@@ -36,7 +36,8 @@ def test_parse_full_snake_case():
                         "inpainting_mask_invert": False},
             "loras": [{"name": "foo", "weight": 0.8}],
             "controlnet": [{"enabled": True, "model": "cn", "image": None, "preprocessor": "canny", "weight": 1.0,
-                            "guidance_start": 0.1, "guidance_end": 0.9, "preprocessor_args": {"low_threshold": 50}}],
+                            "guidance_start": 0.1, "guidance_end": 0.9, "preprocessor_args": {"low_threshold": 50},
+                            "resize_mode": 2, "source_compatible_resize": True}],
             "hooks": {"freeu": {"b1": 1.1}, "freeu_xyz": 3},
             "styles": [], "checkpoint": None, "vae": None, "extra": {"k": "v"}, "unknown_key": 1,
         },
@@ -50,6 +51,7 @@ def test_parse_full_snake_case():
     assert p.img2img.resize_mode == 1 and p.is_img2img and not p.is_inpaint
     assert p.loras[0].name == "foo" and p.loras[0].weight == 0.8
     assert p.controlnet[0].guidance_start == 0.1 and p.controlnet[0].preprocessor_args == {"low_threshold": 50.0}
+    assert p.controlnet[0].resize_mode == 2 and p.controlnet[0].source_compatible_resize is True
     assert p.hooks["freeu"] == {"b1": 1.1}
     assert r.preview_every == 3 and r.lora_paths == {"foo": "foo.safetensors"}
     assert p.images_per_job == 6

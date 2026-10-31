@@ -13,6 +13,37 @@ import scala.jdk.CollectionConverters.*
 class GeneratorSuite extends munit.FunSuite:
   import FakeEngine.*
 
+  test("job-scoped Fastload saves each output without leaking payload to metadata") {
+    val plugin = new sdfx.core.plugins.api.Plugin:
+      def id = "controlnet_fastload"
+      def name = "Fastload fixture"
+      def kind = sdfx.core.plugins.api.PluginKind.AlwaysOn
+    val values = sdfx.core.plugins.api.Values(Map("enabled" -> "true", "mode" -> "save_only",
+      "priority" -> "current_first", "save_format" -> "both"))
+    val isolatedHome = tempHome()
+    val isolated = new AppServices(isolatedHome, Settings(lastModel = Some("foo")), dryRun = true, builtins = Nil,
+      launchOverride = Some(() => launch()), persistSettings = false, installShutdownHook = false)
+    try
+      isolated.start()
+      val context = isolated.generator.forJob(GenerationListener.none, Seq(plugin -> values))
+      val images = context.generate(GenerationParams(prompt = "test", seed = 77, width = 64, height = 64, steps = 1, batchSize = 2))
+      assertEquals(images.size, 2)
+      images.foreach { image =>
+        val bytes = Files.readAllBytes(image.path)
+        assert(bytes.takeRight(13).sameElements("fastload-test".getBytes("UTF-8")))
+        val sidecar = image.path.resolveSibling(image.path.getFileName.toString.stripSuffix(".png") + ".cni")
+        assertEquals(Files.readString(sidecar), "fastload-test")
+        assert(!image.infotext.contains("fastload-test"))
+      }
+      val next = isolated.generator.forJob(GenerationListener.none).generate(
+        GenerationParams(prompt = "later", seed = 78, width = 64, height = 64, steps = 1)).head
+      assert(!Files.readAllBytes(next.path).takeRight(13).sameElements("fastload-test".getBytes("UTF-8")))
+      assert(!Files.exists(next.path.resolveSibling(next.path.getFileName.toString.stripSuffix(".png") + ".cni")))
+    finally
+      isolated.shutdown()
+      deleteTree(isolatedHome.root)
+  }
+
   test("per-image effective prompts become each output's infotext") {
     val isolatedHome = tempHome()
     val isolated = new AppServices(isolatedHome, Settings(lastModel = Some("foo")), dryRun = true, builtins = Nil,

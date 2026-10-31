@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 124, todo 178, na 51.
+Totals: done 125, todo 177, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -209,7 +209,7 @@ Totals: done 124, todo 178, na 51.
 | 200 | [Refiner](https://github.com/wcde/sd-webui-refiner.git) | 155 | todo | `refiner` |  |
 | 201 | [sd-webui-deoldify](https://github.com/SpenserCai/sd-webui-deoldify) | 693 | todo | `deoldify` |  |
 | 202 | [sd-wav2lip-uhq](https://github.com/numz/sd-wav2lip-uhq) | 1422 | todo | `wav2lip` |  |
-| 203 | [Controlnet Fastload](https://github.com/pk5ls20/sd-webui-controlnet-fastload.git) | 36 | todo | `controlnet_fastload` |  |
+| 203 | [Controlnet Fastload](https://github.com/pk5ls20/sd-webui-controlnet-fastload.git) | 36 | done | `controlnet_fastload` | AlwaysOn load/save of ControlNet units in the upstream marker+gzip+pickle format (embedded, .cni, both), current/loaded priority, non-executing bounded reader, inspect/preview/send/capture tab, 36-per-page filter gallery and MCP inspect/always_on. Native ControlNet gains source control modes, canny processor resolution/pixel perfect, hires canny/MLSD softening and non-inpaint mask selection. SD1.5/SDXL real MCP load/save/round-trip/priority/hires/cancel verified with image inspection. Inpaint/CLIP masks, batch inputs, hires-only units and other preprocessors' resolutions are rejected; NUI writes no ControlNet infotext for gallery filters. See controlnet-fastload-verification.md. |
 | 204 | [LoRA Control](https://github.com/cheald/sd-webui-loractl.git) | 265 | todo | `lora_control` |  |
 | 205 | [Wildcards](https://github.com/AUTOMATIC1111/stable-diffusion-webui-wildcards.git) | 481 | done | `dynamic_prompts` |  |
 | 206 | [SD Ratio Lock](https://github.com/bit9labs/sd-ratio-lock.git) | 16 | done | `core:size-presets` |  |

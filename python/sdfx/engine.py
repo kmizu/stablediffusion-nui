@@ -195,7 +195,7 @@ class Engine(BaseEngine):
 
     def features(self) -> list[str]:
         # Temperature guard uses step callbacks and does not alter model weights.
-        f = ["conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "system_info", "vae_tools", "prevent_interrupt"]
+        f = ["controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "system_info", "vae_tools", "prevent_interrupt"]
         f += self._batch_features()
         if cn_mod._has("cv2"):
             f.append("inpaint_difference")
@@ -1094,7 +1094,7 @@ class Engine(BaseEngine):
                 cnm.to(dtype=self.dtype)
                 self.cn_cache[path] = cnm
             if u.image:
-                src = load_rgb(u.image)
+                src = cn_mod.load_controlnet_image(u.image, u.source_compatible_resize)
             elif init_img is not None:
                 src = init_img
             else:
@@ -1103,7 +1103,10 @@ class Engine(BaseEngine):
                 cond = src  # warned in parse_generation
             else:
                 try:
-                    cond = cn_mod.run_preprocessor(u.preprocessor, src, u.preprocessor_args)
+                    if u.preprocessor == "canny" and (u.source_compatible_resize or u.processor_res != -1 or u.pixel_perfect):
+                        cond = cn_mod.source_canny(src, cn_mod.processor_resolution(u, src, w, h), u.preprocessor_args)
+                    else:
+                        cond = cn_mod.run_preprocessor(u.preprocessor, src, u.preprocessor_args)
                 except Exception as e:
                     raise EngineError(INVALID_PARAMS, f"preprocessor '{u.preprocessor}' failed: {e}", traceback.format_exc())
             models_.append((path, cnm))
@@ -1117,8 +1120,8 @@ class Engine(BaseEngine):
         return models_, images, kw
 
     @staticmethod
-    def _cn_images(images: list, w: int, h: int):
-        sized = [resize_image(1, im, w, h) for im in images]
+    def _cn_images(images: list, w: int, h: int, modes=None, compatible=None):
+        sized = cn_mod.resize_control_images(images, modes if modes is not None else [1] * len(images), w, h, compatible)
         return sized[0] if len(sized) == 1 else sized
 
     def _pag_config(self, gp: GenerationParams, ctx: JobContext) -> Optional[dict]:
@@ -1189,13 +1192,15 @@ class Engine(BaseEngine):
             if latents is not None:
                 kw["latents"] = latents
             if cn_models:
-                kw["image"] = self._cn_images(cn_images, w, h)
+                kw["image"] = self._cn_images(cn_images, w, h, [u.resize_mode for u in gp.controlnet if u.enabled],
+                                              [u.source_compatible_resize for u in gp.controlnet if u.enabled])
         else:
             kw.update(image=image, strength=strength)
             if task == "inpaint":
                 kw.update(mask_image=mask, width=w, height=h)
             if cn_models:
-                kw["control_image"] = self._cn_images(cn_images, w, h)
+                kw["control_image"] = self._cn_images(cn_images, w, h, [u.resize_mode for u in gp.controlnet if u.enabled],
+                                                      [u.source_compatible_resize for u in gp.controlnet if u.enabled])
         if cn_models:
             kw.update(cn_kw)
         if pag:
@@ -1317,6 +1322,10 @@ class Engine(BaseEngine):
             hk2 = hooks_mod.HyperTileHook(unet, h // 8, w // 8, hooks_mod.normalize_hypertile(ht), hook_seed)
             cleanups.append(hk2.remove)
         try:
+            if cn_models:
+                from . import control_mode_policy
+                cleanups.append(control_mode_policy.install(pipe, [u for u in gp.controlnet if u.enabled],
+                    hires=pass_ == "hires", neutral=bool(neutral_plan)))
             if ht:
                 hk2.install()
             if todo is not None:

@@ -1,5 +1,6 @@
 package sdfx.mcp
 
+import sdfx.core.model.ControlNetUnit
 import sdfx.core.png.PngMetadata
 import sdfx.engine.AppServices
 
@@ -53,6 +54,34 @@ class McpToolsSuite extends munit.FunSuite:
     assert(!r("isError").bool, s"$tool failed: ${textOf(r)}")
     r
 
+  test("ControlNet Fastload is discoverable with an explicit operation schema") {
+    val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
+    val tool = ts.find(_("name").str == "controlnet_fastload").getOrElse(fail("Fastload tool missing"))
+    val schema = tool("inputSchema")
+    assertEquals(schema("type").str, "object")
+    assert(schema("required").arr.exists(_.str == "operation"))
+    assert(schema("properties").obj.contains("path"))
+    val version = ok("controlnet_fastload", ujson.Obj("operation" -> "version"))
+    assertEquals(version("structuredContent")("version").num.toInt, 1)
+    val rejected = call("controlnet_fastload", ujson.Obj("operation" -> "not-an-operation"))
+    assert(rejected("isError").bool)
+  }
+
+  test("ControlNet Fastload rejects protected sessions and out-of-policy files") {
+    val outside = Files.createTempFile("fastload-outside-", ".cni")
+    try
+      val denied = call("controlnet_fastload", ujson.Obj("operation" -> "inspect", "path" -> outside.toString))
+      assert(denied("isError").bool)
+      services.imageScrambleSession.unlock("private-test-password")
+      try
+        val blocked = call("controlnet_fastload", ujson.Obj("operation" -> "inspect", "path" -> outside.toString))
+        assert(blocked("isError").bool)
+        assert(textOf(blocked).contains("protected image session"))
+        assert(!textOf(blocked).contains("private-test-password"))
+      finally services.imageScrambleSession.lock()
+    finally Files.deleteIfExists(outside)
+  }
+
   test("vae_tools rejects marked PNG before dispatch without exposing a desktop password") {
     val path = home.outputs(services.settings).resolve("mcp-protected-vae.png")
     Files.createDirectories(path.getParent)
@@ -69,7 +98,7 @@ class McpToolsSuite extends munit.FunSuite:
   test("tools/list: every tool has a JSON schema object with valid required fields") {
     val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
     val names = ts.map(_("name").str).toSet
-    for n <- Seq("txt2img", "img2img", "txt2img_async", "img2img_async", "get_job", "list_models", "set_model", "list_loras",
+    for n <- Seq("txt2img", "img2img", "txt2img_async", "img2img_async", "get_job", "list_models", "set_model", "list_loras", "list_controlnets",
         "list_samplers", "list_recent", "get_image", "get_status", "interrupt", "list_scripts", "run_script", "vae_tools")
     do assert(names.contains(n), n)
     ts.foreach { t =>
@@ -314,6 +343,9 @@ class McpToolsSuite extends munit.FunSuite:
     ok("set_model", ujson.Obj("name" -> "foo"))
     val loras = ok("list_loras", ujson.Obj())
     assertEquals(loras("structuredContent")("loras")(0)("tag").str, "<lora:My Lora:1.0>")
+    val controlnets = ok("list_controlnets", ujson.Obj())("structuredContent")
+    assertEquals(controlnets("control_modes").arr.map(_.str).toSeq, ControlNetUnit.ControlModes)
+    assertEquals(controlnets("preprocessors")(0).str, "none")
     val samplers = ok("list_samplers", ujson.Obj())("structuredContent")
     assert(samplers("samplers").arr.exists(_("name").str == "Euler a"))
     assert(!samplers("samplers").arr.exists(_("name").str == "Weird"))

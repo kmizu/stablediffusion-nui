@@ -10,7 +10,7 @@ import logging
 import os
 from typing import Optional
 
-from .images import Image, ImageOps, require_pil
+from .images import Image, ImageOps, require_pil, resize_image, load_rgb
 
 log = logging.getLogger("sdfx.controlnet")
 
@@ -54,6 +54,78 @@ _depth_pipe = None
 
 
 PIL_PREPROCESSORS = ("recolor_luminance", "recolor_intensity", "tile_resample", "tile_colorfix", "blur_gaussian")
+
+CONTROL_MODES = ("Balanced", "My prompt is more important", "ControlNet is more important")
+# Source ControlNet ignores the processor resolution for none/invert; canny resizes its input to it.
+RESOLUTION_PREPROCESSORS = ("none", "", "invert", "canny")
+SOURCE_DEFAULT_RESOLUTION = 512
+
+
+def pixel_perfect_resolution(width, height, target_w, target_h, resize_mode):
+    """Source ControlNet's estimate: fill the target, or fit inside it for Resize and Fill (mode 2)."""
+    import numpy as np
+    k0, k1 = float(target_h) / float(height), float(target_w) / float(width)
+    scale = min(k0, k1) if resize_mode == 2 else max(k0, k1)
+    return int(np.round(scale * float(min(height, width))))
+
+
+def processor_resolution(unit, image, target_w, target_h):
+    if unit.pixel_perfect:
+        return pixel_perfect_resolution(image.width, image.height, target_w, target_h, unit.resize_mode)
+    if 64 <= unit.processor_res <= 2048:
+        return unit.processor_res
+    return SOURCE_DEFAULT_RESOLUTION
+
+
+def source_canny(img, resolution, args):
+    """Source ControlNet canny: resize the short side to `resolution`, edge-pad to 64, detect, then crop the pad."""
+    import cv2  # type: ignore
+    import numpy as np
+
+    def threshold(name, default):
+        value = args.get(name, default)
+        return int(value) if 1 <= value <= 255 else default
+
+    a = np.asarray(img.convert("RGB"))
+    height, width = a.shape[:2]
+    k = float(resolution) / float(min(height, width))
+    th, tw = int(np.round(float(height) * k)), int(np.round(float(width) * k))
+    a = cv2.resize(a, (tw, th), interpolation=cv2.INTER_CUBIC if k > 1 else cv2.INTER_AREA)
+    pad = lambda x: int(np.ceil(float(x) / 64.0) * 64 - x)
+    a = np.pad(a, [[0, pad(th)], [0, pad(tw)], [0, 0]], mode="edge")
+    edges = cv2.Canny(a, threshold("low_threshold", 100), threshold("high_threshold", 200))[:th, :tw]
+    return Image.fromarray(np.ascontiguousarray(edges)).convert("RGB")
+
+
+def resize_control_images(images, modes, width, height, compatible=None):
+    """Apply each unit's native resize mode in unit order."""
+    if len(images) != len(modes) or any(type(mode) is not int or mode not in (0, 1, 2) for mode in modes):
+        raise ValueError('invalid ControlNet resize modes')
+    compatible = [False] * len(images) if compatible is None else compatible
+    if len(compatible) != len(images) or any(type(value) is not bool for value in compatible):
+        raise ValueError('invalid ControlNet resize compatibility flags')
+    return [source_controlnet_resize(image, mode, width, height) if source else resize_image(mode, image, width, height)
+            for image, mode, source in zip(images, modes, compatible)]
+
+
+def source_controlnet_resize(image, mode, width, height):
+    from .controlnet_resize_compat import resize
+    return resize(image, mode, width, height)
+
+
+def load_controlnet_image(path, source_compatible=False):
+    if not source_compatible:
+        return load_rgb(path)
+    import numpy as np
+    require_pil()
+    with Image.open(path) as opened:
+        image = ImageOps.exif_transpose(opened)
+        if image.mode == 'RGBA' or (image.mode == 'P' and 'transparency' in image.info):
+            rgba = np.asarray(image.convert('RGBA'), dtype=np.uint8)
+            alpha = rgba[:, :, 3:4].astype(np.float32) / 255.0
+            pixels = rgba[:, :, :3].astype(np.float32) * alpha + 255.0 * (1.0 - alpha)
+            return Image.fromarray(pixels.clip(0, 255).astype(np.uint8), 'RGB')
+        return image.convert('RGB')
 
 
 def pil_preprocess(name: str, img, args: dict):

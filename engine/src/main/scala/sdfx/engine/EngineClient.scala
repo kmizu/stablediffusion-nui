@@ -44,6 +44,14 @@ final class EngineClient(val supervisor: EngineSupervisor):
   def raw(tpe: String, params: ujson.Value = ujson.Obj(), onEvent: EngineEvent => Unit = _ => ()): Future[ujson.Value] =
     supervisor.request(tpe, params, onEvent)
 
+  /** Fastload payloads may contain source images; never persist the request body. */
+  def controlNetFastloadData(params: ujson.Obj, imageSecret: Option[sdfx.core.png.ImageScrambleSecret]): Future[ujson.Value] =
+    supervisor.requestOwned(Protocol.Types.ControlNetFastloadData, params, _ => (), None, imageSecret)
+
+  def controlNetFastloadOwned(params: ujson.Obj, owner: String,
+                              imageSecret: Option[sdfx.core.png.ImageScrambleSecret] = None): Future[ujson.Value] =
+    supervisor.requestOwned(Protocol.Types.ControlNetFastloadData, params, _ => (), Some(owner), imageSecret)
+
   private[engine] def rawOwned(tpe: String, params: ujson.Value, owner: Option[String],
                                onEvent: EngineEvent => Unit = _ => ()): Future[ujson.Value] =
     supervisor.requestOwned(tpe, params, onEvent, owner)

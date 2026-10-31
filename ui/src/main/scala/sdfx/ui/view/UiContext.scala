@@ -45,6 +45,12 @@ final class UiContext(val services: AppServices, val catalog: CatalogVM, val sta
   var openModelBrowser: (String, Option[PromptInsertionTarget]) => Unit = (_, _) => ()
   var editPositivePrompt: (String, Boolean) => Unit = (_, _) => ()
   var currentGeneration: () => GenerationParams = () => GenerationParams()
+  /** Fastload transfers compare a destination snapshot before committing asynchronous work. */
+  var fastloadTarget: (Mode, Int) => Option[sdfx.core.model.ControlNetUnit] = (_, _) => None
+  var applyFastloadTarget: (Mode, Int, sdfx.core.model.ControlNetUnit, sdfx.core.model.ControlNetUnit) => Either[String, Unit] =
+    (_, _, _, _) => Left("ControlNet destination is unavailable")
+  var applyFastloadInfotext: (Mode, String) => Either[String, Unit] =
+    (_, _) => Left("Generation destination is unavailable")
   /** Commits the named mode's existing numeric editor drafts before preset capture/apply. */
   var commitPresetEditors: Mode => Either[String, Unit] =
     _ => Left("Preset destination editors are not attached")

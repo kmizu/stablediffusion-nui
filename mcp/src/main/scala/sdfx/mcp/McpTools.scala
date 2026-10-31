@@ -761,6 +761,7 @@ final class McpTools(
     o
 
   val all: Seq[McpTool] = Seq(
+    new ControlNetFastloadTool(services, pathPolicy, outputsDir, ctx => ready(ctx)),
     new InspectGenerationMetadataTool(pathPolicy, outputsDir),
     new ModelPresetsTool(services),
     tool("list_always_on", "List AlwaysOn extensions",
@@ -927,6 +928,25 @@ final class McpTools(
         val ls = catalog.loras.filter(l => q.isEmpty || l.name.toLowerCase.contains(q))
         val v = ujson.Obj("loras" -> ujson.Arr.from(ls.map(l => ujson.Obj("name" -> l.name, "path" -> l.path, "tag" -> LoraSyntax.tag(l.name)))))
         ToolResult.json(v, Some(if ls.isEmpty then "no LoRAs found" else ls.map(l => s"${l.name}  ${LoraSyntax.tag(l.name)}").mkString("\n")))
+      }),
+    tool("list_controlnets", "List ControlNets",
+      "ControlNet models, preprocessors and control modes accepted by controlnet=[{model, preprocessor, control_mode, ...}].",
+      Schema.empty, ro = true)((a, ctx) => {
+        Args(a, Nil)
+        ready(ctx)
+        ensureCatalog()
+        val models = catalog.controlnets
+        val preprocessors = "none" +: catalog.choices(ChoiceSource.Preprocessors).filterNot(_ == "none")
+        val v = ujson.Obj(
+          "controlnets" -> ujson.Arr.from(models.map(m => ujson.Obj("name" -> m.name, "path" -> m.path))),
+          "preprocessors" -> ujson.Arr.from(preprocessors),
+          "control_modes" -> ujson.Arr.from(ControlNetUnit.ControlModes)
+        )
+        ToolResult.json(v, Some(Seq(
+          s"ControlNets: ${if models.isEmpty then "(none)" else models.map(_.name).mkString(", ")}",
+          s"Preprocessors: ${preprocessors.mkString(", ")}",
+          s"Control modes: ${ControlNetUnit.ControlModes.mkString(", ")}"
+        ).mkString("\n")))
       }),
     tool("list_samplers", "List samplers",
       "Samplers, schedule types, hires-fix upscalers, upscalers and saved styles accepted by txt2img/img2img.",

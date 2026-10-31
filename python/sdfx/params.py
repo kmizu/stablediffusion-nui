@@ -109,6 +109,12 @@ class ControlNetUnit:
     guidance_start: float = 0.0
     guidance_end: float = 1.0
     preprocessor_args: Dict[str, float] = field(default_factory=dict)
+    resize_mode: int = 1
+    # Source ControlNet processing: map interpolation, edge thinning and hires soft injection for canny/MLSD.
+    source_compatible_resize: bool = False
+    control_mode: str = "Balanced"
+    processor_res: int = -1
+    pixel_perfect: bool = False
 
 
 @dataclass

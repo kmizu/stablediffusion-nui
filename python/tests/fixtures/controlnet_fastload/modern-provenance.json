@@ -1,0 +1,11 @@
+{
+  "source_revision": "56cec5b2958edf3b1807b7e7b2b1b5186dbd2f81",
+  "sources": {
+    "internal_controlnet/args.py": "867216765a99ada5fc501d4004665f5fee222683ce841e637af71e03953e628e",
+    "scripts/enums.py": "ad88ccee8975185e9c57eef66781f6acfc9cf226bb3d34e60fd3fc7ab8525710"
+  },
+  "pydantic": "1.10.21",
+  "numpy": "2.2.5",
+  "python": "3.10.11 (tags/v3.10.11:7d4cc5a, Apr  5 2023, 00:38:17) [MSC v.1929 64 bit (AMD64)]",
+  "synthetic": true
+}

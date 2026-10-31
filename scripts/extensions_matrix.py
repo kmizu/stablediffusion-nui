@@ -72,7 +72,7 @@ S = {
     188: "na:server-ops", 189: "todo:latent_upscale", 190: "done:core:gallery", 191: "todo:prompt_filter",
     192: "todo:animatediff", 193: "na:webui-ux", 194: "todo:adetailer", 195: "todo:seamless_tile",
     196: "todo:face_swap", 197: "todo:style_selector", 198: "todo:prompt_library", 199: "todo:custom_hires_fix",
-    200: "todo:refiner", 201: "todo:deoldify", 202: "todo:wav2lip", 203: "todo:controlnet_fastload", 204: "todo:lora_control",
+    200: "todo:refiner", 201: "todo:deoldify", 202: "todo:wav2lip", 203: "done:controlnet_fastload", 204: "todo:lora_control",
     205: "todo:dynamic_prompts", 206: "done:core:size-presets", 207: "na:account", 208: "na:account",
     209: "todo:core:localization", 210: "todo:vectorscope_cc", 211: "todo:prompt_format", 212: "todo:prompt_format",
     213: "todo:fabric", 214: "done:core:close-confirm", 215: "na:account", 216: "todo:model_downloader",
@@ -144,6 +144,7 @@ IMPLEMENTED = {
 
 
 SCOPE_NOTES = {
+    "controlnet_fastload": "AlwaysOn load/save of ControlNet units in the upstream marker+gzip+pickle format (embedded, .cni, both), current/loaded priority, non-executing bounded reader, inspect/preview/send/capture tab, 36-per-page filter gallery and MCP inspect/always_on. Native ControlNet gains source control modes, canny processor resolution/pixel perfect, hires canny/MLSD softening and non-inpaint mask selection. SD1.5/SDXL real MCP load/save/round-trip/priority/hires/cancel verified with image inspection. Inpaint/CLIP masks, batch inputs, hires-only units and other preprocessors' resolutions are rejected; NUI writes no ControlNet infotext for gallery filters. See controlnet-fastload-verification.md.",
     "core:embedding-editor": "Native owned-vector editing with full coordinate pages, real-tokenizer guidance, independent SDXL encoders, unsaved previews and source-bound overwrite with verified original backups/live refresh. Independent implementation from unlicensed pinned behavior; actual PT preservation, SD1.5/SDXL protected native/package save-collision-recovery and genuine PhotoMaker/EM cancellation verified. SD2 checkpoints, native multi-image preview and A1111 training interoperability are unverified; existing PhotoMaker composition guards remain. Dedicated MCP editor API is not included. See embedding-editor-verification.md.",
     "conditioning_highres_fix": "Pinned seven-mode inpainting conditioning formulas, native controls and PNG replay; 9-channel SD1.5/SDXL source and MainWindow, protected input/output, cancellation/recovery verified. Actual 4-channel SD1.5/SDXL masked and Hires output is unchanged. Disabled retains native baseline; SDXL is a native adaptation. Extracted Windows package, full Torch CPU and Scala suites verified. ControlNet/ADetailer composition is not real-model verified; see conditioning-highres-verification.md.",
     "core:embedding-inspector": "Native inspector, tokenizer, vector mixer, arbitrary-code-gated eval, atomic save and active-model refresh with SD1.5/SDXL support; loaded/catalog ownership is explicit. Eval can write readable files; SD2 actual checkpoints and A1111 training interoperability remain unverified. See embedding-inspector-verification.md.",

@@ -24,7 +24,7 @@ QUEUED_TYPES = ("list_models", "list_files", "list_samplers", "load_model", "set
                 "preprocess", "inpaint_difference_preview", "upscale", "unload", "memory", "restore_faces", "caption", "run_code", "img2vid",
                 "novel_view", "merge_models", "convert_model", "image_tool", "tokenize", "embedding_inspector", "embedding_editor", "system_info",
                 "vram_estimator", "system_benchmark", "system_submission_preview", "system_submit", "vae_tools", "temporal_lab", "model_keyword", "model_keyword_plan",
-                "batch_interrogate_prepare", "batch_interrogate_execute", "metadata_utils", "embedding_merge")
+                "batch_interrogate_prepare", "batch_interrogate_execute", "metadata_utils", "embedding_merge", "controlnet_fastload_data")
 
 
 def classify_exception(e: BaseException) -> tuple[str, str, str]:
@@ -101,7 +101,7 @@ class Server:
             self.emitter.emit(error_msg(rid, INVALID_PARAMS, 'owner_id must be a nonempty string of at most 256 characters'))
             return True
         image_password = msg.get('image_password')
-        if 'image_password' in msg and (typ not in ('txt2img', 'img2img', 'batch_interrogate_execute', 'temporal_lab', 'vae_tools') or
+        if 'image_password' in msg and (typ not in ('txt2img', 'img2img', 'batch_interrogate_execute', 'temporal_lab', 'vae_tools', 'controlnet_fastload_data') or
                                         not isinstance(image_password, str) or not image_password):
             self.emitter.emit(error_msg(rid, INVALID_PARAMS, 'invalid image password transport'))
             return True

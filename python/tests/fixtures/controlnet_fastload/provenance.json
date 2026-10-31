@@ -1,0 +1,10 @@
+{
+  "source": "https://raw.githubusercontent.com/Mikubill/sd-webui-controlnet/6ed97a7da27203667da5c1ce5e2c2ecbc7bf79ed/internal_controlnet/external_code.py",
+  "source_sha256": "db0c1c592bfea56d76e95a8fcfe9cc9db3a825fc3cc658d31bb9b8efa1256488",
+  "fastload_source": "https://raw.githubusercontent.com/pk5ls20/sd-webui-controlnet-fastload/bbdb929f4285ea69d5099268496e4322dc7203ab/scripts/fastload.py",
+  "fastload_source_sha256": "a10dc8eff063aef1ce9c3de470ef9bf84980c9777660316e78e16acc82b8882c",
+  "generated_by": "scripts/dev/create_fastload_reference.py",
+  "numpy": "2.2.5",
+  "python": "3.10.11 (tags/v3.10.11:7d4cc5a, Apr  5 2023, 00:38:17) [MSC v.1929 64 bit (AMD64)]",
+  "synthetic": true
+}

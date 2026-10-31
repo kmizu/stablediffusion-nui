@@ -86,7 +86,9 @@ object FrozenJobEvidence:
   private def control(c: ControlNetUnit, path: String): Node = obj(
     "enabled" -> bool(c.enabled), "model" -> string(c.model), "image" -> option(c.image)(string),
     "preprocessor" -> string(c.preprocessor), "weight" -> double(c.weight, s"$path.weight"), "guidanceStart" -> double(c.guidanceStart, s"$path.guidanceStart"),
-    "guidanceEnd" -> double(c.guidanceEnd, s"$path.guidanceEnd"), "preprocessorArgs" -> Obj(c.preprocessorArgs.iterator.map((k, v) => k -> double(v, childPath(s"$path.preprocessorArgs", k))).toVector))
+    "guidanceEnd" -> double(c.guidanceEnd, s"$path.guidanceEnd"), "preprocessorArgs" -> Obj(c.preprocessorArgs.iterator.map((k, v) => k -> double(v, childPath(s"$path.preprocessorArgs", k))).toVector),
+    "resizeMode" -> int(c.resizeMode), "sourceCompatibleResize" -> bool(c.sourceCompatibleResize),
+    "controlMode" -> string(c.controlMode), "processorRes" -> int(c.processorRes), "pixelPerfect" -> bool(c.pixelPerfect))
 
   private def params(p: GenerationParams): Node =
     val path = "params"

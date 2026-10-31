@@ -158,6 +158,18 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     Mode.values.map(m => m -> new GenerationPanel(ctx, vms(m), plugins(m), initial.expanded,
       () => lastSeed, openPayload, openPresets, openGenerationStates)).toMap
   ctx.commitPresetEditors = m => panels(m).commitPresetEditors()
+  ctx.fastloadTarget = (mode, index) => vms.get(mode).flatMap(_.controlNet.lift(index)).map(_.toUnit)
+  ctx.applyFastloadTarget = (mode, index, expected, incoming) =>
+    vms.get(mode).toRight("ControlNet destination is unavailable")
+      .flatMap(vm => sdfx.ui.vm.FastloadApply.replace(vm, index, expected, incoming))
+  ctx.applyFastloadInfotext = (mode, text) =>
+    vms.get(mode).toRight("Generation destination is unavailable").flatMap { vm =>
+      val result = sdfx.ui.vm.FastloadMetadataApply.run(vm, plugins(mode)) {
+        restorePlugins(mode, text, vm.restoreInfotext(text, ctx.styles.asScala.toSeq, services.settings.hiresFixTweaks.restoreTemplate))
+      }
+      result.foreach { _ => noticeHardware(text); select(mode) }
+      result
+    }
   val preview = new PreviewPane(ctx, actions)
   val gallery = new GalleryView(ctx, galleryVM, actions, it => preview.show(it.path, it.parameters))
   val pngInfo = new PngInfoTab(ctx, actions)
@@ -179,6 +191,11 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   val stylesEditor = new StylesEditorTab(ctx)
   val vaeTools = new VaeToolsTab(ctx)
   val metadataUtils = new MetadataUtilsTab(ctx)
+  val controlNetFastload = new ControlNetFastloadTab(ctx)
+  val controlNetFastloadGallery = new ControlNetFastloadGalleryTab(ctx, path => {
+    if controlNetFastload.inspectPath(path) then tabs.getSelectionModel.select(controlNetFastloadTab)
+    else ctx.error("ControlNet Fastload is busy; try again when it finishes.")
+  })
   val embeddingMerge = new EmbeddingMergeTab(ctx)
   val modelPresets = new ModelPresetsTab(ctx,
     () => services.supervisor.loadedModel.map(m => Path.of(m.path)),
@@ -229,6 +246,10 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   modelPresetsTab.setId("model-presets-tab")
   private val metadataUtilsTab = new Tab("Metadata Utils", metadataUtils.node)
   metadataUtilsTab.setId("metadata-utils-tab")
+  private val controlNetFastloadTab = new Tab("ControlNet Fastload", controlNetFastload.node)
+  controlNetFastloadTab.setId("controlnet-fastload-tab")
+  private val controlNetFastloadGalleryTab = new Tab("ControlNet Fastload Filter", controlNetFastloadGallery.node)
+  controlNetFastloadGalleryTab.setId("controlnet-fastload-gallery-tab")
   private val stylesTab = new Tab("Styles", stylesEditor.view)
   private var lastMode: Mode = Mode.Txt2Img
   private val keywordMappings = new ModelKeywordMappingsPane(ctx, (kind, choices) => {
@@ -258,7 +279,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   scramblePages.setId("scramble-pages")
   private val scrambleTab = new Tab("Image Scrambling", scramblePages)
   scrambleTab.setId("image-scrambling-tab")
-  tabs.getTabs.addAll(pngTab, extrasTab, tokenizerTab, embeddingInspectorTab, embeddingEditorTab, temporalLabTab, systemInfoTab, stylesTab, keywordTab, comparisonTab, vaeToolsTab, metadataUtilsTab, embeddingMergeTab, modelPresetsTab, scrambleTab)
+  tabs.getTabs.addAll(pngTab, extrasTab, tokenizerTab, embeddingInspectorTab, embeddingEditorTab, temporalLabTab, systemInfoTab, stylesTab, keywordTab, comparisonTab, vaeToolsTab, metadataUtilsTab, embeddingMergeTab, modelPresetsTab, controlNetFastloadTab, controlNetFastloadGalleryTab, scrambleTab)
   tabs.getTabs.add(new Tab("VRAM Estimator", vramEstimator.node))
   private var comparisonDivider = initial.dividers.get("main").flatMap(_.headOption).getOrElse(.42)
   Mode.values.foreach { mode =>
@@ -1045,6 +1066,8 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       "styles editor" -> (() => stylesEditor.dispose()),
       "metadata utils" -> (() => metadataUtils.dispose()),
       "model presets" -> (() => modelPresets.dispose()),
+      "controlnet fastload" -> (() => controlNetFastload.dispose()),
+      "controlnet fastload gallery" -> (() => controlNetFastloadGallery.dispose()),
       "VRAM timer" -> (() => vramPoll.stop()),
       "MCP controller" -> (() => mcpExec.execute(() => mcp.close())),
       "MCP executor" -> (() => mcpExec.shutdown()),

@@ -222,7 +222,7 @@ class BaseEngine:
         }
 
     def features(self) -> list[str]:
-        return ["embedding_merge", "metadata_utils", "prevent_interrupt", *self._batch_features()]
+        return ["controlnet_fastload_data", "embedding_merge", "metadata_utils", "prevent_interrupt", *self._batch_features()]
 
     def _batch_features(self) -> list[str]:
         if self.dry_run:
@@ -333,6 +333,13 @@ class BaseEngine:
     def metadata_utils(self, params: dict, ctx: JobContext) -> dict:
         from .metadata_utils import run
         return run(params, ctx)
+
+    def controlnet_fastload_data(self, params: dict, ctx: JobContext) -> dict:
+        from .controlnet_fastload import run_fastload_service
+        try:
+            return run_fastload_service(params, ctx)
+        except (ValueError, OSError) as error:
+            raise EngineError(INVALID_PARAMS, f'ControlNet Fastload: {error}') from error
 
     def tokenize(self, params: dict, ctx: JobContext) -> dict:
         if self.dry_run:
@@ -659,6 +666,17 @@ class BaseEngine:
         for u in gp.controlnet:
             if not u.enabled:
                 continue
+            if u.resize_mode not in (0, 1, 2):
+                raise EngineError(INVALID_PARAMS, 'invalid ControlNet resize mode')
+            if u.source_compatible_resize and 'inpaint' in u.preprocessor:
+                raise EngineError(INVALID_PARAMS, 'source-compatible ControlNet inpaint resize requires mask support')
+            from . import controlnet as cn_mod
+            if u.control_mode not in cn_mod.CONTROL_MODES:
+                raise EngineError(INVALID_PARAMS, f"unknown ControlNet control mode '{u.control_mode}'")
+            if u.processor_res != -1 and not 64 <= u.processor_res <= 2048:
+                raise EngineError(INVALID_PARAMS, 'ControlNet processor resolution must be -1 or 64 to 2048')
+            if (u.processor_res != -1 or u.pixel_perfect) and u.preprocessor not in cn_mod.RESOLUTION_PREPROCESSORS:
+                raise EngineError(INVALID_PARAMS, f"processor resolution is not supported for preprocessor '{u.preprocessor}'")
             path = req.controlnet_paths.get(u.model, u.model)
             if u.model not in req.controlnet_paths and not os.path.exists(u.model):
                 raise EngineError(INVALID_PARAMS, f"no path for ControlNet model '{u.model}' in controlnet_paths")

@@ -6,6 +6,7 @@ import javafx.scene.Node
 import javafx.scene.control.*
 import javafx.scene.image.ImageView
 import javafx.scene.layout.VBox
+import sdfx.core.model.ControlNetUnit
 import sdfx.core.plugins.api.ChoiceSource
 import sdfx.ui.Fx
 import sdfx.ui.vm.{ControlNetUnitVM, GenerationVM}
@@ -127,6 +128,12 @@ object ExtraSections:
     def refreshPre(): Unit = pre.setAll(("none" +: preSrc.toArray(Array.empty[String]).toSeq.filterNot(_ == "none"))*)
     refreshPre()
     preSrc.addListener((_: javafx.collections.ListChangeListener.Change[? <: String]) => refreshPre())
+    val resize = new javafx.scene.control.ComboBox[String](FXCollections.observableArrayList(GenerationVM.ResizeModes*))
+    resize.getSelectionModel.select(u.resizeMode.get)
+    resize.getSelectionModel.selectedIndexProperty.addListener((_, _, next) =>
+      if next.intValue >= 0 && u.resizeMode.get != next.intValue then u.resizeMode.set(next.intValue))
+    u.resizeMode.addListener((_, _, next) =>
+      if resize.getSelectionModel.getSelectedIndex != next.intValue then resize.getSelectionModel.select(next.intValue))
 
     val hint = if vm.mode.usesInitImage then "Control image (empty = use the init image)" else "Control image"
     val drop = new ImageDropZone(ctx, u.image, hint, 170)
@@ -141,6 +148,11 @@ object ExtraSections:
       previewView.setImage(null)
       previewBox.getChildren.clear()
     }))
+    u.preprocessorArgs.addListener((_, _, _) => {
+      previewRevision += 1
+      previewView.setImage(null)
+      previewBox.getChildren.clear()
+    })
     ctx.watchImageAccess(previewView)(() => {
       previewRevision += 1
       previewView.setImage(null)
@@ -156,7 +168,8 @@ object ExtraSections:
           val session = ctx.services.imageScrambleSession.state
           val requestRevision = previewRevision
           val preprocessor = u.preprocessor.get
-          Fx.async(ctx.services.generator.preprocess(Paths.get(p), preprocessor, secret = session.secret,
+          val args = u.preprocessorArgs.get
+          Fx.async(ctx.services.generator.preprocess(Paths.get(p), preprocessor, args = args, secret = session.secret,
             warn = message => Fx.run(ctx.info(message)))) { out =>
             previewBtn.setDisable(false)
             if requestRevision == previewRevision && session.revision == ctx.services.imageScrambleSession.state.revision then
@@ -175,10 +188,24 @@ object ExtraSections:
               ctx.error(s"Preprocess failed: ${Fx.message(e)}")
           }
     )
+    val processorRes = W.intSpinner(u.processorRes, -1, 2048)
+    val pixelPerfect = W.check("Pixel perfect", u.pixelPerfect, "Canny: derive the processor resolution from the output size")
+    def resolutionUsable(): Unit =
+      val off = !ControlNetUnit.ResolutionPreprocessors(Option(u.preprocessor.get).getOrElse("none"))
+      processorRes.setDisable(off); pixelPerfect.setDisable(off)
+    u.preprocessor.addListener((_, _, _) => resolutionUsable())
+    resolutionUsable()
     val f = W.form()
       .full(W.check("Enable", u.enabled, "Use this ControlNet unit"))
       .add("Model", W.combo(models, u.model), "ControlNet model (from models/controlnet)")
       .add("Preprocessor", W.combo(pre, u.preprocessor), "Turns the control image into a control map (none = already a map)")
+      .add("Resize mode", resize, "How the control image fits the output dimensions")
+      .full(W.check("ControlNet-compatible processing", u.sourceCompatibleResize,
+        "Use source ControlNet map interpolation and edge thinning, canny at the processor resolution, and softer canny/MLSD control in hires passes"))
+      .add("Control mode", W.combo(FXCollections.observableArrayList(ControlNetUnit.ControlModes*), u.controlMode),
+        "Balanced, or soften control so the prompt leads, or apply control only to the conditional (positive) pass")
+      .add("Processor res", processorRes, "Canny input resolution: -1 (full size, or 512 with compatible processing) or 64 to 2048; ignored by none/invert")
+      .full(pixelPerfect)
       .add("Weight", W.doubleSlider(u.weight, 0, 2, 0.05), "Control strength")
       .add("Start", W.doubleSlider(u.guidanceStart, 0, 1, 0.01), "Fraction of the steps where control starts")
       .add("End", W.doubleSlider(u.guidanceEnd, 0, 1, 0.01), "Fraction of the steps where control ends")

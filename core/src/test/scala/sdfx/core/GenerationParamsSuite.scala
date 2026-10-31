@@ -29,7 +29,8 @@ class GenerationParamsSuite extends munit.FunSuite:
       inpaintingMaskInvert = true)),
     loras = Seq(LoraRef("foo", 0.8), LoraRef("bar")),
     controlnet = Seq(ControlNetUnit(model = "canny", image = Some("c.png"), preprocessor = "canny",
-      weight = 0.9, guidanceStart = 0.1, guidanceEnd = 0.8, preprocessorArgs = Map("low_threshold" -> 100.0))),
+      weight = 0.9, guidanceStart = 0.1, guidanceEnd = 0.8, preprocessorArgs = Map("low_threshold" -> 100.0),
+      resizeMode = 2, sourceCompatibleResize = true)),
     hooks = Map("freeu" -> ujson.Obj("b1" -> 1.3, "s1" -> 0.9)),
     styles = Seq("Style A", "Style B"),
     checkpoint = Some("animagineXL.safetensors"),
@@ -62,7 +63,9 @@ class GenerationParamsSuite extends munit.FunSuite:
       "inpaint_full_res_padding", "inpainting_mask_invert").foreach(k => assert(i2i.obj.contains(k), k))
     assertEquals(i2i("init_image").str, "C:/in/init.png")
     val cn = js("controlnet")(0)
-    Seq("guidance_start", "guidance_end", "preprocessor_args").foreach(k => assert(cn.obj.contains(k), k))
+    Seq("guidance_start", "guidance_end", "preprocessor_args", "resize_mode", "source_compatible_resize").foreach(k => assert(cn.obj.contains(k), k))
+    assertEquals(cn("resize_mode").num, 2.0)
+    assertEquals(cn("source_compatible_resize").bool, true)
     assertEquals(cn("preprocessor_args").obj.keys.toSeq, Seq("low_threshold"))
     assertEquals(js("loras")(1)("weight").num, 1.0)
     assertEquals(js("extra").obj.keys.toSeq, Seq("FreeU Stages"))

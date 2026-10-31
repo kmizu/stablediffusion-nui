@@ -67,8 +67,19 @@ case class ControlNetUnit(
     weight: Double = 1.0,
     guidanceStart: Double = 0.0,
     guidanceEnd: Double = 1.0,
-    preprocessorArgs: Map[String, Double] = Map.empty
+    preprocessorArgs: Map[String, Double] = Map.empty,
+    resizeMode: Int = 1,
+    // Source ControlNet processing: map interpolation, edge thinning, canny resolution and hires soft injection.
+    sourceCompatibleResize: Boolean = false,
+    controlMode: String = "Balanced",
+    processorRes: Int = -1,
+    pixelPerfect: Boolean = false
 ) derives RW
+
+object ControlNetUnit:
+  val ControlModes: Seq[String] = Seq("Balanced", "My prompt is more important", "ControlNet is more important")
+  /** Preprocessors that apply (canny) or, like source ControlNet, ignore (none/invert) the processor resolution. */
+  val ResolutionPreprocessors: Set[String] = Set("none", "", "invert", "canny")
 
 /** Everything needed to produce one generation job. Serialized as the engine `txt2img`/`img2img` params. */
 case class GenerationParams(
@@ -128,7 +139,8 @@ case class GenerationParams(
       Option.when(clipSkip < 1 || clipSkip > 12)(s"clip skip must be 1..12 (got $clipSkip)"),
       Option.when(subseedStrength < 0 || subseedStrength > 1)("variation strength must be 0..1"),
       img2img.flatMap(i => Option.when(i.denoisingStrength < 0 || i.denoisingStrength > 1)("denoising strength must be 0..1")),
-      Option.when(hires.enabled && (hires.denoisingStrength < 0 || hires.denoisingStrength > 1))("hires denoising must be 0..1")
+      Option.when(hires.enabled && (hires.denoisingStrength < 0 || hires.denoisingStrength > 1))("hires denoising must be 0..1"),
+      Option.when(controlnet.exists(u => u.enabled && !Set(0, 1, 2)(u.resizeMode)))("ControlNet resize mode must be 0..2")
     ).flatten
 
 object GenerationParams:

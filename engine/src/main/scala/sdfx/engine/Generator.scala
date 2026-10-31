@@ -23,6 +23,7 @@ trait GenerationListener:
   /** Private transport identity for queued work; never part of GenerationParams or image metadata. */
   def interruptionOwner: Option[String] = None
   private[engine] def imageSecret: Option[sdfx.core.png.ImageScrambleSecret] = None
+  private[engine] def fastloadPayload: Option[(String, Array[Byte])] = None
   private[engine] def editorPreview: Option[EditorPreviewPayload] = None
   private[engine] def wdBatchControl: Option[ExtrasBatchControl] = None
   private[engine] def payloadJobId: Option[String] = None
@@ -142,6 +143,9 @@ final class Generator(
   def forJob(listener: GenerationListener, alwaysOn: Seq[(Plugin, Values)] = Nil, limits: JobLimits = JobLimits()): PluginContext =
     val self = this
     val generations = new java.util.concurrent.atomic.AtomicInteger(0)
+    val fastloadPlan = alwaysOn.find((plugin, values) => plugin.id == "controlnet_fastload" && plugin.isActive(values))
+      .flatMap((_, values) => FastloadJobPlan.fromValues(values))
+    val activeFastloadPayload = new ThreadLocal[Option[(String, Array[Byte])]]()
     def limited(p: GenerationParams): GenerationParams =
       val q = applyAlwaysOn(p, alwaysOn)
       limits.check(q, generations.incrementAndGet())
@@ -159,6 +163,7 @@ final class Generator(
     val scopedListener: GenerationListener = new GenerationListener:
       override def interruptionOwner: Option[String] = listener.interruptionOwner
       override private[engine] def imageSecret: Option[sdfx.core.png.ImageScrambleSecret] = listener.imageSecret
+      override private[engine] def fastloadPayload: Option[(String, Array[Byte])] = Option(activeFastloadPayload.get()).flatten
       override private[engine] def editorPreview: Option[EditorPreviewPayload] = listener.editorPreview
       override private[engine] def payloadJobId: Option[String] = listener.payloadJobId
       override private[engine] def submittedPayloadContext: Option[SubmittedPayloadContext] = listener.submittedPayloadContext
@@ -179,9 +184,41 @@ final class Generator(
       override def plaintextVideoAllowed: Boolean = listener.imageSecret.forall(_.plaintextVideoAllowed)
       override def resourceHashesEnabled: Boolean = alwaysOn.exists((plugin, values) =>
         plugin.id == "pnginfo_injection" && plugin.isActive(values))
-      def generate(p: GenerationParams): Seq[OutputImage] = guard(self.generateWith(limited(p), scopedListener))
+      private def withFastload[T](p: GenerationParams, persist: Boolean)(run: GenerationParams => T): T =
+        val normal = limited(p)
+        fastloadPlan match
+          case None => run(normal)
+          case Some(plan) =>
+            val staged = scala.collection.mutable.ArrayBuffer.empty[Path]
+            val owner = listener.interruptionOwner.getOrElse(java.util.UUID.randomUUID().toString)
+            def check(): Unit = if isInterrupted then throw interruptedError
+            def worker(request: ujson.Obj): ujson.Value =
+              check()
+              val value = await(client.controlNetFastloadOwned(request, owner, listener.imageSecret), timeouts.upscale, "Fastload")
+              check()
+              value
+            def stage(bytes: Array[Byte]): String =
+              check()
+              val image = FastloadInputCodec.decode(bytes)
+              val path = Files.createTempFile(home.tmpDir(settings()), "fastload-input-", ".png")
+              staged += path
+              sdfx.core.png.ScrambledPng.write(image, path, Nil, listener.imageSecret.map(_.use(identity)))
+              path.toString
+            val previousPayload = Option(activeFastloadPayload.get()).flatten
+            try
+              activeFastloadPayload.set(None)
+              val prepared = FastloadGeneration.prepare(normal, plan, listener.imageSecret, worker, stage)
+              if prepared.save && persist then
+                val encoded = worker(ujson.Obj("operation" -> "encode", "units" -> prepared.units))("base64").str
+                require(encoded.length <= 180000000, "Fastload output is too large")
+                activeFastloadPayload.set(Some(plan.saveFormat -> java.util.Base64.getDecoder.decode(encoded)))
+              run(prepared.params)
+            finally
+              if previousPayload.isDefined then activeFastloadPayload.set(previousPayload) else activeFastloadPayload.remove()
+              staged.foreach(path => try Files.deleteIfExists(path) catch case NonFatal(_) => ())
+      def generate(p: GenerationParams): Seq[OutputImage] = guard(withFastload(p, true)(self.generateWith(_, scopedListener)))
       override def generateTransient(p: GenerationParams): Seq[OutputImage] =
-        guard(self.generateTransientWith(limited(p), scopedListener))
+        guard(withFastload(p, false)(self.generateTransientWith(_, scopedListener)))
       def upscale(image: Path, upscaler: String, scale: Double): Path = guard {
         if isInterrupted then throw interruptedError
         val out = self.upscaleImage(image, upscaler, scale, listener.interruptionOwner, listener.imageSecret, listener.onLog)
@@ -690,14 +727,28 @@ final class Generator(
     result.images.map { img =>
       val (params, text) = describe(prep, result, img, loaded)
       val src = Paths.get(img.path)
-      val dst = OutputNaming.nextFile(outputs, kind, img.seed)
-      try
-        val pixels = PngMetadata.readImage(src)
-        sdfx.core.png.ScrambledPng.write(pixels, dst, Seq(PngMetadata.ParametersKey -> text), listener.imageSecret.map(_.use(identity)))
-      catch
-        case NonFatal(e) =>
-          Files.deleteIfExists(dst)
-          throw e
+      val dst = listener.fastloadPayload match
+        case None =>
+          val target = OutputNaming.nextFile(outputs, kind, img.seed)
+          try
+            val pixels = PngMetadata.readImage(src)
+            sdfx.core.png.ScrambledPng.write(pixels, target, Seq(PngMetadata.ParametersKey -> text), listener.imageSecret.map(_.use(identity)))
+          catch
+            case NonFatal(e) =>
+              Files.deleteIfExists(target)
+              throw e
+          target
+        case Some((format, payload)) =>
+          require(listener.imageSecret.isEmpty, "Protected sessions cannot save readable Fastload data")
+          val dir = OutputNaming.dayDir(outputs, kind)
+          val stage = Files.createTempFile(dir, ".fastload-image-", ".tmp")
+          try
+            val pixels = PngMetadata.readImage(src)
+            sdfx.core.png.ScrambledPng.write(pixels, stage, Seq(PngMetadata.ParametersKey -> text), None)
+            // Completed engine images follow the normal partial-result contract even if
+            // interruption was admitted after sampling. The stage remains private until publication.
+            FastloadOutput.publish(stage, dir, img.seed, payload, format, () => ())
+          finally Files.deleteIfExists(stage)
       try Files.deleteIfExists(src)
       catch case NonFatal(_) => ()
       val out = OutputImage(dst, params, text, img.seed)

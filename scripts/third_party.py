@@ -21,6 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # (repo, how it is used, what)
 BASE = [
+    ("pk5ls20/sd-webui-controlnet-fastload", "reimplemented", "Pinned Apache-2.0 source bbdb929f4285ea69d5099268496e4322dc7203ab; independent data-only pickle interpreter, compatible writer, native load/save, viewer and gallery; ControlNet control mode, canny resolution and mask selection re-implemented from Mikubill/sd-webui-controlnet behaviour; no upstream code copied"),
     ("CodeExplode/stable-diffusion-webui-embedding-editor", "reimplemented", "Unlicensed behavior reference c8f290230f9360729abc3a3a57fe1befc2d43b23; independent native coordinate editing, vocabulary guidance, safe save and temporary preview for SD1.5/SDXL; no upstream code or assets copied"),
     ("klimaleksus/stable-diffusion-webui-embedding-merge", "reimplemented", "Pinned SDXL-branch behavior 40d439de3cda5965fc1f9cb4412ef329885d1d6d; independent native vector algebra, scoped prompt expressions, inspection and export; original parser used only in isolated numerical reference fixtures"),
     ("Tzigo/metadata_utils", "reimplemented", "GPL-3.0 behavior reference a4cda9fe899f95de769496946497d20daedb516b; independent native checkpoint/LoRA metadata editor with raw tensor preservation and no-overwrite copy publication"),
@@ -184,6 +185,7 @@ BASE = [
 # Keep these source-pinned original LICENSE bytes; do not normalize newlines.
 # (commit, license path, SHA-256, SPDX)
 PINNED_LICENSES = {
+    "pk5ls20/sd-webui-controlnet-fastload": ("bbdb929f4285ea69d5099268496e4322dc7203ab", "LICENCE", "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1", "Apache-2.0"),
     "klimaleksus/stable-diffusion-webui-embedding-merge": ("40d439de3cda5965fc1f9cb4412ef329885d1d6d", "LICENSE", "2c42de328b26a7318910d10b3cc4db282be0ad8146dc6543686797fbee4cde3b", "Unlicense (upstream also states WTFPL)"),
     "mix1009/model-keyword": ("c3d0833a9434bb41ecd7ea715b5abd5e6b43a5af", "LICENSE", "665df3b62b63216be2ca94177c762f511d3df58e4850e875e4857100ec3d5d5f", "MIT"),
     "Tzigo/metadata_utils": ("a4cda9fe899f95de769496946497d20daedb516b", "LICENSE", "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986", "GPL-3.0"),

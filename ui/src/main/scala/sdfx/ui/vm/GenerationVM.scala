@@ -22,6 +22,20 @@ final class ControlNetUnitVM:
   val weight = new SimpleDoubleProperty(1.0)
   val guidanceStart = new SimpleDoubleProperty(0.0)
   val guidanceEnd = new SimpleDoubleProperty(1.0)
+  // Preserve imported preprocessor parameters even though the form does not
+  // currently expose controls for editing them.
+  val preprocessorArgs = new SimpleObjectProperty[Map[String, Double]](Map.empty)
+  val resizeMode = new SimpleIntegerProperty(1)
+  val sourceCompatibleResize = new SimpleBooleanProperty(false)
+  val controlMode = new SimpleStringProperty("Balanced")
+  val processorRes = new SimpleIntegerProperty(-1)
+  val pixelPerfect = new SimpleBooleanProperty(false)
+  preprocessor.addListener((_, previous, next) =>
+    if previous != next then
+      preprocessorArgs.set(Map.empty)
+      if !ControlNetUnit.ResolutionPreprocessors(Option(next).getOrElse("none")) then
+        processorRes.set(-1)
+        pixelPerfect.set(false))
 
   def isUsable: Boolean = enabled.get && model.get.nonEmpty && model.get != "None"
 
@@ -33,7 +47,13 @@ final class ControlNetUnitVM:
       Option(preprocessor.get).filter(_.nonEmpty).getOrElse("none"),
       weight.get,
       guidanceStart.get,
-      guidanceEnd.get
+      guidanceEnd.get,
+      preprocessorArgs.get,
+      resizeMode.get,
+      sourceCompatibleResize.get,
+      Option(controlMode.get).filter(ControlNetUnit.ControlModes.contains).getOrElse("Balanced"),
+      processorRes.get,
+      pixelPerfect.get
     )
 
   def load(u: Option[ControlNetUnit]): Unit =
@@ -45,6 +65,12 @@ final class ControlNetUnitVM:
     weight.set(x.weight)
     guidanceStart.set(x.guidanceStart)
     guidanceEnd.set(x.guidanceEnd)
+    preprocessorArgs.set(x.preprocessorArgs)
+    resizeMode.set(x.resizeMode)
+    sourceCompatibleResize.set(x.sourceCompatibleResize)
+    controlMode.set(x.controlMode)
+    processorRes.set(x.processorRes)
+    pixelPerfect.set(x.pixelPerfect)
 
 object GenerationVM:
   val ControlNetUnits = 3

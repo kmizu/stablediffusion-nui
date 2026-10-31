@@ -21,6 +21,16 @@ class ExtendedGenerationSuite extends munit.FunSuite:
     assertEquals(p.controlnet.head.preprocessorArgs("low_threshold"), 100.0)
   }
 
+  test("ControlNet control mode and canny processor resolution are typed") {
+    val unit = ujson.Obj("model" -> "cn", "image" -> "inside", "preprocessor" -> "canny",
+      "control_mode" -> "ControlNet is more important", "processor_res" -> 768, "pixel_perfect" -> true)
+    val c = ExtendedGeneration.parse(args(ujson.Obj("controlnet" -> ujson.Arr(unit))), lora, control, prep, image).controlnet.head
+    assertEquals((c.controlMode, c.processorRes, c.pixelPerfect), ("ControlNet is more important", 768, true))
+    for bad <- Seq("control_mode" -> ujson.Str("Prompt"), "processor_res" -> ujson.Num(32), "processor_res" -> ujson.Num(4096)) do
+      val input = ujson.Obj("controlnet" -> ujson.Arr(ujson.Obj("model" -> "cn", "image" -> "inside", bad)))
+      intercept[ToolError](ExtendedGeneration.parse(args(input), lora, control, prep, image))
+  }
+
   test("rejects unknown models, denied images, invalid bounds and extra fields") {
     for input <- Seq(
       ujson.Obj("manual_loras" -> ujson.Arr(ujson.Obj("name" -> "bad"))),

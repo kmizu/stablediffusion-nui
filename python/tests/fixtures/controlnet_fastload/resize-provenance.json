@@ -1,0 +1,10 @@
+{
+  "revision": "56cec5b2958edf3b1807b7e7b2b1b5186dbd2f81",
+  "sources": {
+    "scripts/controlnet.py": "2cfb0a110575e3f4eb66161d193585954b760c5bcdbfed7d8d05d32d531546f3",
+    "scripts/lvminthin.py": "0ca260c87caedf7ea08267dd288dfe216bf93f1a0f7066e228bb76363c6e2ae1"
+  },
+  "synthetic": true,
+  "opencv": "4.11.0",
+  "numpy": "2.2.5"
+}

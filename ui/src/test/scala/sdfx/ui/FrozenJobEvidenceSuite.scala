@@ -45,7 +45,7 @@ class FrozenJobEvidenceSuite extends FunSuite:
     assertEquals(fields(p.hires), Set("enabled", "scale", "upscaler", "secondPassSteps", "resizeX", "resizeY", "denoisingStrength", "samplerName", "scheduler", "prompt", "negativePrompt", "cfgScale"))
     assertEquals(fields(p.img2img.get), Set("initImage", "mask", "denoisingStrength", "resizeMode", "maskBlur", "inpaintingFill", "inpaintFullRes", "inpaintFullResPadding", "inpaintingMaskInvert"))
     assertEquals(fields(p.loras.head), Set("name", "weight", "unet", "lbw", "start", "stop", "dyn"))
-    assertEquals(fields(p.controlnet.head), Set("enabled", "model", "image", "preprocessor", "weight", "guidanceStart", "guidanceEnd", "preprocessorArgs"))
+    assertEquals(fields(p.controlnet.head), Set("enabled", "model", "image", "preprocessor", "weight", "guidanceStart", "guidanceEnd", "preprocessorArgs", "resizeMode", "sourceCompatibleResize", "controlMode", "processorRes", "pixelPerfect"))
     assertEquals(fields(j.limits), Set("maxSide", "maxImagesPerGeneration", "maxGenerations", "maxPixelsPerGeneration"))
     assertEquals(fields(j.submittedContext.get), Set("origin", "sourceMode", "configurationJson", "uiVariationEnabled"))
     assertEquals(fields(j.captureOptions.get), Set("includeImageContents"))
@@ -124,7 +124,10 @@ class FrozenJobEvidenceSuite extends FunSuite:
       "control model" -> p.copy(controlnet = Seq(c.copy(model = "other"), p.controlnet(1))), "control image" -> p.copy(controlnet = Seq(c.copy(image = None), p.controlnet(1))),
       "control preprocessor" -> p.copy(controlnet = Seq(c.copy(preprocessor = "other"), p.controlnet(1))), "control weight" -> p.copy(controlnet = Seq(c.copy(weight = 0.7), p.controlnet(1))),
       "control start" -> p.copy(controlnet = Seq(c.copy(guidanceStart = 0.3), p.controlnet(1))), "control end" -> p.copy(controlnet = Seq(c.copy(guidanceEnd = 0.9), p.controlnet(1))),
-      "control args" -> p.copy(controlnet = Seq(c.copy(preprocessorArgs = Map("a" -> 3.0)), p.controlnet(1))), "control order" -> p.copy(controlnet = p.controlnet.reverse),
+      "control args" -> p.copy(controlnet = Seq(c.copy(preprocessorArgs = Map("a" -> 3.0)), p.controlnet(1))),
+      "control resize" -> p.copy(controlnet = Seq(c.copy(resizeMode = 2, sourceCompatibleResize = true), p.controlnet(1))),
+      "control mode" -> p.copy(controlnet = Seq(c.copy(controlMode = "ControlNet is more important", processorRes = 640, pixelPerfect = true), p.controlnet(1))),
+      "control order" -> p.copy(controlnet = p.controlnet.reverse),
       "hooks nested" -> p.copy(hooks = Map("freeu" -> ujson.Obj("nested" -> ujson.Arr(2)))), "styles order" -> p.copy(styles = p.styles.reverse),
       "checkpoint" -> p.copy(checkpoint = None), "vae" -> p.copy(vae = None), "extra" -> p.copy(extra = Map("a" -> "changed"))
     ).map((name, params) => name -> j.copy(params = params))

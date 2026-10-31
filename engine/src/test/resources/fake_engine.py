@@ -180,6 +180,15 @@ def handle_work(rid, typ, params):
     try:
         if typ in ("txt2img", "img2img"):
             generate(rid, typ, params)
+        elif typ == "controlnet_fastload_data":
+            operation = params.get('operation')
+            empty = {'type': 'list', 'items': []}
+            if operation == 'from_native': result(rid, {'units': empty})
+            elif operation == 'prepare_generation':
+                result(rid, {'units': empty, 'save': params.get('mode') != 'load_only',
+                             'load_skipped': True, 'forms': []})
+            elif operation == 'encode': result(rid, {'base64': 'ZmFzdGxvYWQtdGVzdA=='})
+            else: error(rid, 'unsupported', 'unknown fake Fastload operation')
         elif typ == "batch_interrogate_prepare":
             result(rid, {"token": "0" * 32, "partial": True})
         elif typ == "batch_interrogate_execute":
