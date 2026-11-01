@@ -1,0 +1,267 @@
+---
+title: Extensions
+nav: Extensions
+description: How to use the extensions built into Stable Diffusion NUI (AlwaysOn plugins and Scripts), with a reference grouped by purpose.
+---
+
+Stable Diffusion NUI ships rewritten versions of the A1111 / reForge built-in scripts and extensions, plus many extensions from the A1111 extension index, as built-in plugins. There is nothing extra to install: you use them straight from the generation tabs.
+
+## AlwaysOn plugins and Scripts
+
+There are two kinds of plugin.
+
+| Kind | What it does | Where it is |
+|---|---|---|
+| AlwaysOn | Applies to every generation while it is enabled. You can enable several at once. | A collapsible section per plugin near the bottom of the generation form. |
+| Script | Takes over the whole job (builds a grid, generates many times, and so on). Only one can be selected at a time. | The dropdown in the **Script** card of the generation form. |
+
+![The full txt2img form, with the Script card and the AlwaysOn plugin sections at the bottom](shots/txt2img-form.png)
+
+### Using an AlwaysOn plugin
+
+1. Open the **txt2img**, **img2img** or **Inpaint** tab.
+2. Scroll down the form to the plugin's section.
+3. Tick the checkbox at the left of the section header. An enabled section has a highlighted header.
+4. Expand the section, adjust its values and generate as usual.
+
+The plugin's description appears at the top of its section. Hovering over the header shows the same text.
+
+### Using a Script
+
+1. In the **Script** card of the generation form, pick a script from the dropdown. The default is **None** (no script).
+2. The selected script's settings appear below the dropdown.
+3. Generate as usual and the script runs the job.
+
+Scripts and AlwaysOn plugins work together. For example, every image of an **X/Y/Z plot** also gets the AlwaysOn plugins you have enabled, and the **X/Y/Z plot** axes include settings contributed by plugins.
+
+### Settings per tab
+
+- Plugin values and the selected script are kept separately for the **txt2img**, **img2img** and **Inpaint** tabs, and are restored the next time you start the app.
+- The **Inpaint** tab uses the same plugins as img2img.
+- Some plugins only work in one tab. In tabs they do not support, their section or dropdown entry is not shown. The reference below notes plugins that are limited to one tab.
+- These plugins appear in a dedicated place instead of a generic section:
+    - **Hires Fix Tweaks**: inside the **Hires. fix** section of txt2img
+    - **Inpaint Difference**: inside the image panel of the **Inpaint** tab
+- **Tokenizer** and **VAE Tools** are not shown in the generation forms; you use them as tabs of the same name (see [Tools](tools.html)).
+
+### Hiding plugins
+
+To remove a plugin from the UI, add its id to `disabled_plugins` in `config/settings.json`. The same file stores control defaults under `plugin_values`. Edit the file while the app is closed; the change takes effect the next time it starts.
+
+### Using plugins from MCP
+
+AI agents can use the same plugins. Call `list_always_on` to discover AlwaysOn plugins and their values, then pass them in the `always_on` object of a generation request. These values apply to that job only and do not change the desktop settings. For Scripts, call `list_scripts` to list them and `run_script` to run one. **Custom code** can never be run from MCP. See [MCP](mcp.html) for details.
+
+## AlwaysOn plugin reference
+
+Names in the tables are the section names shown in the app.
+
+### Prompt processing
+
+| Name | What it does |
+|---|---|
+| **Prompt Format** | Removes duplicate spaces and commas (and, optionally, duplicate tags) before generating. |
+| **Prompt Filter** | Removes banned words and applies "find => replace" rules to both prompts. |
+| **Negative Prompt Weight** | Applies one weight to the whole negative prompt. |
+| **NovelAI prompt converter** | Converts NovelAI emphasis `{tag}` / `[tag]` into A1111 weights before generating. |
+| **Style variables** | Inserts saved styles into prompts with `{style:Name}` (or `$Name`). |
+| **Weight Gradient** | Changes the weight of words written like `{words::0-1:e}` during sampling. |
+| **NegPiP** | Negative weights such as `(black hair:-1)` suppress a concept in the positive prompt and boost it in the negative prompt. |
+| **Neutral Prompt** | Combines prompts by their predictions with `AND`, `AND_PERP`, `AND_SALT`, `AND_TOPK` and more. |
+| **Prompt Fusion** | Interpolates prompt embeddings during each image's sampling, using curves, attention ramps and variables. |
+| **Model Keyword** | Inserts keywords for the checkpoint and selected LoRAs into the prompt (see [Tools](tools.html)). |
+
+### Randomising settings
+
+| Name | What it does |
+|---|---|
+| **Randomize** | Picks sampler, schedule, steps, CFG and size at random for each generation (reproducible from the seed). |
+| **Random Resolutions** | Each generation uses a random size from a list (or from a pixel budget and aspect ratios). txt2img only. |
+
+### LoRA
+
+| Name | What it does |
+|---|---|
+| **LoRA Block Weight** | Weights each U-Net block of a LoRA separately (presets or explicit weights) and limits a LoRA to a step range. |
+| **Composable LoRA / LyCORIS** | Keeps each adapter with its own `AND` prompt, and controls negative conditioning and per-step weights. |
+
+For general LoRA use, see [LoRA and embeddings](lora-embeddings.html).
+
+### Guidance (CFG)
+
+| Name | What it does |
+|---|---|
+| **FreeU** | Re-weights U-Net backbone and skip features (FreeU v2). |
+| **Dynamic Thresholding (CFG-Fix)** | Clamps the guidance so high CFG scales look like a lower scale. |
+| **APG is now your CFG** | Adaptive Projected Guidance: replaces CFG and reduces oversaturation at high CFG. |
+| **Mahiro CFG** | Leans towards the positive prompt where it agrees with CFG. |
+| **RescaleCFG** | Rescales the guided prediction's standard deviation to the positive one (for v-prediction / ZTSNR models). |
+| **Perturbed-Attention Guidance** | Adds guidance from a perturbed self-attention pass (PAG). |
+| **Self Attention Guidance** | Guides with blurred self-attention regions. SD1.x txt2img only; needs DDIM / UniPC / DPM++ samplers. |
+| **CFG Schedule** | Moves the CFG scale from a start value to an end value over the steps (needs CFG > 1). |
+| **CADS** | Adds scheduled noise to the prompt conditioning for more diverse results. |
+
+### Sampling and latents
+
+| Name | What it does |
+|---|---|
+| **Detail Daemon** | Tells the model there is less (or more) noise than there is, over a schedule, to add or remove detail. |
+| **Vectorscope CC** | Applies brightness, contrast, saturation and RGB offsets to the latent noise while sampling. |
+| **Latent Mirroring** | Mirrors or rotates the latent during the first steps, from balanced compositions up to perfect reflections. |
+| **Asymmetric Tiling** | Makes seamless tiles, configured separately for the X and Y axes (U-Net and VAE). |
+| **Anti-burn** | Skips the last few steps and averages the latents of the steps before them for smoother results. |
+| **ReSharpen** | Pushes every step further along its change (more detail) or back (smoother). |
+| **Diffusion Color Grading** | Recentres the latent colour channels (removing casts or tinting towards a colour) and stretches the range. |
+| **Latent Modifier** | Sharpness, tonemapping, contrast, CFG-drift correction, noise and spectral tweaks. |
+| **Advanced Model Sampling** | Overrides the model's prediction type (eps / v-prediction) and zero terminal SNR. |
+
+### Large images, speed and memory
+
+| Name | What it does |
+|---|---|
+| **HyperTile** | Speeds up large images by tiling self-attention. |
+| **Kohya HRFix (Deep Shrink)** | Shrinks a deep U-Net block in early steps so high resolutions stay coherent. |
+| **MultiDiffusion (tiled diffusion)** | Denoises overlapping latent tiles and blends them, for very large images. |
+| **Token Downsampling** | Reduces self-attention keys and values to trade detail for speed. Cannot be combined with PAG or HyperTile. |
+| **Never OOM** | Lowers peak VRAM for the job with sliced attention and VAE, and tiled VAE. |
+| **GPU temperature guard** | Pauses sampling above the sleep temperature and resumes below the wake temperature. |
+
+### Hires. fix and img2img
+
+| Name | What it does |
+|---|---|
+| **Hires Fix Tweaks** | Refines one first-pass result with independent seeds, prompt modes and styles. Found inside the **Hires. fix** section. |
+| **img2img Hires Fix** | Upscales and refines each completed image in txt2img, img2img or Inpaint, with pixel upscaling and VAE re-encoding. Separate from the native latent Hires. |
+| **Conditioning Highres Fix** | Adjusts the image conditioning of 9-channel inpainting models relative to the denoising strength. |
+
+For Hires. fix itself, see [Generating images](generate.html).
+
+### Image prompts and control
+
+| Name | What it does |
+|---|---|
+| **Reference only** | Self-attention also attends to a reference image, keeping its style or subject without a model. |
+| **Revision (SDXL image prompt)** | SDXL: adds an image's CLIP-G embedding to the prompt (the encoder downloads once). |
+| **IP-Adapter** | Image prompt adapter. Put the models in the ControlNet folders. |
+| **ControlNet-LLLite** | kohya's lightweight ControlNet for SDXL. Without an image it uses the init image. |
+| **PhotoMaker** | SDXL: takes a person's identity from photos. Put the trigger word after the class word, e.g. `a man img`. txt2img only. |
+| **ControlNet Fastload** | Loads ControlNet units from an image or `.cni` file and saves them with generated images (see [ControlNet](controlnet.html)). |
+
+### Inpainting and repair
+
+| Name | What it does |
+|---|---|
+| **Soft Inpainting** | Blends original and generated content smoothly along a soft (blurred) mask. img2img / Inpaint only. |
+| **Fooocus Inpaint** | SDXL inpainting with the Fooocus patch. img2img / Inpaint only. |
+| **Inpaint Difference** | Creates an inpaint mask from the difference between a base and an altered image. Found inside the image panel of the **Inpaint** tab. |
+| **Restore faces** | Runs GFPGAN or CodeFormer on detected faces. |
+| **ADetailer** | Finds faces, hands or people in each result and redraws them at full resolution. |
+
+### Output and records
+
+| Name | What it does |
+|---|---|
+| **Save intermediate images** | Keeps the denoising steps as PNG frames or a video, separately from the final images. |
+| **Grid image numbers** | Labels grid tiles with their saved image numbers and X/Y/Z values. |
+| **PNG resource hashes** | Records hashes of the local models and other resources used in the PNG generation metadata. |
+
+## Script reference
+
+### Grids and comparisons
+
+| Name | What it does |
+|---|---|
+| **X/Y/Z plot** | Generates a grid of images varying up to three parameters. |
+| **Prompt matrix** | Generates every combination of the `|`-separated prompt parts. |
+| **Test my prompt!** | Generates the prompt with each part removed in turn (same seed) and a labelled grid. |
+| **LoRA queue** | Generates once per selected LoRA (all LoRAs when empty) and makes a grid. |
+| **Batch checkpoints and prompts** | One generation per line of `checkpoint | prompt template` (`{prompt}` is the current prompt). |
+
+### Generating and varying prompts
+
+| Name | What it does |
+|---|---|
+| **Prompts from file or textbox** | Runs one generation per line; lines may use options such as `--prompt` and `--steps`. |
+| **Dynamic Prompts / Wildcards** | Builds prompts from templates such as `{a|b|c}` and `__wildcards__` from `wildcards/*.txt`. |
+| **One Button Prompt** | Generates complete random prompts (subject, style, setting, lighting and more) and renders them. |
+| **StylePile** | Mixes weighted image types, artists and art movements, with sequential and random prompt variables. |
+| **Scramble prompts** | Creates prompt variations by shuffling and randomly dropping comma-separated tags. |
+| **Tweak weights** | Creates variations by randomly re-weighting tags that match a pattern (all tags when empty). |
+
+### Animation and video
+
+| Name | What it does |
+|---|---|
+| **Seed travel** | Makes frames between seeds by interpolating the noise, and saves the frames and an animated GIF. txt2img only. |
+| **Shift attention** | Write `(word:0.5~1.5)` in the prompt; the frames sweep the weight. Saves the frames and a GIF. |
+| **Steps Animation** | Creates a movie from the denoised intermediate steps of one generation. |
+| **Stable Video Diffusion** | Animates the init image with an SVD model and saves a GIF plus the first frame. img2img only. |
+| **Zero123 novel view** | Renders the object in the init image from another angle. img2img only. |
+
+### img2img, upscaling and outpainting
+
+| Name | What it does |
+|---|---|
+| **Loopback** | Runs img2img repeatedly, using each output as the next input. img2img only. |
+| **SD upscale** | Upscales the image, then refines it tile by tile. img2img only. |
+| **Ultimate SD upscale** | Upscales, then redraws tile by tile with masked inpainting; optional seam fixing. img2img only. |
+| **Latent Upscale** | Encodes the image before resizing, interpolates its latents, then denoises for the full step count. img2img only. |
+| **img2img alternative test** | Estimates the init image's noise so a changed prompt edits it (DDIM noise inversion). img2img only. |
+| **Poor man's outpainting** | Extends the image in the chosen directions and inpaints the new area. img2img only. |
+| **Outpainting mk2** | Extends the canvas with colour-matched noise and inpaints it (use high denoising, e.g. 0.8). img2img only. |
+| **Depth aware img2img mask** | Estimates depth and inpaints only the parts between the near and far thresholds. img2img only. |
+| **Inpaint background** | Masks the people and redraws only the background from the prompt. img2img only. |
+| **Seamless tile inpainting** | Moves the tile edges to the centre, then inpaints only their seams. img2img only. |
+
+### Image processing
+
+These scripts process the init image in img2img, and each generated image in txt2img.
+
+| Name | What it does |
+|---|---|
+| **Upscale (extras)** | Upscales the image with an upscaler. |
+| **Waifu2x upscale** | Upscales 2x to 16x with the Anime, Photo or CARN V2 models. Weights download on first use. |
+| **FSR-style upscale (CAS)** | Fast non-AI upscale (Lanczos followed by sharpening). |
+| **Restore faces (extras)** | Runs GFPGAN / CodeFormer on the image. |
+| **Caption (BLIP / WD14 tags)** | Captions the image and saves a copy with the caption in its infotext and a `.txt` next to it. |
+| **Create flipped copies** | Saves horizontally and vertically flipped copies. |
+| **Split oversized images** | Splits very wide or tall images into overlapping pieces of the target size. |
+| **Auto-sized crop** | Picks a 64-divisible size close to the target area and the image's aspect, then crops and resizes. |
+| **Auto focal point crop** | Crops to the target width x height around the most detailed region. |
+| **Remove background** | Cuts out the subject and saves a transparent PNG (and, optionally, the mask). The rembg models need a separate install. |
+| **Person mask** | Saves a black-and-white mask of the people in the image. |
+| **Pixel art** | Turns the image into pixel art with downscaling, a reduced palette, dithering and outlines. |
+| **Color enhance** | Stretches colourfulness to the full range while keeping lightness and hue. |
+| **Color correction** | Matches the colours of a reference image. An empty reference uses the original input. |
+
+You can also upscale or colour-correct a single image in the **Extras** tab.
+
+### Model tools
+
+| Name | What it does |
+|---|---|
+| **Checkpoint merger** | Merges two or three checkpoints into a new `.safetensors` next to model A. Press **Generate** to run it. |
+| **Checkpoint converter** | Writes a cleaned copy of a checkpoint (precision, EMA weights, junk keys, baked VAE and more). Press **Generate** to run it. |
+
+### Other
+
+| Name | What it does |
+|---|---|
+| **Custom code** | Runs Python in the engine. Works only when **Allow custom code** is on in Settings → **Engine**. |
+
+## A1111 extension index status
+
+The status of every entry in the A1111 / reForge extension index (353 entries) is listed in [docs/EXTENSIONS.md](https://github.com/kmizu/stablediffusion-nui/blob/main/docs/EXTENSIONS.md) on GitHub. Each entry is `done` (built in), `todo` (planned) or `na` (does not apply to a desktop app).
+
+Some extensions are implemented as part of the app or as tabs rather than as plugins (the gallery, Styles, the embedding tabs and others). These are covered in [Tools](tools.html) and [LoRA and embeddings](lora-embeddings.html).
+
+## Adding external plugins
+
+You can write your own plugins and add them.
+
+- Implement `sdfx.core.plugins.api.Plugin` and register it with `java.util.ServiceLoader` in a jar.
+- A plugin is either AlwaysOn or Script. The controls it declares are drawn as a form in the GUI and exposed to MCP as a JSON schema.
+- Put the jar in the app's `plugins-ext/` folder and restart the app to load it.
+- A plugin with the same id as a built-in one is not loaded (the built-in wins).
+
+For sample code and the full steps, see [how to write external plugins](https://github.com/kmizu/stablediffusion-nui#外部プラグインの作り方) in the README.

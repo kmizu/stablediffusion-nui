@@ -4,6 +4,8 @@
 
 リポジトリ: [kmizu/stablediffusion-nui](https://github.com/kmizu/stablediffusion-nui)。旧名は Stable Diffusion FX / SDFX。
 
+**マニュアル: <https://kmizu.github.io/stablediffusion-nui/>**（English: <https://kmizu.github.io/stablediffusion-nui/en/>）
+
 ![SDNUIのネイティブ画面。左にプロンプトと生成設定、右に生成画像と20枚のギャラリー、ZIP保存ボタン。](docs/images/sdnui-desktop.png)
 
 *実際のSDNUI画面：4枚同時 × 5回のバッチ生成結果。*
@@ -12,7 +14,7 @@
 a Scala 3 + JavaFX 21 UI, an MCP server so AI agents (Claude Code etc.) can generate images, and a Python
 `diffusers` engine that the UI drives over a JSON Lines protocol. It lives entirely in this folder and does not
 need the parent reForge/A1111 repository (it can optionally *read* an existing A1111/reForge models folder).
-Requirements: JDK 17+, Python 3.10-3.12, an NVIDIA GPU is recommended. Quick start: `scripts\build.bat`, then
+User manual: <https://kmizu.github.io/stablediffusion-nui/en/>. Requirements: JDK 17+, Python 3.10-3.12, an NVIDIA GPU is recommended. Quick start: `scripts\build.bat`, then
 `run.bat` (or `run.bat --dry-run` to try the UI without a GPU or models).
 
 ---

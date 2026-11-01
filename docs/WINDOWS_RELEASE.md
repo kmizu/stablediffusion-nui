@@ -18,6 +18,18 @@ To use existing Civitai downloads, place the model files in the corresponding `m
 `LICENSE`, `THIRD_PARTY_NOTICES.md`, `DISTRIBUTION_NOTICES.md` and the referenced `licenses/*.txt` cover the app and listed dependencies; the bundled runtime's own notices are in `runtime/legal`. This is a portable app-image, not an installer; deleting its extracted folder removes its local data as well.
 
 
+The full user manual (Japanese and English) is at <https://kmizu.github.io/stablediffusion-nui/en/>.
+
+## Use from AI agents (MCP)
+
+`SDNUI.exe --mcp` starts a headless MCP server over stdio with the bundled Java runtime, without opening the window. Set up Python and model folders first (in the GUI or in `<home>/config/settings.json`), then register it with your MCP client, for example:
+
+```powershell
+claude mcp add stablediffusion-nui -- C:/apps/SDNUI/SDNUI.exe --mcp --home C:/apps/SDNUI
+```
+
+`.mcp.json.example` shows the same connection for `.mcp.json`. Add `--dry-run` to try it without a GPU, or `--http [PORT]` to serve Streamable HTTP instead of stdio. To let agents drive the running GUI instead, enable Settings → MCP → **Enable MCP HTTP server** and connect to `http://127.0.0.1:7861/mcp`. Tools, options and limits: `mcp/README.md` and the manual's MCP page.
+
 ## WD v3 batch interrogation (partial)
 
 This optional Img2Img workflow tags each input image using a local WD v3 model before generating. It does not implement all backends or options of the original batch interrogator. Models are not bundled or downloaded automatically.

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="{lang}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<meta name="description" content="{description}">
+<link rel="alternate" hreflang="{other_lang}" href="{other_url}">
+<link rel="icon" href="{root}assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="{root}assets/site.css">
+<script src="{root}assets/site.js" defer></script>
+</head>
+<body class="{page_class}">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="{root}{lang_home}"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">SDNUI</span><span class="brand-sub">{manual}</span></a>
+  <nav class="top-links">
+    <a href="{other_url}" hreflang="{other_lang}" lang="{other_lang}">{other_label}</a>
+    <a class="gh" href="{repo}">GitHub</a>
+    <a class="button" href="{releases}">{download}</a>
+  </nav>
+</header>
+<div class="frame">
+  <aside class="sidebar">
+    <details class="nav-toggle" open>
+      <summary>{menu}</summary>
+      <nav aria-label="{menu}">{nav}</nav>
+    </details>
+  </aside>
+  <main id="main">
+    {hero}
+    <article class="prose">
+      {heading}
+      {content}
+    </article>
+    {pager}
+    <footer class="foot">
+      <p>{licence}</p>
+      <p><a href="{edit_url}">{edit_label}</a></p>
+    </footer>
+  </main>
+  <aside class="toc" aria-label="{toc_label}">
+    <p class="toc-label">{toc_label}</p>
+    <ul>{toc}</ul>
+  </aside>
+</div>
+</body>
+</html>

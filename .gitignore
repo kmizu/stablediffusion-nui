@@ -23,3 +23,5 @@ python/.cache/
 # The parent repo ignores *.bat / *.sh; keep this app's launchers tracked.
 !*.bat
 !*.sh
+site/_site/
+.playwright-mcp/

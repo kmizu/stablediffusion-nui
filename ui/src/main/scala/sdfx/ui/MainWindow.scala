@@ -972,6 +972,9 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       if t == "styles" then tabs.getSelectionModel.select(stylesTab)
       if t == "comparison" then tabs.getSelectionModel.select(comparisonTab)
       if t == "vae_tools" then tabs.getSelectionModel.select(vaeToolsTab)
+      // Dev flag --tab also accepts any tab id or title (documentation screenshots).
+      if opts.tab.contains(t) then
+        tabs.getTabs.asScala.find(tab => tab.getId == t || tab.getText == t).foreach(tabs.getSelectionModel.select)
     }
     statusBar.logToggle.setSelected(initial.logVisible)
     reloadGallery()
