@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from . import adapters, agent_attention, cd_tuner, guidance, latent_ops, sampling_ext, semantic_guidance, unet_hooks
+from . import adapters, agent_attention, cd_tuner, characteristic_guidance, guidance, latent_ops, sampling_ext, semantic_guidance, unet_hooks
 from .hooks import coerce_bool, hook_config
 from .protocol import INVALID_PARAMS, UNSUPPORTED, EngineError
 
@@ -26,7 +26,7 @@ log = logging.getLogger("sdfx.extensions")
 EXTENSION_HOOKS = ("apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
                    "soft_inpainting", "sag", "neveroom", "reference", "revision", "ip_adapter", "controllllite",
                    "fooocus_inpaint", "photomaker", "face_restore", "img2imgalt", "semantic_guidance",
-                   "agent_attention", "cd_tuner") + sampling_ext.HOOKS
+                   "agent_attention", "cd_tuner", "characteristic_guidance") + sampling_ext.HOOKS
 
 MODEL_SAMPLING_DEFAULTS = {"sampling": "default", "zsnr": False}
 SAG_DEFAULTS = {"scale": 0.5, "blur_sigma": 2.0}
@@ -306,6 +306,13 @@ def install(engine, pipe, task: str, gp, req, kw: dict, ctx, cleanups: list, *, 
                                          sag=plan.sag is not None)
         if remove is not None:
             cleanups.append(remove)
+
+    # --- characteristic guidance (last: its pre-hook sees the inputs every other hook has prepared) ---------------
+    chg = cfg(gp, "characteristic_guidance", characteristic_guidance.DEFAULTS)
+    if chg:
+        characteristic_guidance.install(engine, pipe, gp, kw, ctx, chg, pass_=pass_, sched=sched, cfg_scale=cfg_scale,
+                                        cleanups=cleanups, pag="pag_scale" in kw, sag=plan.sag is not None,
+                                        composed=branch_hooks is not None)
     return cleanups
 
 

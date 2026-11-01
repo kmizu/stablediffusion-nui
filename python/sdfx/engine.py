@@ -216,7 +216,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")

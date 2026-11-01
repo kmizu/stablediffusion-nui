@@ -71,6 +71,26 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(bad("unapplied_fields").obj.contains("CDT"))
   }
 
+  test("Characteristic Guidance CHG restores the plugin and is consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("chg.png")
+    val chg = "{'RegS': 5, 'RegR': 1.5, 'MaxI': 30, 'NBasis': 1, 'Reuse': 1, 'Tol': -4, 'IteSS': 1, 'ASpeed': 0.4, " +
+      "'AStrength': 0.5, 'AADim': 2, 'CMode': 'More Prompt', 'StartStep': 0.1, 'StopStep': 0.4}"
+    val text = "cat\nSteps: 20, Seed: 4, Size: 512x512, CHG: \"" + chg + "\""
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, new PathPolicy(() => Seq(dir)), dir)
+    val on = result("always_on")("characteristic_guidance")
+    assertEquals((on("enabled").bool, on("reg_ini").num, on("ite").num, on("noise_base").num), (true, 5.0, 30.0, 1.0))
+    assertEquals((on("controlnet_mode").str, on("stop_step").num), ("More Prompt", 0.4))
+    assert(!result("unapplied_fields").obj.contains("CHG"))
+    val malformed = dir.resolve("chg-bad.png")
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), malformed,
+      Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512, CHG: \"{'RegS': 'x'}\""))
+    val bad = InspectGenerationMetadata.inspect(malformed.toString, new PathPolicy(() => Seq(dir)), dir)
+    assert(!bad("always_on").obj.contains("characteristic_guidance"))
+    assert(bad("unapplied_fields").obj.contains("CHG"))
+  }
+
   test("replay rejects non-finite variation strength") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("non-finite.png")

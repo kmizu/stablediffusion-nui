@@ -98,6 +98,7 @@ LoRA 全般の使い方は [LoRA と Embedding](lora-embeddings.html) を参照�
 | **RescaleCFG** | ガイダンス後の予測の標準偏差を、ポジティブ側に合わせて調整します(v-prediction / ZTSNR モデル向け)。 |
 | **Perturbed-Attention Guidance** | 自己注意を乱したパスからのガイダンスを加えます(PAG)。 |
 | **Semantic Guidance** | 専用のプロンプトに書いた概念(カンマ区切り)を画像に加え、ネガティブプロンプトの概念を取り除きます。Warmup 後のステップでプロンプトの条件付けを編集するので、構図はおおむね保たれます。Edit guidance scale の既定値 1.0 でも効きが強く、特に取り除く方向では崩れることがあるので、0.3〜1.0 で調整してください。 |
+| **Characteristic Guidance** | CFG スケールが大きいときの CFG を、U-Net への入力を反復的にずらして補正します。大きなスケールのプロンプト追従性を保ったまま、彩度の飽和や不自然な色、背景、細部を抑えます。1 ステップごとに U-Net を何回も追加で評価するので遅く、まず通常の CFG で生成してから同じシードで試すのがおすすめです。反復が収束しなかったステップは通常の CFG になります(収束したステップ数はログに出ます)。Regularization Strength と Range Over Time を大きくすると収束しやすくなり、結果は CFG に近づきます。SDXL では Regularization Strength 5 から始めてください。CHG End Step を 0.4 前後にすると、結果をあまり変えずに大幅に速くなります。 |
 | **Self Attention Guidance** | ぼかした自己注意の領域でガイダンスします。SD1.x の txt2img 専用で、DDIM / UniPC / DPM++ 系のサンプラーが必要です。 |
 | **CFG Schedule** | CFG スケールを、ステップの進行に合わせて開始値から終了値へ変化させます(CFG > 1 が必要)。 |
 | **CADS** | プロンプトの条件付けにスケジュールしたノイズを加え、結果の多様性を高めます。 |

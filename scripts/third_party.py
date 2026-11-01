@@ -22,6 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # (repo, how it is used, what)
 BASE = [
     ("Elldreth/loopback_scaler", "reimplemented", "Pinned MIT source 184a53e6d22579c578c6ee1bf55d821479213c49; independent native img2img loop schedule and final filters; no upstream code copied"),
+    ("scraed/CharacteristicGuidanceWebUI", "reimplemented", "Pinned GPL-3.0 source e2f9fdca460beed1366647e2eea8276a63f98484; independent characteristic guidance iteration; no upstream code copied"),
     ("hako-mikan/sd-webui-cd-tuner", "reimplemented", "Pinned AGPL-3.0 source aafdbdda88b8d4e717fdb9aa9abe9e6df4943d7a; independent weight, latent and VAE adjustments, colour map and prompt tags; no upstream code copied"),
     ("v0xie/sd-webui-agentattention", "reimplemented", "Pinned GPL-3.0 source 8c2fd24ed5203e68450100064a49fa7873eea0bb; independent agent attention and token merging (behaviour of LeapLabTHU/Agent-Attention 207ce3e and dbolya/tomesd 27a14a3 as the source documents them); no upstream code copied"),
     ("w-e-w/sd-webui-nudenet-nsfw-censor", "ported", "Pinned AGPL-3.0 source 1fb21cf9c3f72915ea1b5091bd51aedf91eae9d0; NudeNet letterbox detection, per-category thresholds and expansion, NMS, mask shapes, censor filters and the generation / live preview / Extras workflows re-implemented as `nsfw_checker` and `nsfw_checker_extras`; its unmodified nudenet/best.onnx (Git blob 12f4f7808735fb2f8a0fb9beca635a1426bfdcad) is bundled as models/nudenet/best.onnx"),
@@ -192,6 +193,7 @@ BASE = [
 # (commit, license path, SHA-256, SPDX)
 PINNED_LICENSES = {
     "Elldreth/loopback_scaler": ("184a53e6d22579c578c6ee1bf55d821479213c49", "LICENSE", "d664856e8ec3180ea54d889cd2bbbd5971b7cb14f91b882c4af3b94b3e86747a", "MIT"),
+    "scraed/CharacteristicGuidanceWebUI": ("e2f9fdca460beed1366647e2eea8276a63f98484", "LICENSE", "8b1ba204bb69a0ade2bfcf65ef294a920f6bb361b317dba43c7ef29d96332b9b", "GPL-3.0"),
     "hako-mikan/sd-webui-cd-tuner": ("aafdbdda88b8d4e717fdb9aa9abe9e6df4943d7a", "LICENSE", "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef", "AGPL-3.0"),
     "v0xie/sd-webui-agentattention": ("8c2fd24ed5203e68450100064a49fa7873eea0bb", "LICENSE", "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986", "GPL-3.0"),
     "w-e-w/sd-webui-nudenet-nsfw-censor": ("1fb21cf9c3f72915ea1b5091bd51aedf91eae9d0", "LICENSE", "3918cb0f0add9f911a7ad0c4f188e8a9be865a4f14b860820cca1fbf6fefe1e7", "AGPL-3.0"),

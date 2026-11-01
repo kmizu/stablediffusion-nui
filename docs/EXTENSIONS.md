@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 130, todo 172, na 51.
+Totals: done 131, todo 171, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -273,7 +273,7 @@ Totals: done 130, todo 172, na 51.
 | 264 | [Deepdanbooru object recognition](https://github.com/Jibaku789/sd-webui-deepdanbooru-object-recognition.git) | 37 | todo | `deepdanbooru` |  |
 | 265 | [Deepdanbooru Tag2Folder](https://github.com/Jibaku789/sd-webui-deepdanbooru-tag2folder) | 9 | todo | `deepdanbooru` |  |
 | 266 | [sd-webui-ocr](https://github.com/SpenserCai/sd-webui-ocr) | 17 | todo | `ocr` |  |
-| 267 | [Characteristic Guidance Web UI](https://github.com/scraed/CharacteristicGuidanceWebUI.git) | 84 | todo | `characteristic_guidance` |  |
+| 267 | [Characteristic Guidance Web UI](https://github.com/scraed/CharacteristicGuidanceWebUI.git) | 84 | done | `characteristic_guidance` | AlwaysOn characteristic guidance as the pinned extension: per-step iteration with all 13 controls, eps/v models, k-diffusion/DDIM/UniPC, SD1.5/SD2/SDXL incl. 9-channel inpainting, base pass only (hires restarts, ADetailer skipped), CHG infotext with PNG/MCP replay. QR solve replaces CPU lstsq so replays are exact. Many other guidance/branch plugins are rejected by name. SD1.5/SDXL real MCP checks with image inspection. See characteristic-guidance-verification.md. |
 | 268 | [embedding-inspector](https://github.com/w-e-w/embedding-inspector.git) | 24 | done | `core:embedding-inspector` | Native inspector, tokenizer, vector mixer, arbitrary-code-gated eval, atomic save and active-model refresh with SD1.5/SDXL support; loaded/catalog ownership is explicit. Eval can write readable files; SD2 actual checkpoints and A1111 training interoperability remain unverified. See embedding-inspector-verification.md. |
 | 269 | [Lama cleaner as masked content](https://github.com/light-and-ray/sd-webui-lama-cleaner-masked-content.git) | 102 | todo | `lama_cleaner` |  |
 | 270 | [Latent Regional Helper](https://github.com/safubuki/sd-webui-latent-regional-helper.git) | 23 | todo | `regional_prompter` |  |

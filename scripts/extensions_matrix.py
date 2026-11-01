@@ -88,7 +88,7 @@ S = {
     253: "todo:core:api-payload", 254: "todo:adetailer", 255: "todo:lora_queue", 256: "done:kohya_hrfix",
     257: "todo:test_my_prompt", 258: "na:webui-ux", 259: "na:account", 260: "todo:replacer",
     261: "todo:color_correction", 262: "todo:core:state-manager", 263: "done:agent_attention", 264: "todo:deepdanbooru",
-    265: "todo:deepdanbooru", 266: "todo:ocr", 267: "todo:characteristic_guidance", 268: "done:core:embedding-inspector",
+    265: "todo:deepdanbooru", 266: "todo:ocr", 267: "done:characteristic_guidance", 268: "done:core:embedding-inspector",
     269: "todo:lama_cleaner", 270: "todo:regional_prompter", 271: "todo:model_organizer", 272: "na:account",
     273: "todo:video_extras", 274: "todo:inpaint_background", 275: "todo:daam", 276: "todo:controlnet_preprocess_extras",
     277: "na:account", 278: "todo:rpg_diffusion", 279: "todo:creaprompt", 280: "todo:img2img_workflow",
@@ -144,6 +144,7 @@ IMPLEMENTED = {
 
 
 SCOPE_NOTES = {
+    "characteristic_guidance": "AlwaysOn characteristic guidance as the pinned extension: per-step iteration with all 13 controls, eps/v models, k-diffusion/DDIM/UniPC, SD1.5/SD2/SDXL incl. 9-channel inpainting, base pass only (hires restarts, ADetailer skipped), CHG infotext with PNG/MCP replay. QR solve replaces CPU lstsq so replays are exact. Many other guidance/branch plugins are rejected by name. SD1.5/SDXL real MCP checks with image inspection. See characteristic-guidance-verification.md.",
     "nsfw_checker": "Index 238 (NudeNet NSFW Censor) only: bundled pinned NudeNet 320n ONNX with hash check, 18 categories with per-category threshold and expansion, NMS, all mask shapes and censor filters, generation censoring after refinement with optional before-censor/mask outputs, live preview censoring, Extras with custom-mask union, image_tool/MCP and PNG replay. Indices 83 (A1111 nsfw-censor) and 231 (NSFWJS blurrer) remain todo under #91. SD1.5/SDXL real MCP checks with image inspection. See nsfw-checker-verification.md.",
     "cd_tuner": "AlwaysOn colour/detail tuner as the pinned extension: detail d1/d2 and hires hd1/hd2 via conv_in/norm_out/conv_out weights restored after every pass, hr-scaling, stop steps, Contrast 2, brightness and three colour axes, VAE saturation 1/2, the colour map, <cdt:>/<cdtc:> prompt tags, Apply once and CDT/CDTC infotext with PNG/MCP replay. Source quirks kept (Hr-Stop Step 0). Stop steps count pipeline steps (differs for second-order samplers). SD1.5/SDXL real MCP checks with image inspection. See cd-tuner-verification.md.",
     "agent_attention": "AlwaysOn agent attention with token merging as the pinned extension: first/second pass sx, sy, ratio and agent ratio, second pass step, max downsample, FP32, hires-only, source infotext keys, PNG/MCP replay and all 13 XYZ axes. Merging uses a deterministic reduction (seeded from the image seed) so PNG replays are pixel-exact, not pixel-equal to A1111. Rejects PAG, SAG, HyperTile, Token Downsampling, Reference-only and ControlNet-LLLite combinations. SD1.5/SDXL real MCP checks with image inspection. See agent-attention-verification.md.",

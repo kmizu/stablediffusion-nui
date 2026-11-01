@@ -105,6 +105,7 @@ final class PluginsVM(val mode: Mode, scripts: Seq[Plugin], alwaysOnPlugins: Seq
     sdfx.plugins.AgentAttentionPlugin.replay(fields).foreach(values => form("agent_attention").foreach(_.load(values)))
     sdfx.plugins.CdTunerPlugin.replay(fields).foreach(values => form("cd_tuner").foreach(_.load(values)))
     sdfx.plugins.NsfwCheckerPlugin.replay(fields).foreach(values => form("nsfw_checker").foreach(_.load(values)))
+    sdfx.plugins.CharacteristicGuidancePlugin.replay(fields).foreach(values => form("characteristic_guidance").foreach(_.load(values)))
     def flag(key: String): Option[Boolean] = fields.get(key).flatMap { v =>
       v.trim.toLowerCase(java.util.Locale.ROOT) match
         case "true" => Some(true)
