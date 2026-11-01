@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 134, todo 168, na 51.
+Totals: done 135, todo 167, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -75,7 +75,7 @@ Totals: done 134, todo 168, na 51.
 | 66 | [haku-img](https://github.com/KohakuBlueleaf/a1111-sd-webui-haku-img.git) | 198 | todo | `haku_img` |  |
 | 67 | [Asymmetric Tiling](https://github.com/tjm35/asymmetric-tiling-sd-webui.git) | 216 | done | `asymmetric_tiling` |  |
 | 68 | [Latent Mirroring](https://github.com/dfaker/SD-latent-mirroring.git) | 111 | done | `latent_mirroring` |  |
-| 69 | [Sonar](https://github.com/Kahsolt/stable-diffusion-webui-sonar.git) | 112 | todo | `sonar` |  |
+| 69 | [Sonar](https://github.com/Kahsolt/stable-diffusion-webui-sonar.git) | 112 | done | `sonar` | AlwaysOn Sonar from the behaviour of the MIT source (README and script, nothing copied): momentum on the Euler a / Euler / Naive sampler updates (current and history momentum, pos/neg/rand sign, zero/rand_init/rand_new history start), Naive reference-image shallow fusion (linear and euler methods, step range), the final upscale by ratio or size, Sonar sampler/momentum/momentum_hist infotext plus extra keys for exact PNG/MCP replay, hires and img2img. The k-diffusion samplers map onto diffusers' Euler and Euler a schedulers (momentum 1.0 is bit-identical to them); while active the Sonar sampler replaces the request sampler. Random choices (rand sign, rand_new history, Naive 1e-5 noise) come from a seeded generator and the reference latent is the VAE posterior mean, so replays are exact; the reference image file cannot be restored from a PNG; the grid-search script mode is covered by X/Y/Z axes of momentum and momentum_hist (the `start:stop:step` list syntax is not provided); the AlwaysVisible/Script morph switch is not applicable. SD1.5/SDXL real MCP checks with image inspection. See sonar-verification.md. |
 | 70 | [Depth Image I/O](https://github.com/AnonymousCervine/depth-image-io-for-SDWebui.git) | 73 | todo | `depth_image_io` |  |
 | 71 | [Ultimate SD Upscale](https://github.com/Coyote-A/ultimate-upscale-for-automatic1111.git) | 1764 | done | `ultimate_sd_upscale` |  |
 | 72 | [Prompt Fusion](https://github.com/ljleb/prompt-fusion-extension.git) | 265 | done | `prompt_fusion` |  |

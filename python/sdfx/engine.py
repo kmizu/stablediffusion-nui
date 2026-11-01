@@ -25,7 +25,7 @@ import diffusers  # noqa: F401
 from . import controlnet as cn_mod
 from . import hires as hires_mod
 from . import hooks as hooks_mod
-from . import adapters, extras, inpaint, lora_blocks, models, preview, prompt, prompt_schedule, schedulers, upscalers
+from . import adapters, extras, inpaint, lora_blocks, models, preview, prompt, prompt_schedule, schedulers, sonar, upscalers
 from . import weight_gradient, save_intermediate, latent_upscale, steps_animation
 from . import negpip
 from . import neutral_prompt, neutral_runtime, prompt_fusion
@@ -216,7 +216,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")
@@ -1178,7 +1178,7 @@ class Engine(BaseEngine):
                 raise
         if _photomaker_scope is not None:
             _photomaker_scope.activate(pipe)
-        sched, plan = self._scheduler(sampler, schedule, ctx)
+        sched, plan = self._scheduler(sonar.effective_sampler(gp.hooks, sampler), schedule, ctx)
         if xplan.sag and type(sched).__name__ not in SAG_SCHEDULERS:
             ctx.warn(f"SAG does not work with sampler '{sampler}' (use DDIM, UniPC or a DPM++ sampler); ignored")
             xplan.sag = None
@@ -1569,6 +1569,8 @@ class Engine(BaseEngine):
         gp = req.params
         from . import nsfw_checker
         nsfw_cfg = nsfw_checker.job_config(gp.hooks, ctx)
+        sonar_cfg = hooks_mod.hook_config(gp.hooks, "sonar", sonar.DEFAULTS)
+        sonar_cfg = sonar.normalize(sonar_cfg) if sonar_cfg is not None else None
         from . import img2img_hires_fix
         refine_config = hooks_mod.hook_config(gp.hooks, 'img2img_hires_fix', {})
         refine_config = img2img_hires_fix.normalize(refine_config) if refine_config is not None else None
@@ -1772,6 +1774,8 @@ class Engine(BaseEngine):
                         seeds[j], idx0 + j, total, pag, cn, effective_gp, lora_hashes)
                 # NudeNet NSFW Censor: after ADetailer, post-images and img2img Hires Fix, just before saving.
                 im, censor_auxiliaries = nsfw_checker.censor_final(im, nsfw_cfg, ctx)
+                if sonar_cfg is not None:
+                    im = sonar.upscale_image(self, im, sonar_cfg, gp, req, ctx)
                 path = next_output_path(req.output_dir, str(base_seeds[j]))
                 image_result = {"path": path, "seed": base_seeds[j], "subseed": base_subs[j],
                                 "width": im.width, "height": im.height}
@@ -1990,7 +1994,7 @@ class Engine(BaseEngine):
     # hooks that must not run again on ADetailer's inpainting passes (whole-image effects, or ADetailer itself)
     _ADETAILER_SKIP_HOOKS = ("steps_animation", "adetailer", "save_intermediate", "tiling", "latent_mirroring", "multidiffusion", "kohya_hrfix", "reference",
                              "revision", "ip_adapter", "controllllite", "photomaker", "img2imgalt", "soft_inpainting",
-                             "agent_attention", "incantations")
+                             "agent_attention", "incantations", "sonar")
 
     def _adetailer(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag):
         """ADetailer: detect, then inpaint every detection of every unit (in unit order) at full resolution."""

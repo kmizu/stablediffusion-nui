@@ -16,6 +16,7 @@ description of their behaviour only.
 
 | Project | Use | License | What |
 |---|---|---|---|
+| [Kahsolt/stable-diffusion-webui-sonar](https://github.com/Kahsolt/stable-diffusion-webui-sonar) | reimplemented | MIT ([text](licenses/Kahsolt__stable-diffusion-webui-sonar.txt)) | Pinned MIT source 15f92859f70f624513796dde91396109134da47b; independent momentum Euler / Euler a / Naive scheduler steps, reference-image guidance and upscale from the source behaviour; no upstream code copied |
 | [Elldreth/loopback_scaler](https://github.com/Elldreth/loopback_scaler) | reimplemented | MIT ([text](licenses/Elldreth__loopback_scaler.txt)) | Pinned MIT source 184a53e6d22579c578c6ee1bf55d821479213c49; independent native img2img loop schedule and final filters; no upstream code copied |
 | [v0xie/sd-webui-incantations](https://github.com/v0xie/sd-webui-incantations) | reimplemented | GPL-3.0 ([text](licenses/v0xie__sd-webui-incantations.txt)) | Pinned GPL-3.0 source 980d63838a2b8c8659a01b242e55551870619d6a; independent Smoothed Energy Guidance, S-CFG, PAG with SANF, CFG scheduler and Multi-Concept T2I-Zero; no upstream code copied |
 | [scraed/CharacteristicGuidanceWebUI](https://github.com/scraed/CharacteristicGuidanceWebUI) | reimplemented | GPL-3.0 ([text](licenses/scraed__CharacteristicGuidanceWebUI.txt)) | Pinned GPL-3.0 source e2f9fdca460beed1366647e2eea8276a63f98484; independent characteristic guidance iteration; no upstream code copied |

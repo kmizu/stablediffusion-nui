@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from . import adapters, agent_attention, cd_tuner, characteristic_guidance, guidance, incantations, latent_ops, sampling_ext, semantic_guidance, unet_hooks
+from . import adapters, agent_attention, cd_tuner, characteristic_guidance, guidance, incantations, latent_ops, sampling_ext, semantic_guidance, sonar, unet_hooks
 from .hooks import coerce_bool, hook_config
 from .protocol import INVALID_PARAMS, UNSUPPORTED, EngineError
 
@@ -26,7 +26,7 @@ log = logging.getLogger("sdfx.extensions")
 EXTENSION_HOOKS = ("apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
                    "soft_inpainting", "sag", "neveroom", "reference", "revision", "ip_adapter", "controllllite",
                    "fooocus_inpaint", "photomaker", "face_restore", "img2imgalt", "semantic_guidance",
-                   "agent_attention", "cd_tuner", "characteristic_guidance", "incantations") + sampling_ext.HOOKS
+                   "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar") + sampling_ext.HOOKS
 
 MODEL_SAMPLING_DEFAULTS = {"sampling": "default", "zsnr": False}
 SAG_DEFAULTS = {"scale": 0.5, "blur_sigma": 2.0}
@@ -316,6 +316,11 @@ def install(engine, pipe, task: str, gp, req, kw: dict, ctx, cleanups: list, *, 
             "Neutral Prompt / Composable LoRA branches": branch_hooks is not None}
         incantations.install(engine, pipe, gp, kw, ctx, inc, pass_=pass_, w=w, h=h, cfg_scale=cfg_scale, sched=sched,
                              cleanups=cleanups, others=others)
+
+    # --- Sonar (sampler step momentum / reference guidance) -------------------------------------------------------
+    son = cfg(gp, "sonar", sonar.DEFAULTS)
+    if son:
+        sonar.install(engine, pipe, gp, kw, ctx, son, pass_=pass_, seed=seed, sched=sched, w=w, h=h, cleanups=cleanups)
 
     # --- self-attention token merging (last, so it wraps the final attn1 processors) -------------------------------
     aa = cfg(gp, "agent_attention", agent_attention.DEFAULTS)

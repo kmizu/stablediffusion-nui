@@ -417,7 +417,7 @@
 "index": 69,
 "name": "Sonar",
 "url": "https://github.com/Kahsolt/stable-diffusion-webui-sonar.git",
-"status": "todo:sonar"
+"status": "done:sonar"
 },
 {
 "index": 70,

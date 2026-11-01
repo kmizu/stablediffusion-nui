@@ -624,6 +624,10 @@ class BaseEngine:
                 raise EngineError(UNSUPPORTED, 'img2img Hires Fix sampler is not available')
             if config.upscaler not in PIXEL_UPSCALERS:
                 self.check_model_upscaler(config.upscaler, req.upscaler_paths)
+        son = hook_config(gp.hooks, "sonar", {})
+        if son is not None:
+            from . import sonar
+            sonar.validate(son, gp, req, self)
         latent = hook_config(gp.hooks, "latent_upscale", {})
         if latent is not None:
             from . import latent_upscale

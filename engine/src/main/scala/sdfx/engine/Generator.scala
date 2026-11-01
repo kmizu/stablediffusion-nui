@@ -364,7 +364,10 @@ final class Generator(
         None
       }
     }.toMap
-    val upPaths = Seq(Option.when(recorded.hires.enabled)(recorded.hires.upscaler), refinement.map(_("upscaler").str)).flatten
+    val sonarUpscaler = recorded.hooks.get("sonar").collect {
+      case o: ujson.Obj if o.value.get("upscale").contains(ujson.Bool(true)) && o.value.contains("upscaler") => o("upscaler").str
+    }
+    val upPaths = Seq(Option.when(recorded.hires.enabled)(recorded.hires.upscaler), refinement.map(_("upscaler").str), sonarUpscaler).flatten
       .flatMap(u => catalog.findUpscaler(u).map(e => u -> e.path))
       .toMap
     val s = settings()

@@ -343,6 +343,28 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("agent_attention"))
   }
 
+  test("Sonar source infotext becomes a typed candidate and its keys are consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("sonar.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val text = "lion\nSteps: 20, Seed: 4, Size: 512x512, Sonar sampler: Naive, Sonar momentum: 0.9, " +
+      "Sonar momentum_hist: 0.5, Sonar momentum_sign: neg, Sonar ref_img: guide.png, Sonar ref_meth: euler, " +
+      "Sonar ref_hgf: 0.3, Sonar ref_start_step: 1, Sonar ref_stop_step: 0.5"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("always_on")("sonar")
+    assertEquals(candidate("enabled").bool, true)
+    assertEquals(candidate("sampler").str, "Naive")
+    assertEquals(candidate("momentum").num, 0.9)
+    assertEquals(candidate("momentum_sign").str, "neg")
+    assertEquals(candidate("ref_meth").str, "euler")
+    assertEquals(candidate("ref_img").str, "")
+    val unapplied = result("unapplied_fields").obj.keySet
+    assert(!unapplied.exists(k => sdfx.plugins.SonarPlugin.InfotextKeys.contains(k)), unapplied)
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("sonar"))
+  }
+
   test("Incantations source infotext becomes a typed candidate and its keys are consumed") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("incant.png")
