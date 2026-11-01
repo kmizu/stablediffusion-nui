@@ -622,6 +622,88 @@ class GeneratorSuite extends munit.FunSuite:
     } finally services.updateSettings(_ => original)
   }
 
+  test("NudeNet auxiliary outputs are saved before their image with its infotext and not returned") {
+    val logs = scala.collection.mutable.ArrayBuffer.empty[String]
+    val saved = scala.collection.mutable.ArrayBuffer.empty[sdfx.core.plugins.api.OutputImage]
+    val listener = new GenerationListener:
+      override def onLog(m: String): Unit = logs += m
+      override def onImageSaved(image: sdfx.core.plugins.api.OutputImage, grid: Boolean): Unit = saved += image
+    val p = GenerationParams(seed = 31, steps = 1, width = 64, height = 64, batchSize = 2,
+      extra = Map("censor_auxiliary_fixture" -> "true"))
+    val out = services.generator.generateWith(p, listener)
+    assertEquals(out.map(_.seed), Seq(31L, 32L))
+    assertEquals(saved.map(_.path).toSeq, out.map(_.path))
+    val dir = out.head.path.getParent
+    def index(path: java.nio.file.Path) = path.getFileName.toString.take(5).toInt
+    val first = index(out.head.path)
+    def named(i: Int, rest: String) = dir.resolve(f"$i%05d-$rest.png")
+    for (image, base) <- out.zip(Seq(first - 2, first + 1)) do
+      val before = named(base, s"${image.seed}-before-censor")
+      val mask = named(base + 1, s"${image.seed}-censor-mask")
+      assertEquals(index(image.path), base + 2)
+      for aux <- Seq(before, mask) do
+        assert(Files.isRegularFile(aux), aux.toString)
+        assertEquals(PngMetadata.readParameters(aux), Some(image.infotext))
+      assertEquals(PngMetadata.readImage(before).getRGB(0, 0) & 0xffffff, (250 << 16) | (10 << 8) | 10)
+      assertEquals(PngMetadata.readImage(mask).getRGB(0, 0) & 0xffffff, (250 << 16) | (11 << 8) | 10)
+    assertEquals(logs.count(_.startsWith("Saved -before-censor image")), 2)
+    val tmp = home.tmpDir(services.settings)
+    assert(Files.list(tmp).iterator().asScala.forall(!_.getFileName.toString.startsWith("tmp-")))
+  }
+
+  test("NudeNet auxiliary outputs follow scrambling, reject unsafe suffixes and persist for transient jobs") {
+    val session = new sdfx.core.png.ImageScrambleSession
+    session.unlock("aux secret")
+    val protectedListener = new GenerationListener:
+      override private[engine] def imageSecret = session.snapshot
+    val image = services.generator.generateWith(GenerationParams(seed = 41, steps = 1, width = 64, height = 64,
+      extra = Map("censor_auxiliary_fixture" -> "true")), protectedListener).head
+    val dir = image.path.getParent
+    val i = image.path.getFileName.toString.take(5).toInt
+    val before = dir.resolve(f"${i - 2}%05d-41-before-censor.png")
+    assertEquals(PngMetadata.readTexts(before).get("Encrypt"), Some("pixel_shuffle_3"))
+    assertEquals(PngMetadata.readTexts(dir.resolve(f"${i - 1}%05d-41-censor-mask.png")).get("Encrypt"), Some("pixel_shuffle_3"))
+
+    val logs = scala.collection.mutable.ArrayBuffer.empty[String]
+    val logging = new GenerationListener:
+      override def onLog(m: String): Unit = logs += m
+    val unsafe = services.generator.generateWith(GenerationParams(seed = 43, steps = 1, width = 64, height = 64,
+      extra = Map("censor_auxiliary_fixture" -> "invalid")), logging).head
+    assert(logs.exists(_.startsWith("Skipped an auxiliary engine image")))
+    assert(Files.list(unsafe.path.getParent).iterator().asScala.forall(!_.getFileName.toString.contains("escape")))
+    assert(Files.list(home.tmpDir(services.settings)).iterator().asScala.forall(!_.getFileName.toString.contains("-aux")))
+
+    val transient = services.generator.generateTransientWith(GenerationParams(seed = 47, steps = 1, width = 64, height = 64,
+      extra = Map("censor_auxiliary_fixture" -> "true")), GenerationListener.none)
+    try
+      assertEquals(transient.size, 1)
+      assert(transient.head.path.startsWith(home.tmpDir(services.settings)))
+      val persisted = Files.list(dir).iterator().asScala.map(_.getFileName.toString).toSeq
+      assert(persisted.exists(_.endsWith("-47-before-censor.png")) && persisted.exists(_.endsWith("-47-censor-mask.png")))
+      assert(!persisted.exists(_.matches("""\d+-47\.png""")))
+    finally transient.foreach(o => Files.deleteIfExists(o.path))
+  }
+
+  test("image tool custom masks are decoded for the worker and removed afterwards") {
+    val src = home.root.resolve("protected-censor-input.png")
+    val mask = home.root.resolve("protected-censor-mask.png")
+    val pixels = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.ScrambledPng.write(pixels, src, Nil, Some("mask secret"))
+    sdfx.core.png.ScrambledPng.write(pixels, mask, Nil, Some("mask secret"))
+    val session = new sdfx.core.png.ImageScrambleSession; session.unlock("mask secret")
+    try
+      val context = services.generator.forImageSession(session.snapshot)
+      val r = context.engineCall("image_tool", ujson.Obj("tool" -> "nsfw_checker", "image_path" -> src.toString,
+        "mask_path" -> mask.toString))
+      val extra = await(services.client.raw("get_state"))("last_extra")
+      val sent = java.nio.file.Paths.get(extra("params")("mask_path").str)
+      assertNotEquals(sent, mask)
+      assertEquals(extra("readable")("mask_path"), ujson.Bool(true))
+      assert(!Files.exists(sent))
+      Files.deleteIfExists(java.nio.file.Paths.get(r("path").str))
+    finally Seq(src, mask).foreach(Files.deleteIfExists)
+  }
+
   test("upscale, memory, choices") {
     val img = services.generator.generate(GenerationParams(prompt = "u", seed = 9, steps = 1, width = 64, height = 64)).head.path
     val up = services.generator.upscale(img, "4x-Ultra", 2)

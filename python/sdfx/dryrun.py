@@ -76,7 +76,11 @@ class FakeEngine(BaseEngine):
 
     def features(self) -> list[str]:
         from importlib.util import find_spec
-        return (["inpaint_difference"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + ["controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "pag", "controlnet", "apg", "mahiro", "rescale_cfg", "semantic_guidance", "agent_attention", "cd_tuner",
+        nsfw = []
+        if HAVE_NUMPY and HAVE_PIL:
+            from .nsfw_checker import available as nsfw_available
+            nsfw = ["nsfw_checker"] if nsfw_available() else []
+        return (["inpaint_difference"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + nsfw + ["controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "pag", "controlnet", "apg", "mahiro", "rescale_cfg", "semantic_guidance", "agent_attention", "cd_tuner",
                 "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier", "soft_inpainting", "sag", "neveroom",
                 "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint", "photomaker", "img2imgalt",
                 "face_restore", "caption", "img2vid", "novel_view", "ldsr", "marigold", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "system_info", "prevent_interrupt"] + list(SAMPLING_HOOKS) + (
@@ -215,6 +219,13 @@ class FakeEngine(BaseEngine):
         from .img2img_hires_fix import normalize, effective
         refine_config = hook_config(gp.hooks, 'img2img_hires_fix', {})
         refine_config = normalize(refine_config) if refine_config is not None else None
+        nsfw_cfg = None
+        if hook_config(gp.hooks, 'nsfw_checker', {}) is not None:
+            if not (HAVE_NUMPY and HAVE_PIL):
+                raise EngineError(UNSUPPORTED, 'NudeNet NSFW Censor dry-run requires NumPy and Pillow')
+            from .nsfw_checker import job_config
+            nsfw_cfg = job_config(gp.hooks)
+        auxiliary = []
         seed, subseed = resolve_seed(gp.seed), resolve_seed(gp.subseed)
         bs, n_iter = gp.batch_size, gp.n_iter
         hires = mode == "txt2img" and gp.hires.enabled
@@ -299,6 +310,10 @@ class FakeEngine(BaseEngine):
                                     self._run_pass(ctx, actual, 'img2img_hires', (it * repeats + repeat) * bs + j,
                                         total, hr_seeds[j], req.preview_every, (rw, rh))
                                 img = img.resize((rw, rh))
+                            censor_auxiliaries = []
+                            if nsfw_cfg is not None:
+                                from .nsfw_checker import censor_final
+                                img, censor_auxiliaries = censor_final(img, nsfw_cfg, ctx)
                             save_png(img, path)
                             iw, ih = img.size
                         else:
@@ -323,6 +338,9 @@ class FakeEngine(BaseEngine):
                         if hardware_record is not None:
                             entry['hardware_info'] = hardware_record
                         images.append(entry)
+                        if HAVE_PIL and censor_auxiliaries:
+                            from .nsfw_checker import save_auxiliaries
+                            auxiliary.extend(save_auxiliaries(entry, censor_auxiliaries, req.output_dir, len(images) - 1))
         except EngineError as error:
             if error.code != "interrupted" or (hr_plan is None and refine_config is None) or not images:
                 raise
@@ -339,6 +357,7 @@ class FakeEngine(BaseEngine):
             "scheduler": schedulers.resolve_schedule(gp.sampler_name, gp.scheduler),
             "warnings": list(ctx.warnings),
             "system_info": self._system_metadata(req.system_info_fields),
+            **({"auxiliary_images": auxiliary} if auxiliary else {}),
         }
 
     # -- tools ---------------------------------------------------------------

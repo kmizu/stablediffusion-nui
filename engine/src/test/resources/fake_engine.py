@@ -119,6 +119,7 @@ def generate(rid, kind, req):
     out_dir = req["output_dir"]
     os.makedirs(out_dir, exist_ok=True)
     images = []
+    auxiliary = []
     for i in range(n):
         for s in range(1, steps + 1):
             if interrupted.is_set() and not ignore:
@@ -148,6 +149,15 @@ def generate(rid, kind, req):
             image_result["hardware_info"] = {"hardware_info": "Fixture GPU, Fixture CPU, 32GB RAM",
                 "time_taken": f"{i + 1}.0 sec.", "remark": hardware.get("remark") or None}
         images.append(image_result)
+        fixture = extra.get("censor_auxiliary_fixture")
+        if fixture:
+            # NudeNet NSFW Censor auxiliary outputs: before-censor copy and mask of this image.
+            suffixes = ["-before-censor", "-censor-mask"] if fixture == "true" else ["/../escape"]
+            for k, suffix in enumerate(suffixes):
+                aux_path = os.path.join(out_dir, "tmp-%s-%d-aux%d.png" % (rid, i, k))
+                with open(aux_path, "wb") as f:
+                    f.write(png_bytes(w, h, (250, 10 + k, 10)))
+                auxiliary.append(dict(image_result, path=aux_path, output_suffix=suffix, auxiliary_of=len(images) - 1))
     if interrupted.is_set() and not ignore and not images:
         error(rid, "interrupted", "interrupted")
         return
@@ -173,6 +183,7 @@ def generate(rid, kind, req):
         "lora_hashes": {k: "1234abcd" for k in req.get("lora_paths", {})},
         "scheduler": "Karras",
         "warnings": [],
+        **({"auxiliary_images": auxiliary} if auxiliary else {}),
     })
 
 
@@ -244,6 +255,14 @@ def handle_work(rid, typ, params):
                 f.write(png_bytes(16, 16, (5, 5, 5)))
             state["last_extra"] = {"type": typ, "params": params}
             result(rid, {"path": out})
+        elif typ == "image_tool":
+            out = os.path.join(params["output_dir"], "tool-%s.png" % rid)
+            os.makedirs(params["output_dir"], exist_ok=True)
+            with open(out, "wb") as f:
+                f.write(png_bytes(16, 16, (6, 6, 6)))
+            readable = {k: os.path.isfile(params[k]) for k in ("image_path", "mask_path") if params.get(k)}
+            state["last_extra"] = {"type": typ, "params": params, "readable": readable}
+            result(rid, {"path": out, "outputs": {}, "info": {}})
         elif typ == "caption":
             state["last_extra"] = {"type": typ, "params": params}
             result(rid, {"caption": "fake caption"})

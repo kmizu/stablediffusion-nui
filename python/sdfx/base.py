@@ -488,6 +488,9 @@ class BaseEngine:
                 out, extra = image_tools.run(tool, img, params, dev, check_interrupt=ctx.check_interrupt,
                                             progress=lambda done, total: ctx.progress(done, total, 'waifu2x'))
                 ctx.check_interrupt()
+            elif tool == "nsfw_checker":
+                ctx.check_interrupt()
+                out, extra = image_tools.run(tool, img, dict(params, _log=lambda line: ctx.log("info", line)), dev)
             else:
                 out, extra = image_tools.run(tool, img if tool != "remove_background" else img.convert("RGB"), params, dev)
         except ImportError as e:

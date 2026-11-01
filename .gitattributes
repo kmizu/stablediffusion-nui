@@ -2,6 +2,7 @@
 *.bat text eol=crlf
 *.png binary
 *.jpg binary
+models/nudenet/best.onnx binary
 licenses/huchenlei__sd-webui-api-payload-display.txt -text whitespace=cr-at-eol
 licenses/summerstyle__jsonTreeViewer.txt -text
 licenses/Zyin055__Config-Presets.txt -text whitespace=cr-at-eol

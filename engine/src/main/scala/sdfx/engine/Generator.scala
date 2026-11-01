@@ -242,7 +242,7 @@ final class Generator(
         if kind == "img2vid" then requirePlaintextVideoAllowed()
         val fields = kind match
           case "caption" | "restore_faces" | "novel_view" | "img2vid" => Seq("image_path")
-          case "image_tool" => Seq("image_path", "reference_path")
+          case "image_tool" => Seq("image_path", "reference_path", "mask_path")
           case _ => Nil
         ScrambledInput.withObject(params, fields, home.tmpDir(settings()), listener.imageSecret, listener.onLog) { resolved =>
           self.engineCallWith(kind, resolved, scopedListener)
@@ -564,6 +564,13 @@ final class Generator(
       listener.onEngineInterrupted()
       throw interruptedError
     val loaded = client.supervisor.loadedModel
+    // Auxiliary images are user outputs even for transient generations (upstream saves them while processing).
+    try
+      val kind = outputKind(prep)
+      val outputs = prep.finalOutputDir.getOrElse(outputsDir)
+      result.images.indices.foreach(i => saveAuxiliaries(prep, result, Some(i), listener, loaded, kind, outputs))
+      saveAuxiliaries(prep, result, None, listener, loaded, kind, outputs)
+    finally deleteEngineTemps(result.auxiliaryImages)
     result.images.map { img =>
       val (params, text) = describe(prep, result, img, loaded)
       OutputImage(Paths.get(img.path), params, text, img.seed)
@@ -702,7 +709,7 @@ final class Generator(
       case NonFatal(error) =>
         lifecycle(if JobRunner.isInterruption(error) then PayloadState.Cancelled else PayloadState.Failed)
         throw error
-    result.images.foreach(i => listener.onTempFile(Paths.get(i.path)))
+    (result.images ++ result.auxiliaryImages).foreach(i => listener.onTempFile(Paths.get(i.path)))
     result.warnings.foreach(listener.onLog)
     result.vaeRecovery.foreach(a => listener.onLog(s"VAE decode recovery: ${a("latent_path").str}"))
     result.composableLoraTrace.foreach(t => listener.onLog(s"Composable LoRA trace: ${t.path}"))
@@ -710,21 +717,59 @@ final class Generator(
       .foreach(a => listener.onLog(s"Intermediate ${a.`type`}: ${a.path}"))
     (prep, result)
 
+  private def outputKind(prep: PreparedGeneration): String = if prep.mode == GenerationMode.Img2Img then "img2img" else "txt2img"
+
+  private def deleteEngineTemps(images: Seq[GeneratedImage]): Unit =
+    images.foreach(img =>
+      try Files.deleteIfExists(Paths.get(img.path))
+      catch case NonFatal(_) => ()
+    )
+
   private def saveResult(prep: PreparedGeneration, result: GenerationResult, listener: GenerationListener): Seq[OutputImage] =
     val loaded = client.supervisor.loadedModel
-    val kind = if prep.mode == GenerationMode.Img2Img then "img2img" else "txt2img"
     val outputs = prep.finalOutputDir.getOrElse(outputsDir)
-    try saveAll(prep, result, listener, loaded, kind, outputs)
+    try saveAll(prep, result, listener, loaded, outputKind(prep), outputs)
     finally
       // Engine temp files are never needed after this point, whether saving succeeded or not.
-      result.images.foreach(img =>
-        try Files.deleteIfExists(Paths.get(img.path))
-        catch case NonFatal(_) => ()
-      )
+      deleteEngineTemps(result.images ++ result.auxiliaryImages)
+
+  /** Persists auxiliary engine images (NudeNet before-censor copy / mask) as `<index>-<seed><suffix>.png` with the
+    * infotext of the image they belong to, under the same scrambling session. They are logged, not returned. */
+  private def saveAuxiliary(prep: PreparedGeneration, result: GenerationResult, aux: GeneratedImage, listener: GenerationListener,
+      loaded: Option[LoadedModel], kind: String, outputs: Path): Option[Path] =
+    val src = Paths.get(aux.path)
+    try
+      aux.outputSuffix.filter(Generator.AuxiliarySuffix.matches) match
+        case None =>
+          listener.onLog(s"Skipped an auxiliary engine image with an invalid name suffix: ${aux.outputSuffix.getOrElse("")}")
+          None
+        case Some(suffix) =>
+          val (_, text) = describe(prep, result, aux, loaded)
+          val target = OutputNaming.nextFile(outputs, kind, aux.seed, suffix)
+          try
+            val pixels = PngMetadata.readImage(src)
+            sdfx.core.png.ScrambledPng.write(pixels, target, Seq(PngMetadata.ParametersKey -> text), listener.imageSecret.map(_.use(identity)))
+          catch
+            case NonFatal(e) =>
+              Files.deleteIfExists(target)
+              throw e
+          listener.onLog(s"Saved $suffix image: $target")
+          Some(target)
+    finally
+      try Files.deleteIfExists(src)
+      catch case NonFatal(_) => ()
+
+  private def saveAuxiliaries(prep: PreparedGeneration, result: GenerationResult, index: Option[Int], listener: GenerationListener,
+      loaded: Option[LoadedModel], kind: String, outputs: Path): Unit =
+    val valid = result.images.indices.toSet
+    result.auxiliaryImages.filter(a => if index.isDefined then a.auxiliaryOf == index else !a.auxiliaryOf.exists(valid))
+      .foreach(aux => saveAuxiliary(prep, result, aux, listener, loaded, kind, outputs))
 
   private def saveAll(prep: PreparedGeneration, result: GenerationResult, listener: GenerationListener, loaded: Option[LoadedModel],
       kind: String, outputs: Path): Seq[OutputImage] =
-    result.images.map { img =>
+    val saved = result.images.zipWithIndex.map { (img, index) =>
+      // Upstream writes the before-censor copy and the mask before the censored image itself.
+      saveAuxiliaries(prep, result, Some(index), listener, loaded, kind, outputs)
       val (params, text) = describe(prep, result, img, loaded)
       val src = Paths.get(img.path)
       val dst = listener.fastloadPayload match
@@ -755,6 +800,8 @@ final class Generator(
       listener.onImageSaved(out, grid = false)
       out
     }
+    saveAuxiliaries(prep, result, None, listener, loaded, kind, outputs)
+    saved
 
   /** Non-generation engine request. Fills `output_dir` with the temp dir and registers returned image paths as job
     * temp files (callers save what they keep). Progress events are forwarded to the listener.
@@ -840,6 +887,9 @@ final class Generator(
     out
 
 object Generator:
+  /** File name suffixes the engine may request for auxiliary outputs (e.g. `-before-censor`, `-censor-mask`). */
+  val AuxiliarySuffix: scala.util.matching.Regex = "-[a-z][a-z0-9-]{0,31}".r
+
   /** LoRA Block Weight user presets, `config/lbwpresets.txt`: one `NAME:w1,w2,...` per line (`#` comments). */
   def lbwPresets(configDir: java.nio.file.Path): Map[String, String] =
     val f = configDir.resolve("lbwpresets.txt")

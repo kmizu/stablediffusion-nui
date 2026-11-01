@@ -13,7 +13,7 @@ opencv-python-headless==4.11.0.86
 spandrel==0.4.1
 torchsde==0.2.6
 psutil==7.0.0
-onnxruntime==1.23.2  # WD14 tagger (Caption plugin, method wd14)
+onnxruntime==1.23.2  # WD14 tagger (Caption plugin, method wd14) and the NudeNet NSFW Censor detector (CPU)
 # optional: PhotoMaker plugin (v1 adapters). Install without dependencies so the pins above stay intact:
 #   pip install --no-deps "git+https://github.com/TencentARC/PhotoMaker.git"
 # optional extra preprocessors (openpose, lineart, hed, mlsd, normal_bae):

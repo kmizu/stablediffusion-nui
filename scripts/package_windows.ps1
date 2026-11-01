@@ -51,11 +51,17 @@ foreach ($required in @('SDNUI.exe', 'app/stablediffusion-nui.jar', 'runtime/leg
 }
 
 # Only tracked, explicitly allowed source and licence files are copied: no models, environments,
-# credentials, caches, settings, or output files from the developer's checkout.
+# credentials, caches, settings, or output files from the developer's checkout. The single model
+# exception is the pinned NudeNet NSFW Censor detector models/nudenet/best.onnx (AGPL-3.0, from
+# w-e-w/sd-webui-nudenet-nsfw-censor@1fb21cf); its SHA-256 is verified before it is copied.
 $tracked = @(git -C $repo ls-files -- python/sdfx models licenses)
 if ($LASTEXITCODE -ne 0) { throw 'git ls-files failed; a Git checkout is required.' }
-$payload = @($tracked | Where-Object { $_ -match '^python/sdfx/.+\.py$|^python/sdfx/waifu2x_assets\.json$|^python/sdfx/data/model_keyword/(model|lora)-keyword\.txt$|^python/sdfx/.+/LICENSE$|^models/.+/README\.txt$|^licenses/[A-Za-z0-9_.-]+\.txt$' })
+$payload = @($tracked | Where-Object { $_ -match '^python/sdfx/.+\.py$|^python/sdfx/waifu2x_assets\.json$|^python/sdfx/data/model_keyword/(model|lora)-keyword\.txt$|^python/sdfx/.+/LICENSE$|^models/.+/README\.txt$|^models/nudenet/best\.onnx$|^licenses/[A-Za-z0-9_.-]+\.txt$' })
 if (-not ($payload -contains 'python/sdfx/__main__.py')) { throw 'Python source files missing from Git index.' }
+$nudenet = 'models/nudenet/best.onnx'
+if (-not ($payload -contains $nudenet)) { throw "Pinned NudeNet detector missing from Git index: $nudenet" }
+$nudenetHash = (Get-FileHash -LiteralPath (Join-Path $repo $nudenet) -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($nudenetHash -ne '9832f15515bdb06bcb5a77beb60bc8ea54439bd7ecbaac46dac3b760b3dd13cc') { throw "NudeNet detector hash mismatch: $nudenetHash" }
 foreach ($relative in $payload) {
     $source = Join-Path $repo $relative
     $item = Get-Item -LiteralPath $source

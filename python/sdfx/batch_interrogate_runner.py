@@ -100,6 +100,16 @@ def run_batch(engine, inputs, generation, models, options, backend, verify_input
                 parameters["negative_prompt"] = prompts.negative
                 request["output_dir"] = str(transaction.directory)
                 generated = engine.img2img(request, ctx)
+                auxiliary = generated.pop("auxiliary_images", None) or ()
+                for extra_image in auxiliary:
+                    # NudeNet NSFW Censor before-censor copies / masks are not published by a WD batch.
+                    try:
+                        os.remove(extra_image["path"])
+                    except OSError:
+                        pass
+                if auxiliary:
+                    ctx.warn("NudeNet NSFW Censor: WD batch keeps only the censored images "
+                             "(before-censor copies and masks are not saved)")
                 ctx.check_interrupt()
                 published = transaction.commit(generated, ctx)
             results.append({"status": "complete", "input": item.path,

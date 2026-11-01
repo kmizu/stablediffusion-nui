@@ -9,6 +9,7 @@
                                                                     person segmentation -> transparent PNG / mask
   depth_mask         depthmap2mask                                  depth estimation -> near / far mask
   loopback_scaler    loopback_scaler (final image filters)          PIL ImageEnhance + ImageFilter chain
+  nsfw_checker       sd-webui-nudenet-nsfw-censor                   NudeNet regions (+ custom mask) -> censor filter
 
 Every tool takes a PIL image and returns (image, extra_outputs) where extra_outputs are other PIL images
 (e.g. the mask) keyed by name.
@@ -19,7 +20,7 @@ from typing import Optional
 
 import numpy as np
 
-TOOLS = ("pixel_art", "color_enhance", "cas_upscale", "person_mask", "remove_background", "depth_mask", "color_correction", "waifu2x", "loopback_scaler")
+TOOLS = ("pixel_art", "color_enhance", "cas_upscale", "person_mask", "remove_background", "depth_mask", "color_correction", "waifu2x", "loopback_scaler", "nsfw_checker")
 REMBG_MODELS = ("u2net", "u2netp", "u2net_human_seg", "isnet-general-use", "isnet-anime", "silueta")
 
 
@@ -217,6 +218,10 @@ def run(tool: str, img, params: dict, device: str = "cuda", check_interrupt=None
     if tool == "loopback_scaler":
         from . import loopback_scaler
         return loopback_scaler.run(img, p)
+    if tool == "nsfw_checker":
+        from . import nsfw_checker
+        return nsfw_checker.censor_tool(img, p, model_path=p.get("model_path") or None,
+                                        log=p.get("_log") if callable(p.get("_log")) else None)
     if tool == "pixel_art":
         return pixel_art(img, int(p.get("pixel_size", 8)), int(p.get("colors", 16)), float(p.get("dither", 0.0)),
                          bool(p.get("outline", False)), bool(p.get("upscale", True)), int(p.get("seed", 0)))

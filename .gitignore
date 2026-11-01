@@ -15,6 +15,8 @@ config/*.json
 models/**/*
 !models/**/
 !models/**/README.txt
+# Pinned NudeNet NSFW Censor detector (w-e-w/sd-webui-nudenet-nsfw-censor@1fb21cf, SHA-256 checked at load).
+!models/nudenet/best.onnx
 plugins-ext/*.jar
 python/.venv-test/
 python/.venv-smoke/

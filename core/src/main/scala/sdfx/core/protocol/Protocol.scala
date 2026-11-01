@@ -142,7 +142,10 @@ case class GeneratedImage(path: String, seed: Long, subseed: Long = -1L, width: 
     hiresSubseedStrength: Option[Double] = None, hiresRepeat: Option[Int] = None,
     hiresSeedResizeFromW: Option[Int] = None, hiresSeedResizeFromH: Option[Int] = None,
     effectivePrompt: Option[String] = None, modelKeywordSourcePrompt: Option[String] = None,
-    modelKeywordRefinementPrompt: Option[String] = None) derives RW
+    modelKeywordRefinementPrompt: Option[String] = None,
+    /** Auxiliary outputs only (e.g. NudeNet `-before-censor` / `-censor-mask`): file name suffix and the index of
+      * the result image they belong to. They are saved next to that image with its infotext. */
+    outputSuffix: Option[String] = None, auxiliaryOf: Option[Int] = None) derives RW
 
 /** Persistent auxiliary output; not an engine temp file or a final-image gallery member. */
 case class IntermediateArtifact(path: String, `type`: String = "image") derives RW
@@ -165,7 +168,9 @@ case class GenerationResult(
     systemInfo: Option[ujson.Value] = None,
     vaeRecovery: Seq[ujson.Value] = Nil,
     resourceHashes: Map[String, String] = Map.empty,
-    interrupted: Boolean = false
+    interrupted: Boolean = false,
+    /** Saved beside the result images but not returned as results (no gallery event, no grid member). */
+    auxiliaryImages: Seq[GeneratedImage] = Nil
 ) derives RW
 
 case class UpscaleRequest(imagePath: String, upscaler: String, scale: Double, outputDir: String, upscalerPaths: Map[String, String] = Map.empty,

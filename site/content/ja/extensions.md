@@ -159,6 +159,7 @@ Hires. fix 自体の使い方は [画像の生成](generate.html) を参照し�
 | **Inpaint Difference** | 元画像と変更後の画像の差分からインペイント用マスクを作ります。**Inpaint** タブの画像パネルの中にあります。 |
 | **Restore faces** | 検出した顔に GFPGAN または CodeFormer をかけます。 |
 | **ADetailer** | 結果画像の顔・手・人物を検出し、その部分を高解像度で描き直します。 |
+| **NudeNet NSFW Censor** | 同梱の NudeNet 検出器(CPU で動作)で NSFW 領域を検出し、最終画像(ADetailer や Hires の仕上げの後)とライブプレビューで、ぼかし・モザイク・塗りつぶしをかけます。既定では露出した胸・性器・肛門が対象です。18 のカテゴリーごとにしきい値と拡大率を設定できます(しきい値 1 でそのカテゴリーは無効)。検閲した画像は、オフにしない限り検閲前のコピーを `-before-censor` 付きで保存します。マスクも `-censor-mask` 付きで保存できます。 |
 
 ### 出力と記録
 
@@ -237,6 +238,7 @@ Hires. fix 自体の使い方は [画像の生成](generate.html) を参照し�
 | **Pixel art** | 縮小、減色、ディザリング、輪郭線でピクセルアートにします。 |
 | **Color enhance** | 明るさと色相を保ったまま、彩度を全範囲に広げます。 |
 | **Color correction** | 参照画像の色に合わせます。参照が空なら元の入力を使います。 |
+| **NudeNet NSFW Censor** | NudeNet が検出した領域と、マスク画像の白い部分を検閲します。**Entire image (always)** は画像全体を検閲します。**No censor** と **Output only the mask** を組み合わせると、マスクだけを保存します。 |
 
 単体の画像の拡大と色補正は、**Extras** タブでも行えます。
 

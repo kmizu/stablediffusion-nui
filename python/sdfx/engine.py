@@ -199,6 +199,9 @@ class Engine(BaseEngine):
         f += self._batch_features()
         if cn_mod._has("cv2"):
             f.append("inpaint_difference")
+        from . import nsfw_checker
+        if nsfw_checker.available():
+            f.append("nsfw_checker")
         if hasattr(diffusers, "StableDiffusionXLPAGPipeline"):
             f.append("pag")
         if hasattr(diffusers, "ControlNetModel"):
@@ -1008,6 +1011,12 @@ class Engine(BaseEngine):
         every = int(req.preview_every or 0)
         method = req.preview_method
         state = {"started": False}
+        from . import nsfw_checker
+        nsfw = nsfw_checker.preview_config(getattr(req.params, "hooks", None)) if every > 0 and method != "none" else None
+
+        def censored(b64):
+            # NudeNet live preview censor; an error drops the preview instead of showing it uncensored.
+            return nsfw_checker.censor_preview_b64(b64, nsfw) if nsfw is not None and b64 else b64
 
         def cb(pipe, i, t, kw):
             if not state["started"]:
@@ -1028,13 +1037,14 @@ class Engine(BaseEngine):
                             b64 = self.taesd.decode_b64(lat, self.sdxl, self.device, self.dtype)
                         if b64 is None:
                             b64 = preview.latent_preview_b64(lat[:, :4].float().cpu().numpy(), self.sdxl)
+                        b64 = censored(b64)
                         if b64:
                             ctx.preview(b64, step)
                     except Exception as e:  # never fail a generation because of a preview
                         log.debug("preview failed: %s", e)
                         if method == 'taesd':
                             try:
-                                b64 = preview.latent_preview_b64(lat[:, :4].float().cpu().numpy(), self.sdxl)
+                                b64 = censored(preview.latent_preview_b64(lat[:, :4].float().cpu().numpy(), self.sdxl))
                                 if b64:
                                     ctx.preview(b64, step)
                             except Exception as fallback_error:
@@ -1555,6 +1565,8 @@ class Engine(BaseEngine):
         hardware_started = time.perf_counter()
         req = self.parse_generation(params, mode, ctx)
         gp = req.params
+        from . import nsfw_checker
+        nsfw_cfg = nsfw_checker.job_config(gp.hooks)
         from . import img2img_hires_fix
         refine_config = hooks_mod.hook_config(gp.hooks, 'img2img_hires_fix', {})
         refine_config = img2img_hires_fix.normalize(refine_config) if refine_config is not None else None
@@ -1724,6 +1736,7 @@ class Engine(BaseEngine):
             ctx.warn("variation seed is only applied in txt2img")
 
         out_images = []
+        out_auxiliary = []
         plan = None
         def finish_batch(imgs, base_seeds, base_subs, seeds, idx0, it, repeat=0, hr_seeds=None, hr_subs=None, pass_gp=None):
             effective_gp = pass_gp if pass_gp is not None else gp
@@ -1755,6 +1768,8 @@ class Engine(BaseEngine):
                         refine_req = replace(req, img2img_hires_loras=keyword_plan['refinement_loras'])
                     im = img2img_hires_fix.refine(self, refine_gp, refine_req, ctx, refine_config, im,
                         seeds[j], idx0 + j, total, pag, cn, effective_gp, lora_hashes)
+                # NudeNet NSFW Censor: after ADetailer, post-images and img2img Hires Fix, just before saving.
+                im, censor_auxiliaries = nsfw_checker.censor_final(im, nsfw_cfg, ctx)
                 path = next_output_path(req.output_dir, str(base_seeds[j]))
                 image_result = {"path": path, "seed": base_seeds[j], "subseed": base_subs[j],
                                 "width": im.width, "height": im.height}
@@ -1779,6 +1794,9 @@ class Engine(BaseEngine):
                 else:
                     save_png(im, path)
                 out_images.append(image_result)
+                if path and censor_auxiliaries:
+                    out_auxiliary.extend(nsfw_checker.save_auxiliaries(image_result, censor_auxiliaries,
+                                                                       req.output_dir, len(out_images) - 1))
                 if self._intermediate_recorder is not None:
                     self._intermediate_recorder.final(im, base_seeds[j], it * repeats + repeat, j)
 
@@ -1964,6 +1982,7 @@ class Engine(BaseEngine):
             "scheduler": plan.schedule if plan else schedulers.resolve_schedule(gp.sampler_name, gp.scheduler),
             "warnings": list(ctx.warnings),
             "intermediate_artifacts": intermediate_artifacts,
+            **({"auxiliary_images": out_auxiliary} if out_auxiliary else {}),
         }
 
     # hooks that must not run again on ADetailer's inpainting passes (whole-image effects, or ADetailer itself)

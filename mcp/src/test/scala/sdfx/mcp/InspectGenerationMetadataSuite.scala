@@ -230,6 +230,36 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     }
   }
 
+  test("NudeNet NSFW Censor candidate reproduces the native hook and consumes its key") {
+    import sdfx.core.model.GenerationParams
+    import sdfx.core.infotext.{Infotext, ImageFacts}
+    import sdfx.core.plugins.api.Values
+    val plugin = new sdfx.plugins.NsfwCheckerPlugin
+    val values = Values(Values.defaults(plugin.controls).map ++ Map("enabled" -> "true", "gen_filter_type" -> "Fill color",
+      "save_mask" -> "true", "threshold_Face_female" -> "0.3", "horizontal_Face_female" -> "1.4", "rectangle_round_radius" -> "-6"))
+    val params = plugin.process(GenerationParams(prompt = "portrait"), values)
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("nudenet.png")
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> Infotext.write(params, ImageFacts(42L))))
+    val inspected = InspectGenerationMetadata.inspect(path.toString, new PathPolicy(() => Seq(dir)), dir)
+    val candidate = inspected("always_on")("nsfw_checker")
+    assertEquals(candidate("enabled").bool, true)
+    assertEquals(candidate("gen_filter_type").str, "Fill color")
+    assertEquals(candidate("threshold_Face_female").num, 0.3)
+    assert(!inspected("unapplied_fields").obj.contains(sdfx.plugins.NsfwCheckerPlugin.InfotextKey))
+    val restored = Values(candidate.obj.toSeq.map { (k, value) =>
+      k -> (value match
+        case ujson.Str(v) => v
+        case ujson.Bool(v) => v.toString
+        case ujson.Num(v) => Values.fmt(v)
+        case _ => fail("invalid candidate type"))
+    }.toMap)
+    assertEquals(plugin.process(GenerationParams(), restored).hooks(plugin.id), params.hooks(plugin.id))
+    val plain = dir.resolve("plain.png")
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), plain, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(!InspectGenerationMetadata.inspect(plain.toString, new PathPolicy(() => Seq(dir)), dir)("always_on").obj.contains("nsfw_checker"))
+  }
+
   test("unknown FreeU version and malformed or out-of-range values stay unapplied") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("replay.png")

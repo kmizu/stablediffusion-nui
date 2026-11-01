@@ -159,6 +159,7 @@ For Hires. fix itself, see [Generating images](generate.html).
 | **Inpaint Difference** | Creates an inpaint mask from the difference between a base and an altered image. Found inside the image panel of the **Inpaint** tab. |
 | **Restore faces** | Runs GFPGAN or CodeFormer on detected faces. |
 | **ADetailer** | Finds faces, hands or people in each result and redraws them at full resolution. |
+| **NudeNet NSFW Censor** | Detects NSFW regions with the bundled NudeNet detector (on the CPU) and blurs, pixelates or fills them in the final images, after ADetailer and Hires refinement, and in live previews. By default it censors exposed breasts, genitalia and anuses; you can set a threshold and expansion for each of the 18 categories (a threshold of 1 turns a category off). When something is censored, an uncensored copy is saved with the `-before-censor` suffix unless you turn that off, and the mask can be saved as `-censor-mask`. |
 
 ### Output and records
 
@@ -237,6 +238,7 @@ These scripts process the init image in img2img, and each generated image in txt
 | **Pixel art** | Turns the image into pixel art with downscaling, a reduced palette, dithering and outlines. |
 | **Color enhance** | Stretches colourfulness to the full range while keeping lightness and hue. |
 | **Color correction** | Matches the colours of a reference image. An empty reference uses the original input. |
+| **NudeNet NSFW Censor** | Censors the regions NudeNet detects and/or the white areas of a custom mask image. **Entire image (always)** censors the whole image; **No censor** with **Output only the mask** saves only the mask. |
 
 You can also upscale or colour-correct a single image in the **Extras** tab.
 

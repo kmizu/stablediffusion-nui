@@ -81,7 +81,7 @@ S = {
     225: "todo:mov2mov", 226: "todo:easyphoto", 227: "todo:rich_text", 228: "todo:remove_background",
     229: "todo:booru_prompt", 230: "todo:model_downloader", 231: "todo:nsfw_checker", 232: "todo:negpip",
     233: "done:cd_tuner", 234: "na:webui-css", 235: "na:webui-api", 236: "todo:core:compile",
-    237: "done:core:image-scrambling", 238: "todo:nsfw_checker", 239: "todo:lcm", 240: "todo:cads",
+    237: "done:core:image-scrambling", 238: "done:nsfw_checker", 239: "todo:lcm", 240: "todo:cads",
     241: "todo:face_swap", 242: "todo:hotshot_xl", 243: "done:inpaint_difference", 244: "todo:temporal",
     245: "todo:facechain", 246: "todo:style_selector", 247: "todo:panorama_tools", 248: "todo:core:styles-editor",
     249: "done:semantic_guidance", 250: "done:core:png-info", 251: "todo:person_mask", 252: "todo:style_variables",
@@ -144,6 +144,7 @@ IMPLEMENTED = {
 
 
 SCOPE_NOTES = {
+    "nsfw_checker": "Index 238 (NudeNet NSFW Censor) only: bundled pinned NudeNet 320n ONNX with hash check, 18 categories with per-category threshold and expansion, NMS, all mask shapes and censor filters, generation censoring after refinement with optional before-censor/mask outputs, live preview censoring, Extras with custom-mask union, image_tool/MCP and PNG replay. Indices 83 (A1111 nsfw-censor) and 231 (NSFWJS blurrer) remain todo under #91. SD1.5/SDXL real MCP checks with image inspection. See nsfw-checker-verification.md.",
     "cd_tuner": "AlwaysOn colour/detail tuner as the pinned extension: detail d1/d2 and hires hd1/hd2 via conv_in/norm_out/conv_out weights restored after every pass, hr-scaling, stop steps, Contrast 2, brightness and three colour axes, VAE saturation 1/2, the colour map, <cdt:>/<cdtc:> prompt tags, Apply once and CDT/CDTC infotext with PNG/MCP replay. Source quirks kept (Hr-Stop Step 0). Stop steps count pipeline steps (differs for second-order samplers). SD1.5/SDXL real MCP checks with image inspection. See cd-tuner-verification.md.",
     "agent_attention": "AlwaysOn agent attention with token merging as the pinned extension: first/second pass sx, sy, ratio and agent ratio, second pass step, max downsample, FP32, hires-only, source infotext keys, PNG/MCP replay and all 13 XYZ axes. Merging uses a deterministic reduction (seeded from the image seed) so PNG replays are pixel-exact, not pixel-equal to A1111. Rejects PAG, SAG, HyperTile, Token Downsampling, Reference-only and ControlNet-LLLite combinations. SD1.5/SDXL real MCP checks with image inspection. See agent-attention-verification.md.",
     "loopback_scaler": "Native img2img Script with every source control: eased per-loop sizes to the max or scaled target, denoise change factor, per-loop seeds, batch restarts, saved loop outputs with source infotext and the final Pillow filters. Fixes the source's landscape height bug; rejects txt2img and batch size > 1. SD1.5/SDXL real MCP runs including cancel/recovery with image inspection (SD1.5 colour drift comes from repeated img2img with that model). See loopback-scaler-verification.md.",

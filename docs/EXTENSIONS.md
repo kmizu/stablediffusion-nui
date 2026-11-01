@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 129, todo 173, na 51.
+Totals: done 130, todo 172, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -89,7 +89,7 @@ Totals: done 129, todo 173, na 51.
 | 80 | [booru2prompt](https://github.com/Malisius/booru2prompt.git) | 61 | todo | `booru_prompt` |  |
 | 81 | [Gelbooru Prompt](https://github.com/antis0007/sd-webui-gelbooru-prompt.git) | 40 | todo | `booru_prompt` |  |
 | 82 | [e621 Prompt](https://github.com/nochnoe/sd-webui-e621-prompt.git) | 29 | todo | `booru_prompt` |  |
-| 83 | [NSFW checker](https://github.com/AUTOMATIC1111/stable-diffusion-webui-nsfw-censor.git) | 141 | todo | `nsfw_checker` |  |
+| 83 | [NSFW checker](https://github.com/AUTOMATIC1111/stable-diffusion-webui-nsfw-censor.git) | 141 | todo | `nsfw_checker` | Index 238 (NudeNet NSFW Censor) only: bundled pinned NudeNet 320n ONNX with hash check, 18 categories with per-category threshold and expansion, NMS, all mask shapes and censor filters, generation censoring after refinement with optional before-censor/mask outputs, live preview censoring, Extras with custom-mask union, image_tool/MCP and PNG replay. Indices 83 (A1111 nsfw-censor) and 231 (NSFWJS blurrer) remain todo under #91. SD1.5/SDXL real MCP checks with image inspection. See nsfw-checker-verification.md. |
 | 84 | [Diffusion Defender](https://github.com/WildBanjos/DiffusionDefender.git) | 29 | done | `prompt_filter` |  |
 | 85 | [DH Patch](https://github.com/d8ahazard/sd_auto_fix.git) | 12 | na | `obsolete` | superseded: the feature is in the base app (A1111 >= 1.5) or the extension is deprecated |
 | 86 | [Riffusion](https://github.com/enlyth/sd-webui-riffusion.git) | 202 | todo | `riffusion` |  |
@@ -237,14 +237,14 @@ Totals: done 129, todo 173, na 51.
 | 228 | [sd-webui-bg-mask](https://github.com/Scholar01/sd-webui-bg-mask.git) | 39 | done | `remove_background` |  |
 | 229 | [Ranbooru](https://github.com/Inzaniak/sd-webui-ranbooru.git) | 77 | todo | `booru_prompt` |  |
 | 230 | [CivBrowser](https://github.com/SignalFlagZ/sd-webui-civbrowser.git) | 117 | todo | `model_downloader` |  |
-| 231 | [NSFW Blurrer-NSFWJS](https://github.com/aria1th/sd-webui-nsfw-filter.git) | 21 | todo | `nsfw_checker` |  |
+| 231 | [NSFW Blurrer-NSFWJS](https://github.com/aria1th/sd-webui-nsfw-filter.git) | 21 | todo | `nsfw_checker` | Index 238 (NudeNet NSFW Censor) only: bundled pinned NudeNet 320n ONNX with hash check, 18 categories with per-category threshold and expansion, NMS, all mask shapes and censor filters, generation censoring after refinement with optional before-censor/mask outputs, live preview censoring, Extras with custom-mask union, image_tool/MCP and PNG replay. Indices 83 (A1111 nsfw-censor) and 231 (NSFWJS blurrer) remain todo under #91. SD1.5/SDXL real MCP checks with image inspection. See nsfw-checker-verification.md. |
 | 232 | [NegPiP](https://github.com/hako-mikan/sd-webui-negpip.git) | 263 | done | `negpip` |  |
 | 233 | [CD(Color/Detail) Tuner](https://github.com/hako-mikan/sd-webui-cd-tuner.git) | 226 | done | `cd_tuner` | AlwaysOn colour/detail tuner as the pinned extension: detail d1/d2 and hires hd1/hd2 via conv_in/norm_out/conv_out weights restored after every pass, hr-scaling, stop steps, Contrast 2, brightness and three colour axes, VAE saturation 1/2, the colour map, <cdt:>/<cdtc:> prompt tags, Apply once and CDT/CDTC infotext with PNG/MCP replay. Source quirks kept (Hr-Stop Step 0). Stop steps count pipeline steps (differs for second-order samplers). SD1.5/SDXL real MCP checks with image inspection. See cd-tuner-verification.md. |
 | 234 | [DevDark theme](https://github.com/devdarktheme/stable-diffusion-webui-devdark.git) | 22 | na | `webui-css` | styles / JavaScript tweaks of the Gradio web page; the JavaFX UI has its own theme and layout |
 | 235 | [auxiliary API](https://github.com/aria1th/webui-model-uploader.git) | 4 | na | `webui-api` | adds HTTP routes to the A1111 server for other tools; this app's integration surface is MCP |
 | 236 | [TensorRT](https://github.com/NVIDIA/Stable-Diffusion-WebUI-TensorRT) | 1978 | todo | `core:compile` |  |
 | 237 | [encrypt-image](https://github.com/viyiviyi/sd-encrypt-image.git) | 64 | done | `core:image-scrambling` | Native session and batch compatibility with upstream pixel permutations. This is not secure encryption; readable metadata and temporary files remain. See encrypt-image-verification.md. |
-| 238 | [NudeNet NSFW Censor](https://github.com/w-e-w/sd-webui-nudenet-nsfw-censor.git) | 139 | todo | `nsfw_checker` |  |
+| 238 | [NudeNet NSFW Censor](https://github.com/w-e-w/sd-webui-nudenet-nsfw-censor.git) | 139 | done | `nsfw_checker` | Index 238 (NudeNet NSFW Censor) only: bundled pinned NudeNet 320n ONNX with hash check, 18 categories with per-category threshold and expansion, NMS, all mask shapes and censor filters, generation censoring after refinement with optional before-censor/mask outputs, live preview censoring, Extras with custom-mask union, image_tool/MCP and PNG replay. Indices 83 (A1111 nsfw-censor) and 231 (NSFWJS blurrer) remain todo under #91. SD1.5/SDXL real MCP checks with image inspection. See nsfw-checker-verification.md. |
 | 239 | [Latent Consistency Models](https://github.com/0xbitches/sd-webui-lcm.git) | 606 | todo | `lcm` |  |
 | 240 | [CADS](https://github.com/v0xie/sd-webui-cads.git) | 106 | done | `cads` |  |
 | 241 | [sd-webui-facefusion](https://github.com/diffus-me/sd-webui-facefusion) | 102 | todo | `face_swap` |  |

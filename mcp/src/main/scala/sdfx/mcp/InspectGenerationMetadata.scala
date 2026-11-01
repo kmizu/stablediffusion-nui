@@ -5,7 +5,7 @@ import java.util.Base64
 import sdfx.core.infotext.Infotext
 import sdfx.core.plugins.api.{Control, Plugin, Values}
 import sdfx.core.png.PngMetadata
-import sdfx.plugins.{AgentAttentionPlugin, CdTunerPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, SemanticGuidancePlugin, StandardPlugins, TokenDownsamplingPlugin}
+import sdfx.plugins.{AgentAttentionPlugin, CdTunerPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, StandardPlugins, TokenDownsamplingPlugin}
 import scala.util.control.NonFatal
 
 /** Inspect only: no model load, plugin execution, script execution or generation. */
@@ -152,6 +152,7 @@ object InspectGenerationMetadata:
       "semantic_guidance" -> SemanticGuidancePlugin.replay(f).filter(_ => f.contains("SEGA Active")),
       "agent_attention" -> AgentAttentionPlugin.replay(f).filter(_ => f.contains(AgentAttentionPlugin.ActiveKey)),
       "cd_tuner" -> CdTunerPlugin.replay(f).filter(_ => f.contains("CDT") || f.contains("CDTC")),
+      "nsfw_checker" -> NsfwCheckerPlugin.replay(f),
       "model_keyword" -> Option.when(f.contains("Model keyword settings") || f.get("Model keyword replay").exists(_.equalsIgnoreCase("true")))(Values(Map("enabled" -> "false")))
     )
     val plugins = StandardPlugins.alwaysOn.map(p => p.id -> p).toMap
@@ -198,7 +199,8 @@ object InspectGenerationMetadata:
       (if on.value.contains("pag") then Set("PAG scale", "PAG adaptive scale", "PAG applied layers") else Set.empty[String]) ++
       (if on.value.contains("semantic_guidance") then Set("SEGA Active", "SEGA Prompt", "SEGA Negative Prompt", "SEGA Warmup Period", "SEGA Edit Guidance Scale", "SEGA Tail Percentage Threshold", "SEGA Momentum Scale", "SEGA Momentum Beta") else Set.empty[String]) ++
       (if on.value.contains("agent_attention") then AgentAttentionPlugin.InfotextKeys.toSet else Set.empty[String]) ++
-      (if on.value.contains("cd_tuner") then Set("CDT", "CDTC") else Set.empty[String])
+      (if on.value.contains("cd_tuner") then Set("CDT", "CDTC") else Set.empty[String]) ++
+      (if on.value.contains("nsfw_checker") then Set(NsfwCheckerPlugin.InfotextKey) else Set.empty[String])
     val unconsumed = f.filterNot((key, _) => represented.contains(key))
     ujson.Obj("infotext" -> text, "generation_args" -> args, "always_on" -> on,
       "unapplied_fields" -> ujson.Obj.from(unconsumed.map((k, v) => k -> ujson.Str(v))),
