@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 135, todo 167, na 51.
+Totals: done 136, todo 166, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -309,7 +309,7 @@ Totals: done 135, todo 167, na 51.
 | 300 | [cli-interruption](https://github.com/light-and-ray/sd-webui-cli-interruption.git) | 10 | na | `server-ops` | operating a shared web server (tunnels, TLS, multi-instance, kill buttons) |
 | 301 | [DemoFusion](https://github.com/sebaxakerhtc/sd-webui-demofusion.git) | 23 | todo | `demofusion` |  |
 | 302 | [Incantations](https://github.com/v0xie/sd-webui-incantations.git) | 153 | done | `incantations` | AlwaysOn Incantations: Smoothed Energy Guidance, S-CFG, Perturbed Attention Guidance with Saliency-Adaptive Noise Fusion, CFG scheduler with noise interval (17 schedule types) and Multi-Concept T2I-Zero (CbS, CTNMS), 29 XYZ axes, PNG/MCP replay, hires; Seek for Incantations (needs interrogators) and the attention-map saver are not provided; native PAG/SAG/Reference/Neutral/Composable combinations are rejected. Verified on real SD1.5 and SDXL, docs/incantations-verification.md. |
-| 303 | [Old SD firstpasser](https://github.com/light-and-ray/sd-webui-old-sd-firstpasser.git) | 32 | todo | `old_sd_firstpasser` |  |
+| 303 | [Old SD firstpasser](https://github.com/light-and-ray/sd-webui-old-sd-firstpasser.git) | 32 | done | `old_sd_firstpasser` | txt2img Script from the README only (the source has no licence and was not read): firstpass with an SD 1.x or SDXL checkpoint (steps, network type Auto/SD1/SDXL, one checkpoint list per family, firstpass resolution), upscale with a pixel upscaler, main-checkpoint img2img with the firstpass denoising, Hires fix as one more img2img pass (latent hires upscalers resize instead), PNG/MCP replay of the script values. Own design where the README is silent: firstpass size = native 512/1024 on the shorter side; Auto = the other family than the main checkpoint (LoRA metadata is not read); LoRA tags, manual LoRAs and ControlNet units act in the firstpass only unless LoRAs in the main pass is ticked; AlwaysOn plugins apply to both passes (the host applies them to every script generation); the main checkpoint is reloaded after an interrupted run. Not provided: the img2img-tab variant with an empty init image (extensions on the second pass), automatic LoRA-metadata type guess, restoring the firstpass AlwaysOn plugins/ControlNet units from the PNG beyond the AlwaysOn keys the main pass records. Upstream infotext key names are undocumented, so this app uses its own `Old SD firstpasser ...` keys. Verified on real SD1.5 and SDXL, docs/old-sd-firstpasser-verification.md. |
 | 304 | [SD Image Editor](https://github.com/sontungdo/sd-image-editor.git) | 50 | todo | `image_editor` |  |
 | 305 | [TripoSR](https://github.com/AlbedoFire/sd-webui-triposr.git) | 16 | todo | `triposr` |  |
 | 306 | [Readme browser](https://github.com/light-and-ray/sd-webui-readme-browser.git) | 11 | na | `webui-ux` | Gradio page behaviour (tabs, buttons, dialogs); the desktop UI provides the equivalent natively |

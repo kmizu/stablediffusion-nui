@@ -65,6 +65,14 @@ final class PluginsVM(val mode: Mode, scripts: Seq[Plugin], alwaysOnPlugins: Seq
       }
       case None => if selectedScript.get == "latent_upscale" then selectedScript.set("")
 
+  def restoreOldSdFirstpasser(fields: Map[String, String]): Unit =
+    sdfx.plugins.OldSdFirstpasserPlugin.replay(fields) match
+      case Some(values) => form("old_sd_firstpasser").foreach { f =>
+        f.load(values)
+        selectedScript.set("old_sd_firstpasser")
+      }
+      case None => if selectedScript.get == "old_sd_firstpasser" then selectedScript.set("")
+
   def scriptJob: Option[(Plugin, Values)] =
     scriptForms.find(_.plugin.id == selectedScript.get).map(f => f.plugin -> f.values)
 

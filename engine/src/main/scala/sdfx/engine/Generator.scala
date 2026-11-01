@@ -127,6 +127,11 @@ final class Generator(
   def tempFile(suffix: String): Path = Files.createTempFile(home.tmpDir(settings()), "sdfx-", suffix)
   def choices(source: ChoiceSource): Seq[String] = catalog.choices(source)
   override def modelPath(source: ChoiceSource, name: String): Option[String] = catalog.pathOf(source, name)
+  override def checkpointInfo(name: Option[String]): Option[CheckpointInfo] = name match
+    case Some(n) => catalog.findCheckpoint(n).map(e => CheckpointInfo(e.name, e.kind))
+    case None => client.supervisor.loadedModel.map(m => CheckpointInfo(catalog.findCheckpoint(m.path).map(_.name).getOrElse(m.name), m.kind))
+  override def loadCheckpoint(name: String, vae: Option[String]): Unit =
+    ensureModel(GenerationParams(checkpoint = Some(name), vae = vae))
   override def engineCall(kind: String, params: ujson.Obj): ujson.Value = engineCallWith(kind, params, GenerationListener.none)
   def log(message: String): Unit = System.err.println(s"[sdfx] $message")
   def status(text: String, done: Int, total: Int): Unit = ()
@@ -237,6 +242,8 @@ final class Generator(
         t
       def choices(source: ChoiceSource): Seq[String] = self.choices(source)
       override def modelPath(source: ChoiceSource, name: String): Option[String] = self.modelPath(source, name)
+      override def checkpointInfo(name: Option[String]): Option[CheckpointInfo] = self.checkpointInfo(name)
+      override def loadCheckpoint(name: String, vae: Option[String]): Unit = self.loadCheckpoint(name, vae)
       override def engineCall(kind: String, params: ujson.Obj): ujson.Value = guard {
         if isInterrupted then throw interruptedError
         if kind == "img2vid" then requirePlaintextVideoAllowed()

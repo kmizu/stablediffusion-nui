@@ -23,6 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE = [
     ("Kahsolt/stable-diffusion-webui-sonar", "reimplemented", "Pinned MIT source 15f92859f70f624513796dde91396109134da47b; independent momentum Euler / Euler a / Naive scheduler steps, reference-image guidance and upscale from the source behaviour; no upstream code copied"),
     ("Elldreth/loopback_scaler", "reimplemented", "Pinned MIT source 184a53e6d22579c578c6ee1bf55d821479213c49; independent native img2img loop schedule and final filters; no upstream code copied"),
+    ("light-and-ray/sd-webui-old-sd-firstpasser", "reimplemented", "Unlicensed behavior reference 74eb6b965bc5dbb65be99999b4a86bfbb0ee2b13; only its README was used (firstpass with an old SD 1.x / SDXL checkpoint, upscale, main-checkpoint img2img, Hires fix supported), re-implemented as the `old_sd_firstpasser` txt2img script; no upstream code was read or copied (its README screenshot was viewed only to name the controls)"),
     ("v0xie/sd-webui-incantations", "reimplemented", "Pinned GPL-3.0 source 980d63838a2b8c8659a01b242e55551870619d6a; independent Smoothed Energy Guidance, S-CFG, PAG with SANF, CFG scheduler and Multi-Concept T2I-Zero; no upstream code copied"),
     ("scraed/CharacteristicGuidanceWebUI", "reimplemented", "Pinned GPL-3.0 source e2f9fdca460beed1366647e2eea8276a63f98484; independent characteristic guidance iteration; no upstream code copied"),
     ("hako-mikan/sd-webui-cd-tuner", "reimplemented", "Pinned AGPL-3.0 source aafdbdda88b8d4e717fdb9aa9abe9e6df4943d7a; independent weight, latent and VAE adjustments, colour map and prompt tags; no upstream code copied"),
@@ -262,6 +263,8 @@ PINNED_UNLICENSED = {
         "c21cc99b731ff295039b0531e73968d1bf384570", "no license file published at pinned source"),
     "aria1th/sd-webui-nsfw-filter": (
         "ab49c733c86ad24358417b5bff4adf4b3803baf8", "no license file published at pinned source"),
+    "light-and-ray/sd-webui-old-sd-firstpasser": (
+        "74eb6b965bc5dbb65be99999b4a86bfbb0ee2b13", "no license file published at pinned source"),
 }
 
 

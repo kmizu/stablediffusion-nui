@@ -128,6 +128,16 @@ class FakeContext(val interruptAfter: Int = Int.MaxValue, val echoInit: Boolean 
         ujson.Obj("path" -> gif.toString, "frames" -> 4, "preview" -> prev.toString)
       case other => throw new UnsupportedOperationException(other)
 
+  val loadedCheckpoints = ArrayBuffer[(String, Option[String])]()
+  override def loadCheckpoint(name: String, vae: Option[String]): Unit = loadedCheckpoints += ((name, vae))
+
+  /** Catalog stand-in: modelA is SD1.5, modelB (the "loaded" model) is SDXL, anything else is unknown. */
+  override def checkpointInfo(name: Option[String]): Option[CheckpointInfo] = name match
+    case None | Some("modelB.safetensors") => Some(CheckpointInfo("modelB.safetensors", "sdxl"))
+    case Some("modelA.safetensors")        => Some(CheckpointInfo("modelA.safetensors", "sd15"))
+    case Some("modelC.safetensors")        => Some(CheckpointInfo("modelC.safetensors", "sd15"))
+    case _                                 => None
+
   override def modelPath(source: ChoiceSource, name: String): Option[String] =
     Option.when(name.nonEmpty && name != "missing")(s"/models/${source.toString}/$name")
 

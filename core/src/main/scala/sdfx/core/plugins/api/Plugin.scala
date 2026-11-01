@@ -75,6 +75,9 @@ case class OutputImage(path: Path, params: GenerationParams, infotext: String, s
 case class JobOutput(images: Seq[OutputImage], grids: Seq[OutputImage] = Nil):
   def all: Seq[OutputImage] = grids ++ images
 
+/** A checkpoint known to the host: catalog name and architecture kind (`sd15`, `sd15-inpaint`, `sd2`, `sdxl`, `sdxl-inpaint`). */
+final case class CheckpointInfo(name: String, kind: String)
+
 /** Services the host offers to plugins. Calls are blocking and run on the job thread. */
 trait PluginContext:
   /** Whether this job uses an image scrambling session. */
@@ -98,6 +101,14 @@ trait PluginContext:
     */
   def engineCall(kind: String, params: ujson.Obj): ujson.Value =
     throw new UnsupportedOperationException(s"engine request '$kind' is not available in this host")
+
+  /** The named checkpoint, or (`name = None`) the one that is loaded now, as listed by the model catalog. */
+  def checkpointInfo(name: Option[String]): Option[CheckpointInfo] = None
+
+  /** Loads the named checkpoint (and VAE) when it is not the loaded one; used by scripts that switch checkpoints
+    * to put the model back after an interrupted or failed run.
+    */
+  def loadCheckpoint(name: String, vae: Option[String] = None): Unit = ()
 
   /** Resolves a model choice (as listed by [[choices]]) to its file path. */
   def modelPath(source: ChoiceSource, name: String): Option[String] = None

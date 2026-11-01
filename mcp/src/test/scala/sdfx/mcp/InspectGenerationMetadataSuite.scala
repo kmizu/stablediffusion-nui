@@ -390,3 +390,26 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("incantations"))
   }
+
+  test("Old SD firstpasser infotext becomes a typed script candidate and its keys are consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("firstpass.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val text = "lion\nSteps: 20, Seed: 4, Size: 1024x768, Old SD firstpasser: SD1, Old SD firstpasser steps: 14, " +
+      "Old SD firstpasser denoising: 0.45, Old SD firstpasser upscaler: Lanczos, Old SD firstpasser checkpoint: old.safetensors, " +
+      "Old SD firstpasser model hash: abcd1234, Old SD firstpasser size: 680x512, Old SD firstpasser resolution: 0, " +
+      "Old SD firstpasser main LoRAs: False"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("scripts")("old_sd_firstpasser")
+    assertEquals(candidate("network_type").str, "SD1")
+    assertEquals(candidate("steps").num, 14.0)
+    assertEquals(candidate("denoising").num, 0.45)
+    assertEquals(candidate("sd1_checkpoint").str, "old.safetensors")
+    assertEquals(candidate("sdxl_checkpoint").str, "")
+    assertEquals(candidate("main_loras").bool, false)
+    val unapplied = result("unapplied_fields").obj.keySet
+    assert(!unapplied.exists(_.startsWith("Old SD firstpasser")), unapplied)
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(InspectGenerationMetadata.inspect(path.toString, policy, dir)("scripts").obj.isEmpty)
+  }

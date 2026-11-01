@@ -5,7 +5,7 @@ import java.util.Base64
 import sdfx.core.infotext.Infotext
 import sdfx.core.plugins.api.{Control, Plugin, Values}
 import sdfx.core.png.PngMetadata
-import sdfx.plugins.{AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
+import sdfx.plugins.{OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
 import scala.util.control.NonFatal
 
 /** Inspect only: no model load, plugin execution, script execution or generation. */
@@ -207,7 +207,11 @@ object InspectGenerationMetadata:
       (if on.value.contains("characteristic_guidance") then Set(CharacteristicGuidancePlugin.Key) else Set.empty[String]) ++
       (if on.value.contains("incantations") then IncantationsPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("sonar") then SonarPlugin.InfotextKeys.toSet else Set.empty[String])
-    val unconsumed = f.filterNot((key, _) => represented.contains(key))
-    ujson.Obj("infotext" -> text, "generation_args" -> args, "always_on" -> on,
+    // Script candidates: only reported, run_script is called by the agent with these values and generation_args.
+    val scripts = ujson.Obj.from(OldSdFirstpasserPlugin.replay(f).flatMap(v =>
+      StandardPlugins.scripts(() => Nil).find(_.id == OldSdFirstpasserPlugin.Id).map(pl => OldSdFirstpasserPlugin.Id -> typed(pl, v))).toSeq)
+    val scriptKeys = if scripts.value.contains(OldSdFirstpasserPlugin.Id) then OldSdFirstpasserPlugin.InfotextKeys.toSet else Set.empty[String]
+    val unconsumed = f.filterNot((key, _) => represented.contains(key) || scriptKeys.contains(key))
+    ujson.Obj("infotext" -> text, "generation_args" -> args, "always_on" -> on, "scripts" -> scripts,
       "unapplied_fields" -> ujson.Obj.from(unconsumed.map((k, v) => k -> ujson.Str(v))),
       "warnings" -> ujson.Arr("Review candidates and missing model, LoRA, image, mask and unsupported plugin settings before replay; nothing was executed."))
