@@ -307,3 +307,6 @@ superpowers の brainstorming → plan mode → HANDSOFF/docs 読み、upstream 
 
 ### 引き継ぎ受入の追加確認（2026-11-02）
 Kimi の受入マトリクス（SD1.5/SDXL × stdio/HTTP、公式 SDK、`--require-extensions`）を v0.05 配布 `SDNUI.exe` で再実行し、4 run すべて success（`outputs/pkg-v005-*`, `outputs/pkg-v005-http-*`）。Kimi の `3417ca5` 単体は main の祖先ではないが、その内容は `56c1ade`/`cda253d` として main に入り、配布物で同じ受入が通ることを確認済み。
+
+## v0.06 バッチ（ユーザー指示 `issues.take(20).map(_.resolve)`、2026-11-02 開始）
+解釈: open issue を番号昇順で先頭 20 件（#2,3,5,6,8,10,12,13,14,18,19,20,21,22,23,24,25,26,27,28）を解決する。agent を worktree で並行実行（GPU は `outputs/.gpu.lock`）、私が 1 件ずつ merge --squash→テスト→push。実装不能（モデル/依存不足など）の issue は実装済みと数えず理由を記録する。進捗はこの節に追記。
