@@ -124,6 +124,7 @@ LoRA 全般の使い方は [LoRA と Embedding](lora-embeddings.html) を参照�
 | **Kohya HRFix (Deep Shrink)** | 序盤のステップで U-Net の深いブロックを縮小し、高解像度でも構図が崩れにくくします。 |
 | **MultiDiffusion (tiled diffusion)** | 重なり合う潜在タイルごとにノイズ除去して合成し、非常に大きな画像を作ります。 |
 | **Token Downsampling** | 自己注意のキーと値を間引いて、ディテールと引き換えに速度を上げます。PAG や HyperTile とは併用できません。 |
+| **Agent Attention** | U-Net の自己注意で似たトークンをまとめ、少数のエージェントトークンを介して注意を計算します(AgentSD)。速度が上がり、ディテールが良くなることもあります。First Pass の設定は Second Pass Step まで効き、そこで効果が止まります。Use Second Pass をオンにすると、そこから Second Pass の設定に切り替わります。Apply to Hires. Fix Only をオンにすると、Hires パスだけに効きます。SDXL では Max Downsample を 2 以上にしてください(1 では何も変わりません)。PAG、SAG、HyperTile、Token Downsampling、Reference-only、ControlNet-LLLite とは併用できません。 |
 | **Never OOM** | 注意と VAE のスライス処理、VAE のタイル処理で、そのジョブの VRAM ピークを下げます。 |
 | **GPU temperature guard** | GPU 温度がスリープ温度を超えたらサンプリングを一時停止し、ウェイク温度を下回ったら再開します。 |
 

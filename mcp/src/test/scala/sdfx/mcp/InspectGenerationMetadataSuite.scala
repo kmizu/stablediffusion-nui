@@ -225,3 +225,25 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assertEquals(PluginMetadataCandidates.hypertile(Map("Hypertile tile size" -> "9999")), None)
     assertEquals(PluginMetadataCandidates.pag(Map("PAG scale" -> "nan", "PAG adaptive scale" -> "0", "PAG applied layers" -> "mid")), None)
   }
+
+  test("Agent Attention source infotext becomes a typed candidate and its keys are consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("agent.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val text = "cat\nSteps: 20, Seed: 4, Size: 512x512, AgAt Active: True, AgAt Use Second Pass: True, " +
+      "AgAt Second Pass Step: 12, AgAt First Pass sx: 2, AgAt First Pass sy: 2, AgAt First Pass Ratio: 0.5, " +
+      "AgAt First Pass Agent Ratio: 0.9, AgAt Second Pass sx: 2, AgAt Second Pass sy: 2, AgAt Second Pass Ratio: 0.4, " +
+      "AgAt Second Pass Agent Ratio: 0.5, AgAt Use FP32 Precision: False, AgAt Max Downsample: 2, " +
+      "AgAt Apply to Hires. Fix Only: False"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("always_on")("agent_attention")
+    assertEquals(candidate("enabled").bool, true)
+    assertEquals(candidate("use_sp").bool, true)
+    assertEquals(candidate("sp_step").num, 12.0)
+    assertEquals(candidate("ratio").num, 0.5)
+    assertEquals(candidate("max_downsample").str, "2")
+    assert(!result("unapplied_fields").obj.keys.exists(_.startsWith("AgAt ")))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("agent_attention"))
+  }

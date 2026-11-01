@@ -124,6 +124,7 @@ For general LoRA use, see [LoRA and embeddings](lora-embeddings.html).
 | **Kohya HRFix (Deep Shrink)** | Shrinks a deep U-Net block in early steps so high resolutions stay coherent. |
 | **MultiDiffusion (tiled diffusion)** | Denoises overlapping latent tiles and blends them, for very large images. |
 | **Token Downsampling** | Reduces self-attention keys and values to trade detail for speed. Cannot be combined with PAG or HyperTile. |
+| **Agent Attention** | Merges similar tokens in the U-Net self-attention and attends through a few agent tokens (AgentSD), for speed and often finer detail. The first-pass settings apply until Second Pass Step, where the effect stops, or switches to the second-pass settings when Use Second Pass is on. Apply to Hires. Fix Only moves it to the hires pass. For SDXL set Max Downsample to 2 or more; at 1 nothing changes. Cannot be combined with PAG, SAG, HyperTile, Token Downsampling, Reference-only or ControlNet-LLLite. |
 | **Never OOM** | Lowers peak VRAM for the job with sliced attention and VAE, and tiled VAE. |
 | **GPU temperature guard** | Pauses sampling above the sleep temperature and resumes below the wake temperature. |
 

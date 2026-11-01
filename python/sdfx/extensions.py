@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from . import adapters, guidance, latent_ops, sampling_ext, semantic_guidance, unet_hooks
+from . import adapters, agent_attention, guidance, latent_ops, sampling_ext, semantic_guidance, unet_hooks
 from .hooks import coerce_bool, hook_config
 from .protocol import INVALID_PARAMS, UNSUPPORTED, EngineError
 
@@ -25,7 +25,8 @@ log = logging.getLogger("sdfx.extensions")
 # hooks handled here (the engine handles freeu, dynamic_thresholding, hypertile, pag itself)
 EXTENSION_HOOKS = ("apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
                    "soft_inpainting", "sag", "neveroom", "reference", "revision", "ip_adapter", "controllllite",
-                   "fooocus_inpaint", "photomaker", "face_restore", "img2imgalt", "semantic_guidance") + sampling_ext.HOOKS
+                   "fooocus_inpaint", "photomaker", "face_restore", "img2imgalt", "semantic_guidance",
+                   "agent_attention") + sampling_ext.HOOKS
 
 MODEL_SAMPLING_DEFAULTS = {"sampling": "default", "zsnr": False}
 SAG_DEFAULTS = {"scale": 0.5, "blur_sigma": 2.0}
@@ -189,7 +190,7 @@ def configure_ip_adapter(engine, pipe, gp, req):
 
 def install(engine, pipe, task: str, gp, req, kw: dict, ctx, cleanups: list, *, plan: RunPlan, w: int, h: int, sched,
             cfg_scale: float, image=None, mask=None, steps: int = 0, seed: int = 0, branch_hooks=None,
-            forward_wrappers=None) -> list:
+            forward_wrappers=None, pass_: str = "base") -> list:
     """Installs every requested hook, appending cleanup callables to `cleanups` as it goes (so a failure half way
     still lets the engine undo what was installed)."""
     import torch
@@ -286,6 +287,14 @@ def install(engine, pipe, task: str, gp, req, kw: dict, ctx, cleanups: list, *, 
             cleanups.append(pipe.vae.disable_slicing)
             if engine.cuda:
                 cleanups.append(torch.cuda.empty_cache)
+
+    # --- self-attention token merging (last, so it wraps the final attn1 processors) -------------------------------
+    aa = cfg(gp, "agent_attention", agent_attention.DEFAULTS)
+    if aa:
+        remove = agent_attention.install(engine, pipe, gp, ctx, aa, pass_=pass_, seed=seed, pag="pag_scale" in kw,
+                                         sag=plan.sag is not None)
+        if remove is not None:
+            cleanups.append(remove)
     return cleanups
 
 

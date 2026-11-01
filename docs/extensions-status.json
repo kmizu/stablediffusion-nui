@@ -1581,7 +1581,7 @@
 "index": 263,
 "name": "Agent Attention",
 "url": "https://github.com/v0xie/sd-webui-agentattention.git",
-"status": "todo:agent_attention"
+"status": "done:agent_attention"
 },
 {
 "index": 264,

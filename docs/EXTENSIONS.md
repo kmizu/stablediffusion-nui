@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 127, todo 175, na 51.
+Totals: done 128, todo 174, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -269,7 +269,7 @@ Totals: done 127, todo 175, na 51.
 | 260 | [Replacer - fast inpaint](https://github.com/light-and-ray/sd-webui-replacer.git) | 242 | todo | `replacer` |  |
 | 261 | [Color Correction Extras](https://github.com/light-and-ray/sd-webui-color-correction-extras.git) | 21 | done | `color_correction` |  |
 | 262 | [State Manager](https://github.com/SenshiSentou/sd-webui-state-manager.git) | 68 | todo | `core:state-manager` | v0.03: per-mode named generation settings save/list/restore/delete; upstream history and other extras remain under #23. See generation-states.md. |
-| 263 | [Agent Attention](https://github.com/v0xie/sd-webui-agentattention.git) | 44 | todo | `agent_attention` |  |
+| 263 | [Agent Attention](https://github.com/v0xie/sd-webui-agentattention.git) | 44 | done | `agent_attention` | AlwaysOn agent attention with token merging as the pinned extension: first/second pass sx, sy, ratio and agent ratio, second pass step, max downsample, FP32, hires-only, source infotext keys, PNG/MCP replay and all 13 XYZ axes. Merging uses a deterministic reduction (seeded from the image seed) so PNG replays are pixel-exact, not pixel-equal to A1111. Rejects PAG, SAG, HyperTile, Token Downsampling, Reference-only and ControlNet-LLLite combinations. SD1.5/SDXL real MCP checks with image inspection. See agent-attention-verification.md. |
 | 264 | [Deepdanbooru object recognition](https://github.com/Jibaku789/sd-webui-deepdanbooru-object-recognition.git) | 37 | todo | `deepdanbooru` |  |
 | 265 | [Deepdanbooru Tag2Folder](https://github.com/Jibaku789/sd-webui-deepdanbooru-tag2folder) | 9 | todo | `deepdanbooru` |  |
 | 266 | [sd-webui-ocr](https://github.com/SpenserCai/sd-webui-ocr) | 17 | todo | `ocr` |  |

@@ -213,7 +213,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")
@@ -1337,7 +1337,7 @@ class Engine(BaseEngine):
             forward_wrappers = []
             ext_mod.install(self, pipe, task, gp, req, kw, ctx, cleanups, plan=xplan, w=w, h=h, sched=sched,
                             cfg_scale=cfg_scale, image=image, mask=mask, steps=steps, seed=hook_seed,
-                            branch_hooks=branch_hooks, forward_wrappers=forward_wrappers)
+                            branch_hooks=branch_hooks, forward_wrappers=forward_wrappers, pass_=pass_)
             if pag:
                 # Capture after IP load/unload: restoring pre-install processors would discard IP weights while
                 # IPAdapterState still considers them loaded. Also restore native PAG changes on failure.
@@ -1964,7 +1964,8 @@ class Engine(BaseEngine):
 
     # hooks that must not run again on ADetailer's inpainting passes (whole-image effects, or ADetailer itself)
     _ADETAILER_SKIP_HOOKS = ("steps_animation", "adetailer", "save_intermediate", "tiling", "latent_mirroring", "multidiffusion", "kohya_hrfix", "reference",
-                             "revision", "ip_adapter", "controllllite", "photomaker", "img2imgalt", "soft_inpainting")
+                             "revision", "ip_adapter", "controllllite", "photomaker", "img2imgalt", "soft_inpainting",
+                             "agent_attention")
 
     def _adetailer(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag):
         """ADetailer: detect, then inpaint every detection of every unit (in unit order) at full resolution."""

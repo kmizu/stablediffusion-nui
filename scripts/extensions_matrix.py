@@ -87,7 +87,7 @@ S = {
     249: "done:semantic_guidance", 250: "done:core:png-info", 251: "todo:person_mask", 252: "todo:style_variables",
     253: "todo:core:api-payload", 254: "todo:adetailer", 255: "todo:lora_queue", 256: "done:kohya_hrfix",
     257: "todo:test_my_prompt", 258: "na:webui-ux", 259: "na:account", 260: "todo:replacer",
-    261: "todo:color_correction", 262: "todo:core:state-manager", 263: "todo:agent_attention", 264: "todo:deepdanbooru",
+    261: "todo:color_correction", 262: "todo:core:state-manager", 263: "done:agent_attention", 264: "todo:deepdanbooru",
     265: "todo:deepdanbooru", 266: "todo:ocr", 267: "todo:characteristic_guidance", 268: "done:core:embedding-inspector",
     269: "todo:lama_cleaner", 270: "todo:regional_prompter", 271: "todo:model_organizer", 272: "na:account",
     273: "todo:video_extras", 274: "todo:inpaint_background", 275: "todo:daam", 276: "todo:controlnet_preprocess_extras",
@@ -144,6 +144,7 @@ IMPLEMENTED = {
 
 
 SCOPE_NOTES = {
+    "agent_attention": "AlwaysOn agent attention with token merging as the pinned extension: first/second pass sx, sy, ratio and agent ratio, second pass step, max downsample, FP32, hires-only, source infotext keys, PNG/MCP replay and all 13 XYZ axes. Merging uses a deterministic reduction (seeded from the image seed) so PNG replays are pixel-exact, not pixel-equal to A1111. Rejects PAG, SAG, HyperTile, Token Downsampling, Reference-only and ControlNet-LLLite combinations. SD1.5/SDXL real MCP checks with image inspection. See agent-attention-verification.md.",
     "loopback_scaler": "Native img2img Script with every source control: eased per-loop sizes to the max or scaled target, denoise change factor, per-loop seeds, batch restarts, saved loop outputs with source infotext and the final Pillow filters. Fixes the source's landscape height bug; rejects txt2img and batch size > 1. SD1.5/SDXL real MCP runs including cancel/recovery with image inspection (SD1.5 colour drift comes from repeated img2img with that model). See loopback-scaler-verification.md.",
     "semantic_guidance": "AlwaysOn conditioning-space concept edit as the pinned extension (not the SEGA paper noise guidance): comma-separated positive/negative concepts with first-segment attention strength, warmup, scale, tail threshold, inert momentum, SDXL pooled edit, source infotext keys, PNG/MCP replay and XYZ axes. SD1.5/SDXL real MCP checks with image inspection. XYZ axes need the plugin enabled; Neutral Prompt/Composable LoRA branches and PhotoMaker are rejected. See semantic-guidance-verification.md.",
     "controlnet_fastload": "AlwaysOn load/save of ControlNet units in the upstream marker+gzip+pickle format (embedded, .cni, both), current/loaded priority, non-executing bounded reader, inspect/preview/send/capture tab, 36-per-page filter gallery and MCP inspect/always_on. Native ControlNet gains source control modes, canny processor resolution/pixel perfect, hires canny/MLSD softening and non-inpaint mask selection. SD1.5/SDXL real MCP load/save/round-trip/priority/hires/cancel verified with image inspection. Inpaint/CLIP masks, batch inputs, hires-only units and other preprocessors' resolutions are rejected; NUI writes no ControlNet infotext for gallery filters. See controlnet-fastload-verification.md.",
