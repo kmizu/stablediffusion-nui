@@ -97,6 +97,7 @@ LoRA 全般の使い方は [LoRA と Embedding](lora-embeddings.html) を参照�
 | **Mahiro CFG** | CFG と一致する部分で、ポジティブプロンプト寄りに補正します。 |
 | **RescaleCFG** | ガイダンス後の予測の標準偏差を、ポジティブ側に合わせて調整します(v-prediction / ZTSNR モデル向け)。 |
 | **Perturbed-Attention Guidance** | 自己注意を乱したパスからのガイダンスを加えます(PAG)。 |
+| **Semantic Guidance** | 専用のプロンプトに書いた概念(カンマ区切り)を画像に加え、ネガティブプロンプトの概念を取り除きます。Warmup 後のステップでプロンプトの条件付けを編集するので、構図はおおむね保たれます。Edit guidance scale の既定値 1.0 でも効きが強く、特に取り除く方向では崩れることがあるので、0.3〜1.0 で調整してください。 |
 | **Self Attention Guidance** | ぼかした自己注意の領域でガイダンスします。SD1.x の txt2img 専用で、DDIM / UniPC / DPM++ 系のサンプラーが必要です。 |
 | **CFG Schedule** | CFG スケールを、ステップの進行に合わせて開始値から終了値へ変化させます(CFG > 1 が必要)。 |
 | **CADS** | プロンプトの条件付けにスケジュールしたノイズを加え、結果の多様性を高めます。 |

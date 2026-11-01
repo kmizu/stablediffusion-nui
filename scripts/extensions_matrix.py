@@ -84,7 +84,7 @@ S = {
     237: "done:core:image-scrambling", 238: "todo:nsfw_checker", 239: "todo:lcm", 240: "todo:cads",
     241: "todo:face_swap", 242: "todo:hotshot_xl", 243: "done:inpaint_difference", 244: "todo:temporal",
     245: "todo:facechain", 246: "todo:style_selector", 247: "todo:panorama_tools", 248: "todo:core:styles-editor",
-    249: "todo:semantic_guidance", 250: "done:core:png-info", 251: "todo:person_mask", 252: "todo:style_variables",
+    249: "done:semantic_guidance", 250: "done:core:png-info", 251: "todo:person_mask", 252: "todo:style_variables",
     253: "todo:core:api-payload", 254: "todo:adetailer", 255: "todo:lora_queue", 256: "done:kohya_hrfix",
     257: "todo:test_my_prompt", 258: "na:webui-ux", 259: "na:account", 260: "todo:replacer",
     261: "todo:color_correction", 262: "todo:core:state-manager", 263: "todo:agent_attention", 264: "todo:deepdanbooru",
@@ -144,6 +144,7 @@ IMPLEMENTED = {
 
 
 SCOPE_NOTES = {
+    "semantic_guidance": "AlwaysOn conditioning-space concept edit as the pinned extension (not the SEGA paper noise guidance): comma-separated positive/negative concepts with first-segment attention strength, warmup, scale, tail threshold, inert momentum, SDXL pooled edit, source infotext keys, PNG/MCP replay and XYZ axes. SD1.5/SDXL real MCP checks with image inspection. XYZ axes need the plugin enabled; Neutral Prompt/Composable LoRA branches and PhotoMaker are rejected. See semantic-guidance-verification.md.",
     "controlnet_fastload": "AlwaysOn load/save of ControlNet units in the upstream marker+gzip+pickle format (embedded, .cni, both), current/loaded priority, non-executing bounded reader, inspect/preview/send/capture tab, 36-per-page filter gallery and MCP inspect/always_on. Native ControlNet gains source control modes, canny processor resolution/pixel perfect, hires canny/MLSD softening and non-inpaint mask selection. SD1.5/SDXL real MCP load/save/round-trip/priority/hires/cancel verified with image inspection. Inpaint/CLIP masks, batch inputs, hires-only units and other preprocessors' resolutions are rejected; NUI writes no ControlNet infotext for gallery filters. See controlnet-fastload-verification.md.",
     "core:embedding-editor": "Native owned-vector editing with full coordinate pages, real-tokenizer guidance, independent SDXL encoders, unsaved previews and source-bound overwrite with verified original backups/live refresh. Independent implementation from unlicensed pinned behavior; actual PT preservation, SD1.5/SDXL protected native/package save-collision-recovery and genuine PhotoMaker/EM cancellation verified. SD2 checkpoints, native multi-image preview and A1111 training interoperability are unverified; existing PhotoMaker composition guards remain. Dedicated MCP editor API is not included. See embedding-editor-verification.md.",
     "conditioning_highres_fix": "Pinned seven-mode inpainting conditioning formulas, native controls and PNG replay; 9-channel SD1.5/SDXL source and MainWindow, protected input/output, cancellation/recovery verified. Actual 4-channel SD1.5/SDXL masked and Hires output is unchanged. Disabled retains native baseline; SDXL is a native adaptation. Extracted Windows package, full Torch CPU and Scala suites verified. ControlNet/ADetailer composition is not real-model verified; see conditioning-highres-verification.md.",

@@ -1497,7 +1497,7 @@
 "index": 249,
 "name": "Semantic Guidance",
 "url": "https://github.com/v0xie/sd-webui-semantic-guidance.git",
-"status": "todo:semantic_guidance"
+"status": "done:semantic_guidance"
 },
 {
 "index": 250,

@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 125, todo 177, na 51.
+Totals: done 126, todo 176, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -255,7 +255,7 @@ Totals: done 125, todo 177, na 51.
 | 246 | [Stylez](https://github.com/javsezlol1/Stylez.git) | 123 | todo | `style_selector` |  |
 | 247 | [sd-webui-panorama-tools](https://github.com/Flyguygx/sd-webui-panorama-tools.git) | 41 | todo | `panorama_tools` |  |
 | 248 | [sd-webui-extended-style-saver](https://github.com/harukei-tech/sd-webui-extended-style-saver.git) | 9 | done | `core:styles-editor` |  |
-| 249 | [Semantic Guidance](https://github.com/v0xie/sd-webui-semantic-guidance.git) | 68 | todo | `semantic_guidance` |  |
+| 249 | [Semantic Guidance](https://github.com/v0xie/sd-webui-semantic-guidance.git) | 68 | done | `semantic_guidance` | AlwaysOn conditioning-space concept edit as the pinned extension (not the SEGA paper noise guidance): comma-separated positive/negative concepts with first-segment attention strength, warmup, scale, tail threshold, inert momentum, SDXL pooled edit, source infotext keys, PNG/MCP replay and XYZ axes. SD1.5/SDXL real MCP checks with image inspection. XYZ axes need the plugin enabled; Neutral Prompt/Composable LoRA branches and PhotoMaker are rejected. See semantic-guidance-verification.md. |
 | 250 | [SD Web UI Modal Info](https://github.com/luminouspear/sd-webui-modal-info.git) | 10 | done | `core:png-info` |  |
 | 251 | [A Person Mask Generator](https://github.com/djbielejeski/a-person-mask-generator.git) | 407 | done | `person_mask` |  |
 | 252 | [Style variables](https://github.com/SirVeggie/extension-style-vars) | 23 | done | `style_variables` |  |

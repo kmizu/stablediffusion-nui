@@ -101,6 +101,7 @@ final class PluginsVM(val mode: Mode, scripts: Seq[Plugin], alwaysOnPlugins: Seq
       form("hires_fix_tweaks").foreach(_.load(values))
     }
     sdfx.plugins.TokenDownsamplingPlugin.replay(fields).foreach(values => form("token_downsampling").foreach(_.load(values)))
+    sdfx.plugins.SemanticGuidancePlugin.replay(fields).foreach(values => form("semantic_guidance").foreach(_.load(values)))
     def flag(key: String): Option[Boolean] = fields.get(key).flatMap { v =>
       v.trim.toLowerCase(java.util.Locale.ROOT) match
         case "true" => Some(true)

@@ -97,6 +97,7 @@ For general LoRA use, see [LoRA and embeddings](lora-embeddings.html).
 | **Mahiro CFG** | Leans towards the positive prompt where it agrees with CFG. |
 | **RescaleCFG** | Rescales the guided prediction's standard deviation to the positive one (for v-prediction / ZTSNR models). |
 | **Perturbed-Attention Guidance** | Adds guidance from a perturbed self-attention pass (PAG). |
+| **Semantic Guidance** | Adds the comma-separated concepts in its own prompt to the image and removes those in its negative prompt, by editing the prompt conditioning after the warmup steps, so the composition mostly stays. The effect is strong even at the default edit guidance scale of 1.0, and removing concepts can break the image, so tune it between 0.3 and 1.0. |
 | **Self Attention Guidance** | Guides with blurred self-attention regions. SD1.x txt2img only; needs DDIM / UniPC / DPM++ samplers. |
 | **CFG Schedule** | Moves the CFG scale from a start value to an end value over the steps (needs CFG > 1). |
 | **CADS** | Adds scheduled noise to the prompt conditioning for more diverse results. |
