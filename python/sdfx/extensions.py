@@ -26,7 +26,7 @@ log = logging.getLogger("sdfx.extensions")
 EXTENSION_HOOKS = ("apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
                    "soft_inpainting", "sag", "neveroom", "reference", "revision", "ip_adapter", "controllllite",
                    "fooocus_inpaint", "photomaker", "face_restore", "img2imgalt", "semantic_guidance",
-                   "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul") + sampling_ext.HOOKS
+                   "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients") + sampling_ext.HOOKS
 
 MODEL_SAMPLING_DEFAULTS = {"sampling": "default", "zsnr": False}
 SAG_DEFAULTS = {"scale": 0.5, "blur_sigma": 2.0}

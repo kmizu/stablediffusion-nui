@@ -414,6 +414,24 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(InspectGenerationMetadata.inspect(path.toString, policy, dir)("scripts").obj.isEmpty)
   }
 
+  test("Aesthetic Gradients infotext becomes a typed candidate and its keys are consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("aesthetic.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val text = "lion\nSteps: 20, Seed: 4, Size: 512x512, Aesthetic LR: 0.0001, Aesthetic weight: 0.7, Aesthetic steps: 12, " +
+      "Aesthetic embedding: sunset, Aesthetic slerp: False"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("always_on")("aesthetic_gradients")
+    assertEquals(candidate("enabled").bool, true)
+    assertEquals(candidate("embedding").str, "sunset")
+    assertEquals(candidate("weight").num, 0.7)
+    assertEquals(candidate("steps").num, 12.0)
+    assert(!result("unapplied_fields").obj.keySet.exists(k => sdfx.plugins.AestheticGradientsPlugin.InfotextKeys.contains(k)))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("aesthetic_gradients"))
+  }
+
   test("LLuL source infotext becomes a typed candidate and its keys are consumed") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("llul.png")

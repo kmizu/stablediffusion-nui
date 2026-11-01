@@ -27,7 +27,7 @@ from . import hires as hires_mod
 from . import hooks as hooks_mod
 from . import adapters, extras, inpaint, lora_blocks, models, preview, prompt, prompt_schedule, schedulers, sonar, upscalers
 from . import weight_gradient, save_intermediate, latent_upscale, steps_animation
-from . import negpip
+from . import aesthetic_gradients, negpip
 from . import neutral_prompt, neutral_runtime, prompt_fusion
 from .clora import runtime as composable_lora
 from . import extensions as ext_mod
@@ -216,7 +216,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")
@@ -799,11 +799,22 @@ class Engine(BaseEngine):
         pipe = self.pipe
         pos = prompt.strip_extra_networks(pos)
         neg = prompt.strip_extra_networks(neg)
+        aesthetic = hooks_mod.hook_config(gp.hooks, "aesthetic_gradients", aesthetic_gradients.DEFAULTS)
+        if aesthetic is not None:
+            aesthetic = aesthetic_gradients.normalize(aesthetic)
+
+        def aesthetic_encode(text, oc):
+            plain = ((lambda p, t: prompt.encode_sdxl(p, t, gp.clip_skip)) if self.sdxl
+                     else (lambda p, t: prompt.encode_sd15(p, t, gp.clip_skip, oc)))
+            return aesthetic_gradients.encode_prompt(self, pipe, text, gp, aesthetic, plain)
         with torch.no_grad():
             if self.sdxl:
-                pe, pp = prompt.encode_sdxl(pipe, pos, gp.clip_skip)
+                pe, pp = (aesthetic_encode(pos, False) if aesthetic is not None and not aesthetic["negative"]
+                          else prompt.encode_sdxl(pipe, pos, gp.clip_skip))
                 if neg.strip() == "":
                     ne, npool = torch.zeros_like(pe), torch.zeros_like(pp)
+                elif aesthetic is not None and aesthetic["negative"]:
+                    ne, npool = aesthetic_encode(neg, False)
                 else:
                     ne, npool = prompt.encode_sdxl(pipe, neg, gp.clip_skip)
                 if pe.shape[1] != ne.shape[1]:
@@ -818,8 +829,10 @@ class Engine(BaseEngine):
                         "pooled_prompt_embeds": pp.repeat(bs, 1).to(self.dtype),
                         "negative_pooled_prompt_embeds": npool.repeat(bs, 1).to(self.dtype)}
             oc = self.kind == "sd2"
-            pe = prompt.encode_sd15(pipe, pos, gp.clip_skip, oc)
-            ne = prompt.encode_sd15(pipe, neg, gp.clip_skip, oc)
+            pe = (aesthetic_encode(pos, oc) if aesthetic is not None and not aesthetic["negative"]
+                  else prompt.encode_sd15(pipe, pos, gp.clip_skip, oc))
+            ne = (aesthetic_encode(neg, oc) if aesthetic is not None and aesthetic["negative"] and neg.strip()
+                  else prompt.encode_sd15(pipe, neg, gp.clip_skip, oc))
             if pe.shape[1] != ne.shape[1]:
                 empty = prompt.encode_sd15(pipe, "", gp.clip_skip, oc)
                 pe, ne = prompt.pad_to_match(pe, ne, empty)
@@ -1994,7 +2007,7 @@ class Engine(BaseEngine):
     # hooks that must not run again on ADetailer's inpainting passes (whole-image effects, or ADetailer itself)
     _ADETAILER_SKIP_HOOKS = ("steps_animation", "adetailer", "save_intermediate", "tiling", "latent_mirroring", "multidiffusion", "kohya_hrfix", "reference",
                              "revision", "ip_adapter", "controllllite", "photomaker", "img2imgalt", "soft_inpainting",
-                             "agent_attention", "incantations", "sonar", "llul")
+                             "agent_attention", "incantations", "sonar", "llul", "aesthetic_gradients")
 
     def _adetailer(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag):
         """ADetailer: detect, then inpaint every detection of every unit (in unit order) at full resolution."""

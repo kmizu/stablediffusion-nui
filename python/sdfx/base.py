@@ -454,6 +454,38 @@ class BaseEngine:
         except (ValueError, TypeError, OSError, PermissionError) as exc:
             raise EngineError(INVALID_PARAMS, f"Embedding Inspector: {exc}") from exc
 
+    def aesthetic_embedding(self, params: dict, ctx: JobContext) -> dict:
+        """Aesthetic Gradients embeddings: {op: "list"} or {op: "create", images, name, [output_dir, overwrite]}."""
+        from . import aesthetic_gradients as ag
+        op = str(params.get("op", "create"))
+        if op == "list":
+            return {"embeddings": ag.list_embeddings(), "folders": [str(d) for d in ag.embedding_dirs()]}
+        if op != "create":
+            raise EngineError(INVALID_PARAMS, f"Aesthetic Gradients: unknown operation '{op}'")
+        if self.dry_run:
+            raise EngineError(UNSUPPORTED, "Aesthetic Gradients embeddings need CLIP ViT-L/14; dry-run does not run it")
+        name = str(params.get("name", "")).strip()
+        if not name or any(ch in name for ch in '\\/:*?"<>|') or name in (".", "..") or name.startswith("."):
+            raise EngineError(INVALID_PARAMS, "Aesthetic Gradients: name must be a plain file name")
+        images = params.get("images")
+        if isinstance(images, str):
+            images = [images]
+        if not images:
+            raise EngineError(INVALID_PARAMS, "Aesthetic Gradients: images (files or a folder) are required")
+        from pathlib import Path
+        folder = Path(params.get("output_dir") or ag.embedding_dirs()[0])
+        output = folder / (name if name.lower().endswith(".pt") else name + ".pt")
+        if output.exists() and not params.get("overwrite"):
+            raise EngineError(INVALID_PARAMS, f"Aesthetic Gradients: {output} exists (pass overwrite to replace it)")
+        ctx.check_interrupt()
+        dev = "cuda" if getattr(self, "cuda", False) else "cpu"
+        try:
+            return ag.create_embedding(images, output, device=dev, check_interrupt=ctx.check_interrupt)
+        except ImportError as e:
+            raise EngineError(UNSUPPORTED, f"Aesthetic Gradients needs torch and transformers: {e}")
+        except (OSError, ValueError) as e:
+            raise EngineError(INVALID_PARAMS, f"Aesthetic Gradients: {e}")
+
     def vae_tools(self, params: dict, ctx: JobContext) -> dict:
         if self.dry_run:
             raise EngineError(UNSUPPORTED, 'VAE Tools requires a real loaded VAE; dry-run cannot encode or decode latents')

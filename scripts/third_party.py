@@ -24,6 +24,8 @@ BASE = [
     ("Kahsolt/stable-diffusion-webui-sonar", "reimplemented", "Pinned MIT source 15f92859f70f624513796dde91396109134da47b; independent momentum Euler / Euler a / Naive scheduler steps, reference-image guidance and upscale from the source behaviour; no upstream code copied"),
     ("Elldreth/loopback_scaler", "reimplemented", "Pinned MIT source 184a53e6d22579c578c6ee1bf55d821479213c49; independent native img2img loop schedule and final filters; no upstream code copied"),
     ("light-and-ray/sd-webui-old-sd-firstpasser", "reimplemented", "Unlicensed behavior reference 74eb6b965bc5dbb65be99999b4a86bfbb0ee2b13; only its README was used (firstpass with an old SD 1.x / SDXL checkpoint, upscale, main-checkpoint img2img, Hires fix supported), re-implemented as the `old_sd_firstpasser` txt2img script; no upstream code was read or copied (its README screenshot was viewed only to name the controls)"),
+    ("AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients", "reimplemented", "Unlicensed behavior reference 2624e5dd4902cb731287b426ad483e741ece85bb; only its README and the method of the paper it cites (Gallego, Personalizing Text-to-Image Generation via Aesthetic Gradients, 2022) were used, re-implemented as the `aesthetic_gradients` AlwaysOn hook; no upstream code was read or copied"),
+    ("openai/clip-vit-large-patch14", "model dependency", "CLIP ViT-L/14 with its text and visual projections for the Aesthetic Gradients embeddings (the openai/CLIP code repository is MIT; the Hugging Face model card states no licence). config.json (4,519 bytes, SHA-256 8a09b467700c58138c29d53c605b34ebc69beaadd13274a8a2af8ad2c2f4032a) and model.safetensors (1,710,540,580 bytes, SHA-256 a2bf730a0c7debf160f7a6b50b3aaf3703e7e88ac73de7a314903141db026dcb) of Hugging Face revision 32bd64288804d66eefd0ccbe215aa642df71cc41 are downloaded on first use and size/SHA-256 checked; not bundled"),
     ("hnmr293/sd-webui-llul", "reimplemented", "Unlicensed behavior reference 6c5ac1b0aa29736e0aad3476939e4e05f25d20d7 (its LICENSE holds only the heading `MIT License`); independent local latent upscaling hooks on the diffusers U-Net; no upstream code copied"),
     ("v0xie/sd-webui-incantations", "reimplemented", "Pinned GPL-3.0 source 980d63838a2b8c8659a01b242e55551870619d6a; independent Smoothed Energy Guidance, S-CFG, PAG with SANF, CFG scheduler and Multi-Concept T2I-Zero; no upstream code copied"),
     ("scraed/CharacteristicGuidanceWebUI", "reimplemented", "Pinned GPL-3.0 source e2f9fdca460beed1366647e2eea8276a63f98484; independent characteristic guidance iteration; no upstream code copied"),
@@ -266,6 +268,10 @@ PINNED_UNLICENSED = {
         "ab49c733c86ad24358417b5bff4adf4b3803baf8", "no license file published at pinned source"),
     "light-and-ray/sd-webui-old-sd-firstpasser": (
         "74eb6b965bc5dbb65be99999b4a86bfbb0ee2b13", "no license file published at pinned source"),
+    "AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients": (
+        "2624e5dd4902cb731287b426ad483e741ece85bb", "no license file published at pinned source"),
+    "openai/clip-vit-large-patch14": (
+        "32bd64288804d66eefd0ccbe215aa642df71cc41", "Hugging Face model card states no license (the openai/CLIP code repository is MIT)"),
     "hnmr293/sd-webui-llul": (
         "6c5ac1b0aa29736e0aad3476939e4e05f25d20d7", "no usable license at pinned source (LICENSE is only the heading `MIT License`)"),
 }

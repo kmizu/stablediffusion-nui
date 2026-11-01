@@ -5,7 +5,7 @@ import java.util.Base64
 import sdfx.core.infotext.Infotext
 import sdfx.core.plugins.api.{Control, Plugin, Values}
 import sdfx.core.png.PngMetadata
-import sdfx.plugins.{LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
+import sdfx.plugins.{AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
 import scala.util.control.NonFatal
 
 /** Inspect only: no model load, plugin execution, script execution or generation. */
@@ -157,6 +157,7 @@ object InspectGenerationMetadata:
       "incantations" -> IncantationsPlugin.replay(f).filter(_ => IncantationsPlugin.ActiveKeys.exists(f.contains)),
       "sonar" -> SonarPlugin.replay(f).filter(_ => f.contains("Sonar sampler")),
       "llul" -> LlulPlugin.replay(f).filter(_ => f.contains(LlulPlugin.EnabledKey)),
+      "aesthetic_gradients" -> AestheticGradientsPlugin.replay(f).filter(_ => f.contains(AestheticGradientsPlugin.EmbeddingKey)),
       "model_keyword" -> Option.when(f.contains("Model keyword settings") || f.get("Model keyword replay").exists(_.equalsIgnoreCase("true")))(Values(Map("enabled" -> "false")))
     )
     val plugins = StandardPlugins.alwaysOn.map(p => p.id -> p).toMap
@@ -208,7 +209,8 @@ object InspectGenerationMetadata:
       (if on.value.contains("characteristic_guidance") then Set(CharacteristicGuidancePlugin.Key) else Set.empty[String]) ++
       (if on.value.contains("incantations") then IncantationsPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("sonar") then SonarPlugin.InfotextKeys.toSet else Set.empty[String]) ++
-      (if on.value.contains("llul") then LlulPlugin.InfotextKeys.toSet else Set.empty[String])
+      (if on.value.contains("llul") then LlulPlugin.InfotextKeys.toSet else Set.empty[String]) ++
+      (if on.value.contains("aesthetic_gradients") then AestheticGradientsPlugin.InfotextKeys.toSet else Set.empty[String])
     // Script candidates: only reported, run_script is called by the agent with these values and generation_args.
     val scripts = ujson.Obj.from(OldSdFirstpasserPlugin.replay(f).flatMap(v =>
       StandardPlugins.scripts(() => Nil).find(_.id == OldSdFirstpasserPlugin.Id).map(pl => OldSdFirstpasserPlugin.Id -> typed(pl, v))).toSeq)
