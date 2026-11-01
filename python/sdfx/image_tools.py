@@ -8,6 +8,7 @@
   remove_background  rembg, ABG, PBRemTools, bg-mask, GeekyRemB     rembg models (u2net, isnet-anime, ...) or the
                                                                     person segmentation -> transparent PNG / mask
   depth_mask         depthmap2mask                                  depth estimation -> near / far mask
+  loopback_scaler    loopback_scaler (final image filters)          PIL ImageEnhance + ImageFilter chain
 
 Every tool takes a PIL image and returns (image, extra_outputs) where extra_outputs are other PIL images
 (e.g. the mask) keyed by name.
@@ -18,7 +19,7 @@ from typing import Optional
 
 import numpy as np
 
-TOOLS = ("pixel_art", "color_enhance", "cas_upscale", "person_mask", "remove_background", "depth_mask", "color_correction", "waifu2x")
+TOOLS = ("pixel_art", "color_enhance", "cas_upscale", "person_mask", "remove_background", "depth_mask", "color_correction", "waifu2x", "loopback_scaler")
 REMBG_MODELS = ("u2net", "u2netp", "u2net_human_seg", "isnet-general-use", "isnet-anime", "silueta")
 
 
@@ -213,6 +214,9 @@ def run(tool: str, img, params: dict, device: str = "cuda", check_interrupt=None
         finally:
             reference.close()
         return result, extra
+    if tool == "loopback_scaler":
+        from . import loopback_scaler
+        return loopback_scaler.run(img, p)
     if tool == "pixel_art":
         return pixel_art(img, int(p.get("pixel_size", 8)), int(p.get("colors", 16)), float(p.get("dither", 0.0)),
                          bool(p.get("outline", False)), bool(p.get("upscale", True)), int(p.get("seed", 0)))

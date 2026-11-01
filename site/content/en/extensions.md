@@ -206,6 +206,7 @@ For Hires. fix itself, see [Generating images](generate.html).
 | **Loopback** | Runs img2img repeatedly, using each output as the next input. img2img only. |
 | **SD upscale** | Upscales the image, then refines it tile by tile. img2img only. |
 | **Ultimate SD upscale** | Upscales, then redraws tile by tile with masked inpainting; optional seam fixing. img2img only. |
+| **Loopback Scaler** | Repeats img2img while the size grows step by step towards the maximum (or scaled) size along an easing curve, changing the denoising strength each loop; optional sharpness, colour and filter adjustments on the final image. Batch size must be 1. img2img only. |
 | **Latent Upscale** | Encodes the image before resizing, interpolates its latents, then denoises for the full step count. img2img only. |
 | **img2img alternative test** | Estimates the init image's noise so a changed prompt edits it (DDIM noise inversion). img2img only. |
 | **Poor man's outpainting** | Extends the image in the chosen directions and inpaints the new area. img2img only. |

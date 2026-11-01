@@ -1101,7 +1101,7 @@
 "index": 183,
 "name": "Loopback Scaler",
 "url": "https://github.com/Elldreth/loopback_scaler.git",
-"status": "todo:loopback_scaler"
+"status": "done:loopback_scaler"
 },
 {
 "index": 184,

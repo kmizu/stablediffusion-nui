@@ -67,7 +67,7 @@ S = {
     167: "todo:face_swap", 168: "todo:color_enhance", 169: "na:account", 170: "done:core:gallery", 171: "todo:pixel_art",
     172: "na:webui-css", 173: "na:webui-css", 174: "todo:llm_prompt", 175: "todo:openpose_editor",
     176: "done:core:size-presets", 177: "done:core:gallery", 178: "todo:qr_code", 179: "todo:sadtalker",
-    180: "na:external-app", 181: "todo:model_downloader", 182: "done:caption", 183: "todo:loopback_scaler",
+    180: "na:external-app", 181: "todo:model_downloader", 182: "done:caption", 183: "done:loopback_scaler",
     184: "todo:inpaint_background", 185: "na:external-app", 186: "todo:gpu_temperature_guard", 187: "done:core:zoom",
     188: "na:server-ops", 189: "todo:latent_upscale", 190: "done:core:gallery", 191: "todo:prompt_filter",
     192: "todo:animatediff", 193: "na:webui-ux", 194: "todo:adetailer", 195: "todo:seamless_tile",
@@ -144,6 +144,7 @@ IMPLEMENTED = {
 
 
 SCOPE_NOTES = {
+    "loopback_scaler": "Native img2img Script with every source control: eased per-loop sizes to the max or scaled target, denoise change factor, per-loop seeds, batch restarts, saved loop outputs with source infotext and the final Pillow filters. Fixes the source's landscape height bug; rejects txt2img and batch size > 1. SD1.5/SDXL real MCP runs including cancel/recovery with image inspection (SD1.5 colour drift comes from repeated img2img with that model). See loopback-scaler-verification.md.",
     "semantic_guidance": "AlwaysOn conditioning-space concept edit as the pinned extension (not the SEGA paper noise guidance): comma-separated positive/negative concepts with first-segment attention strength, warmup, scale, tail threshold, inert momentum, SDXL pooled edit, source infotext keys, PNG/MCP replay and XYZ axes. SD1.5/SDXL real MCP checks with image inspection. XYZ axes need the plugin enabled; Neutral Prompt/Composable LoRA branches and PhotoMaker are rejected. See semantic-guidance-verification.md.",
     "controlnet_fastload": "AlwaysOn load/save of ControlNet units in the upstream marker+gzip+pickle format (embedded, .cni, both), current/loaded priority, non-executing bounded reader, inspect/preview/send/capture tab, 36-per-page filter gallery and MCP inspect/always_on. Native ControlNet gains source control modes, canny processor resolution/pixel perfect, hires canny/MLSD softening and non-inpaint mask selection. SD1.5/SDXL real MCP load/save/round-trip/priority/hires/cancel verified with image inspection. Inpaint/CLIP masks, batch inputs, hires-only units and other preprocessors' resolutions are rejected; NUI writes no ControlNet infotext for gallery filters. See controlnet-fastload-verification.md.",
     "core:embedding-editor": "Native owned-vector editing with full coordinate pages, real-tokenizer guidance, independent SDXL encoders, unsaved previews and source-bound overwrite with verified original backups/live refresh. Independent implementation from unlicensed pinned behavior; actual PT preservation, SD1.5/SDXL protected native/package save-collision-recovery and genuine PhotoMaker/EM cancellation verified. SD2 checkpoints, native multi-image preview and A1111 training interoperability are unverified; existing PhotoMaker composition guards remain. Dedicated MCP editor API is not included. See embedding-editor-verification.md.",

@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 126, todo 176, na 51.
+Totals: done 127, todo 175, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -189,7 +189,7 @@ Totals: done 126, todo 176, na 51.
 | 180 | [Auto-Photoshop-StableDiffusion-Plugin](https://github.com/AbdullahAlfaraj/Auto-Photoshop-StableDiffusion-Plugin.git) | 7304 | na | `external-app` | bridge to a specific external application (Photoshop, Krita, ComfyUI, ...) |
 | 181 | [Civitai Shortcut](https://github.com/sunnyark/civitai-shortcut.git) | 152 | todo | `model_downloader` |  |
 | 182 | [WD 1.4 Tagger](https://github.com/picobyte/stable-diffusion-webui-wd14-tagger.git) | 687 | done | `caption` |  |
-| 183 | [Loopback Scaler](https://github.com/Elldreth/loopback_scaler.git) | 178 | todo | `loopback_scaler` |  |
+| 183 | [Loopback Scaler](https://github.com/Elldreth/loopback_scaler.git) | 178 | done | `loopback_scaler` | Native img2img Script with every source control: eased per-loop sizes to the max or scaled target, denoise change factor, per-loop seeds, batch restarts, saved loop outputs with source infotext and the final Pillow filters. Fixes the source's landscape height bug; rejects txt2img and batch size > 1. SD1.5/SDXL real MCP runs including cancel/recovery with image inspection (SD1.5 colour drift comes from repeated img2img with that model). See loopback-scaler-verification.md. |
 | 184 | [Mask2Background](https://github.com/limithit/Mask2Background.git) | 47 | done | `inpaint_background` |  |
 | 185 | [ComfyUI](https://github.com/ModelSurge/sd-webui-comfyui.git) | 535 | na | `external-app` | bridge to a specific external application (Photoshop, Krita, ComfyUI, ...) |
 | 186 | [GPU temperature protection](https://github.com/w-e-w/stable-diffusion-webui-GPU-temperature-protection.git) | 36 | done | `gpu_temperature_guard` |  |
