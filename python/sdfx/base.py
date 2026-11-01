@@ -520,7 +520,7 @@ class BaseEngine:
                 out, extra = image_tools.run(tool, img, params, dev, check_interrupt=ctx.check_interrupt,
                                             progress=lambda done, total: ctx.progress(done, total, 'waifu2x'))
                 ctx.check_interrupt()
-            elif tool == "nsfw_checker":
+            elif tool in ("nsfw_checker", "aesthetic_score"):
                 ctx.check_interrupt()
                 out, extra = image_tools.run(tool, img, dict(params, _log=lambda line: ctx.log("info", line)), dev)
             else:

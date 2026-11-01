@@ -26,7 +26,7 @@ object StandardPlugins:
     // image prompts / control
     new ReferencePlugin, new RevisionPlugin, new IpAdapterPlugin, new ControlLLLitePlugin, new PhotoMakerPlugin,
     // inpainting / post
-    new SoftInpaintingPlugin, new FooocusInpaintPlugin, new FaceRestorePlugin, new AdetailerPlugin, new NsfwCheckerPlugin,
+    new SoftInpaintingPlugin, new FooocusInpaintPlugin, new FaceRestorePlugin, new AdetailerPlugin, new NsfwCheckerPlugin, new AestheticScorePlugin,
     // memory
     new NeverOomPlugin, new TemperatureGuardPlugin,
     // prompt processing (extension index)
@@ -78,7 +78,7 @@ object StandardPlugins:
     new FocalCropPlugin,
     // image tools (extension index)
     new RemoveBackgroundPlugin, new PersonMaskPlugin, new PixelArtPlugin, new ColorEnhancePlugin, new FsrUpscalePlugin,
-    new ColorCorrectionPlugin, new Waifu2xPlugin, new NsfwCheckerExtrasPlugin
+    new ColorCorrectionPlugin, new Waifu2xPlugin, new NsfwCheckerExtrasPlugin, new AestheticScoreExtrasPlugin
   )
 
   /** `extraAxes` lets the host contribute axes of all loaded plugins (including these AlwaysOn ones). */

@@ -148,6 +148,10 @@ def generate(rid, kind, req):
         if hardware.get("enabled"):
             image_result["hardware_info"] = {"hardware_info": "Fixture GPU, Fixture CPU, 32GB RAM",
                 "time_taken": f"{i + 1}.0 sec.", "remark": hardware.get("remark") or None}
+        if extra.get("aesthetic_fixture") == "true":
+            # Synthetic per-image fields of the aesthetic_score hook (transport only, not a score model).
+            image_result["infotext_fields"] = [["aesthetic_score", f"{5 + i}.5"], ["Cafe waifu", "waifu 0.9000"]]
+            image_result["png_chunks"] = [["aesthetic_score", f"{5 + i}.5"], ["score", "4.25"], ["parameters", "spoof"], ["Encrypt", "spoof"]]
         images.append(image_result)
         fixture = extra.get("censor_auxiliary_fixture")
         if fixture:

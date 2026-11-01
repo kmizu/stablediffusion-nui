@@ -108,7 +108,7 @@ def verify(path: Path, asset: dict) -> bool:
 
 
 def materialize(repo: str, revision: str, asset: dict, root=None, allow_download: Optional[bool] = None,
-                opener=None, progress: Optional[Callable[[str], None]] = None) -> Path:
+                opener=None, progress: Optional[Callable[[str], None]] = None, url: Optional[str] = None) -> Path:
     """The verified local copy of one pinned file; downloads it (atomically, verified before publishing) if absent."""
     directory = model_dir(repo, revision, root)
     name = Path(asset["filename"]).name
@@ -122,7 +122,7 @@ def materialize(repo: str, revision: str, asset: dict, root=None, allow_download
     if not (downloads_allowed() if allow_download is None else allow_download):
         raise ModelUnavailable(f"{label} is not downloaded ({path}); allow downloads or place the pinned file there")
     directory.mkdir(parents=True, exist_ok=True)
-    url = download_url(repo, revision, asset["filename"])
+    url = url or download_url(repo, revision, asset["filename"])
     if progress is not None:
         progress(f"downloading {url} ({asset['bytes']:,} bytes)")
     descriptor, temporary = tempfile.mkstemp(prefix=f".{name}-", suffix=".part", dir=directory)

@@ -145,7 +145,11 @@ case class GeneratedImage(path: String, seed: Long, subseed: Long = -1L, width: 
     modelKeywordRefinementPrompt: Option[String] = None,
     /** Auxiliary outputs only (e.g. NudeNet `-before-censor` / `-censor-mask`): file name suffix and the index of
       * the result image they belong to. They are saved next to that image with its infotext. */
-    outputSuffix: Option[String] = None, auxiliaryOf: Option[Int] = None) derives RW
+    outputSuffix: Option[String] = None, auxiliaryOf: Option[Int] = None,
+    /** Per-image `key: value` fields the engine adds to the generation parameters text (e.g. `aesthetic_score`). */
+    infotextFields: Seq[(String, String)] = Nil,
+    /** Per-image PNG text chunks written next to `parameters` (keyword, text). */
+    pngChunks: Seq[(String, String)] = Nil) derives RW
 
 /** Persistent auxiliary output; not an engine temp file or a final-image gallery member. */
 case class IntermediateArtifact(path: String, `type`: String = "image") derives RW

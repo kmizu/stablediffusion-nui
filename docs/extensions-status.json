@@ -573,19 +573,19 @@
 "index": 95,
 "name": "Aesthetic Image Scorer",
 "url": "https://github.com/tsngo/stable-diffusion-webui-aesthetic-image-scorer.git",
-"status": "todo:aesthetic_score"
+"status": "done:aesthetic_score"
 },
 {
 "index": 96,
 "name": "Aesthetic Scorer",
 "url": "https://github.com/vladmandic/sd-extension-aesthetic-scorer.git",
-"status": "todo:aesthetic_score"
+"status": "done:aesthetic_score"
 },
 {
 "index": 97,
 "name": "cafe-aesthetic",
 "url": "https://github.com/p1atdev/stable-diffusion-webui-cafe-aesthetic.git",
-"status": "todo:aesthetic_score"
+"status": "done:aesthetic_score"
 },
 {
 "index": 98,

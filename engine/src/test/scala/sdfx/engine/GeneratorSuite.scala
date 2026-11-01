@@ -622,6 +622,27 @@ class GeneratorSuite extends munit.FunSuite:
     } finally services.updateSettings(_ => original)
   }
 
+  test("per-image engine fields go to the infotext and PNG chunks; reserved chunk names are ignored") {
+    val out = services.generator.generate(GenerationParams(seed = 61, steps = 1, width = 64, height = 64, batchSize = 2,
+      extra = Map("aesthetic_fixture" -> "true")))
+    assertEquals(out.size, 2)
+    out.zipWithIndex.foreach { (image, i) =>
+      val fields = Infotext.parse(PngMetadata.readParameters(image.path).get).fields
+      assertEquals(fields.get("aesthetic_score"), Some(s"${5 + i}.5"))
+      assertEquals(fields.get("Cafe waifu"), Some("waifu 0.9000"))
+      val texts = PngMetadata.readTexts(image.path)
+      assertEquals(texts.get("aesthetic_score"), Some(s"${5 + i}.5"))
+      assertEquals(texts.get("score"), Some("4.25"))
+      assert(texts("parameters") != "spoof")
+      assert(!texts.contains("Encrypt"))
+    }
+  }
+
+  test("Generator.pngTexts keeps parameters first and drops reserved or oversized keywords") {
+    val texts = Generator.pngTexts("p", Seq("score" -> "1", "parameters" -> "x", "EncryptPwdSha" -> "y", "" -> "z", ("k" * 80) -> "w"))
+    assertEquals(texts, Seq("parameters" -> "p", "score" -> "1"))
+  }
+
   test("NudeNet auxiliary outputs are saved before their image with its infotext and not returned") {
     val logs = scala.collection.mutable.ArrayBuffer.empty[String]
     val saved = scala.collection.mutable.ArrayBuffer.empty[sdfx.core.plugins.api.OutputImage]

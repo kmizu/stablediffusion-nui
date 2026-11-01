@@ -202,6 +202,9 @@ class Engine(BaseEngine):
         from . import nsfw_checker
         if nsfw_checker.available():
             f.append("nsfw_checker")
+        from . import aesthetic_score
+        if aesthetic_score.available():
+            f.append("aesthetic_score")
         if hasattr(diffusers, "StableDiffusionXLPAGPipeline"):
             f.append("pag")
         if hasattr(diffusers, "ControlNetModel"):
@@ -1582,6 +1585,8 @@ class Engine(BaseEngine):
         gp = req.params
         from . import nsfw_checker
         nsfw_cfg = nsfw_checker.job_config(gp.hooks, ctx)
+        from . import aesthetic_score
+        aesthetic_cfg = aesthetic_score.job_config(gp.hooks, ctx)
         sonar_cfg = hooks_mod.hook_config(gp.hooks, "sonar", sonar.DEFAULTS)
         sonar_cfg = sonar.normalize(sonar_cfg) if sonar_cfg is not None else None
         from . import img2img_hires_fix
@@ -1805,6 +1810,9 @@ class Engine(BaseEngine):
                 if hardware_timer is not None:
                     from .hardware_info import record
                     image_result['hardware_info'] = record(hardware_profile, hardware_timer.next_image(), req.hardware_info.remark)
+                if aesthetic_cfg is not None:
+                    # Aesthetic score: the final image as it is saved (after censoring and any upscale).
+                    image_result.update(aesthetic_score.score_final(im, aesthetic_cfg, ctx, gp, seed, self.model["hash"]))
                 if getattr(self, '_benchmark_no_save', False):
                     if getattr(self, '_vram_capture_sample', False) and getattr(self, '_vram_sample', None) is None:
                         self._vram_sample = im.copy()

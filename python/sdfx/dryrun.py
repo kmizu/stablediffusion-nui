@@ -80,6 +80,8 @@ class FakeEngine(BaseEngine):
         if HAVE_NUMPY and HAVE_PIL:
             from .nsfw_checker import available as nsfw_available
             nsfw = ["nsfw_checker"] if nsfw_available() else []
+            from .aesthetic_score import available as aesthetic_available
+            nsfw += ["aesthetic_score"] if aesthetic_available() else []
         return (["inpaint_difference"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + nsfw + ["controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "pag", "controlnet", "apg", "mahiro", "rescale_cfg", "semantic_guidance", "agent_attention", "cd_tuner", "incantations", "sonar", "llul", "aesthetic_gradients", "characteristic_guidance",
                 "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier", "soft_inpainting", "sag", "neveroom",
                 "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint", "photomaker", "img2imgalt",
@@ -225,6 +227,12 @@ class FakeEngine(BaseEngine):
                 raise EngineError(UNSUPPORTED, 'NudeNet NSFW Censor dry-run requires NumPy and Pillow')
             from .nsfw_checker import job_config
             nsfw_cfg = job_config(gp.hooks, ctx)
+        aesthetic_cfg = None
+        if hook_config(gp.hooks, 'aesthetic_score', {}) is not None:
+            if not (HAVE_NUMPY and HAVE_PIL):
+                raise EngineError(UNSUPPORTED, 'Aesthetic score dry-run requires NumPy and Pillow')
+            from .aesthetic_score import job_config as aesthetic_job_config
+            aesthetic_cfg = aesthetic_job_config(gp.hooks, ctx)
         auxiliary = []
         seed, subseed = resolve_seed(gp.seed), resolve_seed(gp.subseed)
         bs, n_iter = gp.batch_size, gp.n_iter
@@ -287,6 +295,7 @@ class FakeEngine(BaseEngine):
                         s, ss = seed + k, subseed + k
                         path = next_output_path(req.output_dir, str(s))
                         hardware_record = None
+                        aesthetic_fields = None
                         if HAVE_PIL:
                             img = fake_image(out_w, out_h, hr_seeds[j], hr_subs[j], hr_plan.strength if hr_plan else gp.subseed_strength)
                             if init is not None:
@@ -314,6 +323,9 @@ class FakeEngine(BaseEngine):
                             if nsfw_cfg is not None:
                                 from .nsfw_checker import censor_final
                                 img, censor_auxiliaries = censor_final(img, nsfw_cfg, ctx)
+                            if aesthetic_cfg is not None:
+                                from .aesthetic_score import score_final
+                                aesthetic_fields = score_final(img, aesthetic_cfg, ctx, gp, seed, m["hash"])
                             save_png(img, path)
                             iw, ih = img.size
                         else:
@@ -337,6 +349,8 @@ class FakeEngine(BaseEngine):
                                 hires_seed_resize_from_w=hr_plan.resize_width, hires_seed_resize_from_h=hr_plan.resize_height)
                         if hardware_record is not None:
                             entry['hardware_info'] = hardware_record
+                        if aesthetic_fields is not None:
+                            entry.update(aesthetic_fields)
                         images.append(entry)
                         if HAVE_PIL and censor_auxiliaries:
                             from .nsfw_checker import save_auxiliaries

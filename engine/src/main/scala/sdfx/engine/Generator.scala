@@ -633,7 +633,7 @@ final class Generator(
       scheduler = result.scheduler,
       extra = scala.collection.immutable.ListMap.from(result.systemInfo.toSeq.map(v => "System Info" -> v.render()) ++
         Option.when(result.vaeRecovery.nonEmpty)("VAE recovery" -> ujson.Arr.from(result.vaeRecovery).render()) ++
-        img.modelKeywordSourcePrompt.map("Model keyword source prompt" -> _) ++ resourceFields ++ hiresFields ++ templateFields) ++ HardwareInfo.fields(img.hardwareInfo)
+        img.modelKeywordSourcePrompt.map("Model keyword source prompt" -> _) ++ resourceFields ++ hiresFields ++ templateFields ++ img.infotextFields) ++ HardwareInfo.fields(img.hardwareInfo)
     )
     (params, Infotext.write(params, facts))
 
@@ -782,12 +782,13 @@ final class Generator(
       saveAuxiliaries(prep, result, Some(index), listener, loaded, kind, outputs)
       val (params, text) = describe(prep, result, img, loaded)
       val src = Paths.get(img.path)
+      val texts = Generator.pngTexts(text, img.pngChunks)
       val dst = listener.fastloadPayload match
         case None =>
           val target = OutputNaming.nextFile(outputs, kind, img.seed)
           try
             val pixels = PngMetadata.readImage(src)
-            sdfx.core.png.ScrambledPng.write(pixels, target, Seq(PngMetadata.ParametersKey -> text), listener.imageSecret.map(_.use(identity)))
+            sdfx.core.png.ScrambledPng.write(pixels, target, texts, listener.imageSecret.map(_.use(identity)))
           catch
             case NonFatal(e) =>
               Files.deleteIfExists(target)
@@ -799,7 +800,7 @@ final class Generator(
           val stage = Files.createTempFile(dir, ".fastload-image-", ".tmp")
           try
             val pixels = PngMetadata.readImage(src)
-            sdfx.core.png.ScrambledPng.write(pixels, stage, Seq(PngMetadata.ParametersKey -> text), None)
+            sdfx.core.png.ScrambledPng.write(pixels, stage, texts, None)
             // Completed engine images follow the normal partial-result contract even if
             // interruption was admitted after sampling. The stage remains private until publication.
             FastloadOutput.publish(stage, dir, img.seed, payload, format, () => ())
@@ -897,6 +898,11 @@ final class Generator(
     out
 
 object Generator:
+  /** `parameters` first, then the engine's extra PNG chunks (keywords the app writes itself are never overridden). */
+  def pngTexts(parameters: String, chunks: Seq[(String, String)]): Seq[(String, String)] =
+    val reserved = Set(PngMetadata.ParametersKey, "Encrypt", "EncryptPwdSha")
+    (PngMetadata.ParametersKey -> parameters) +: chunks.filter((k, _) => k.nonEmpty && k.length <= 79 && !reserved(k))
+
   /** File name suffixes the engine may request for auxiliary outputs (e.g. `-before-censor`, `-censor-mask`). */
   val AuxiliarySuffix: scala.util.matching.Regex = "-[a-z][a-z0-9-]{0,31}".r
 

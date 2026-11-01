@@ -118,6 +118,7 @@ final class PluginsVM(val mode: Mode, scripts: Seq[Plugin], alwaysOnPlugins: Seq
     sdfx.plugins.SonarPlugin.replay(fields).foreach(values => form("sonar").foreach(_.load(values)))
     sdfx.plugins.LlulPlugin.replay(fields).foreach(values => form("llul").foreach(_.load(values)))
     sdfx.plugins.AestheticGradientsPlugin.replay(fields).foreach(values => form("aesthetic_gradients").foreach(_.load(values)))
+    sdfx.plugins.AestheticScorePlugin.replay(fields).foreach(values => form("aesthetic_score").foreach(_.load(values)))
     def flag(key: String): Option[Boolean] = fields.get(key).flatMap { v =>
       v.trim.toLowerCase(java.util.Locale.ROOT) match
         case "true" => Some(true)

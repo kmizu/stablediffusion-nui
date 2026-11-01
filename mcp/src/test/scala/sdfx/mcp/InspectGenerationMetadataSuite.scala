@@ -450,3 +450,26 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("llul"))
   }
+
+  test("Aesthetic score settings and upstream score keys become a typed candidate and are consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("aesthetic.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val image = new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB)
+    val json = """{"improved":true,"simulacra":"vit-b-16","cafe_waifu":true,"png_chunks":true}"""
+    val settings = s"Aesthetic score settings: ${sdfx.core.infotext.Infotext.quote(json)}, aesthetic_score: 5.9, " +
+      "Aesthetic Scorer ViT-B/16: 4.37, Cafe waifu: waifu 0.9100"
+    PngMetadata.write(image, path, Seq("parameters" -> s"lion\nSteps: 20, Seed: 4, Size: 512x512, $settings"))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("always_on")("aesthetic_score")
+    assertEquals(candidate("enabled").bool, true)
+    assertEquals(candidate("simulacra").str, "ViT-B/16")
+    assertEquals(candidate("cafe_waifu").bool, true)
+    assert(!result("unapplied_fields").obj.keySet.exists(k => sdfx.plugins.AestheticScorePlugin.InfotextKeys.contains(k)))
+    // a score written by the original extension alone enables the improved scorer
+    PngMetadata.write(image, path, Seq("parameters" -> "lion\nSteps: 20, Seed: 4, Size: 512x512, aesthetic_score: 5.9"))
+    val alone = InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on")("aesthetic_score")
+    assertEquals(alone("improved").bool, true)
+    PngMetadata.write(image, path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512, hash: abc"))
+    assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("aesthetic_score"))
+  }
