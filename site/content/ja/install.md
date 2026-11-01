@@ -19,7 +19,7 @@ GPU がなくても、dry-run モードで画面の操作は試せます（[dry-
 
 ## ダウンロードと展開
 
-1. [GitHub Releases](https://github.com/kmizu/stablediffusion-nui/releases/latest) から最新版の `SDNUI-v0.04-windows-x64.zip` をダウンロードします。
+1. [GitHub Releases](https://github.com/kmizu/stablediffusion-nui/releases/latest) から最新版の `SDNUI-v0.05-windows-x64.zip` をダウンロードします。
 2. ZIP を書き込みできるフォルダ（たとえばユーザープロファイルの下）に展開します。
 3. 展開した `SDNUI` フォルダの中の `SDNUI.exe` を起動します。
 

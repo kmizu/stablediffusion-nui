@@ -6,6 +6,27 @@ description: Stable Diffusion NUI（旧 SDFX）の各リリースで追加・変
 
 各リリースの配布ファイルは GitHub のリリースページからダウンロードできます。どの版も Java ランタイムを同梱していますが、Python とモデルファイルは別に用意する必要があります。
 
+## v0.05
+
+2026-11-02 公開。[GitHub のリリースページ](https://github.com/kmizu/stablediffusion-nui/releases/tag/v0.05)
+
+v0.04 から拡張機能を 10 件追加しました。
+
+### 追加・変更
+
+- **ガイダンスとアテンション**: Semantic Guidance (#115)、Agent Attention (#4)、CD Tuner (#9)、Characteristic Guidance (#11)、Incantations (#63)。
+- **サンプリングとアップスケール**: Sonar (#118)、LLuL (#75)、Loopback Scaler (#76)、Old SD firstpasser (#94)。
+- **安全機能**: NSFW checker (#91)。NudeNet による検閲、ライブプレビュー、Extras、SD safety checker と NSFWJS に対応します。
+
+### 入手方法
+
+**SDNUI-v0.05-windows-x64.zip** をダウンロードして展開し、**SDNUI/SDNUI.exe** を起動します。SHA-256: `fbdb3ba845bf66b37a3dc006d8b80b7e3525b0f15e1b24b2010910ae10920523`
+
+### 検証
+
+- Scala と Torch CPU のテストを全件実行しました。
+- 各機能を実際の SD1.5 と SDXL モデルで MCP 経由で確認し、画像を目視しました。配布版の `SDNUI.exe` も両モデルで実行しました。
+
 ## v0.04
 
 2026-11-01 公開。[GitHub のリリースページ](https://github.com/kmizu/stablediffusion-nui/releases/tag/v0.04)
