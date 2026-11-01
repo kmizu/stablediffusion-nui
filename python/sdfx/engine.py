@@ -213,7 +213,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "agent_attention", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")
@@ -1512,6 +1512,7 @@ class Engine(BaseEngine):
         self._embedding_merge_ctx = ctx
         self._intermediate_recorder = None
         self._composable_job = None
+        self._cd_tuner_job = None
         self._vae_recovery = []
         try:
             fields = params.get('params', {}) if isinstance(params, dict) else {}
@@ -1545,6 +1546,7 @@ class Engine(BaseEngine):
                 self._intermediate_recorder = None
                 self._editor_preview = None
                 self._embedding_merge_ctx = None
+                self._cd_tuner_job = None
 
     def _generate_recorded(self, params: dict, ctx: JobContext, mode: str) -> dict:
         if getattr(self, "_embedding_reload_error", None):
@@ -1558,6 +1560,8 @@ class Engine(BaseEngine):
         refine_config = img2img_hires_fix.normalize(refine_config) if refine_config is not None else None
         hp = gp.hires
         hires = mode == "txt2img" and hp.enabled
+        from .cd_tuner import Job as CdTunerJob
+        self._cd_tuner_job = CdTunerJob(hires)  # CD Tuner state across this job's passes (hires fix on: p.enable_hr)
         from .hires_tweaks import seed_plan, wire_seed
         tweaks = hooks_mod.hook_config(gp.hooks, "hires_fix_tweaks", {}) if hires else None
         seed = resolve_seed(gp.seed)

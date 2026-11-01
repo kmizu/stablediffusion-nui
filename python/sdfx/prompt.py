@@ -24,7 +24,8 @@ re_attention = re.compile(r"""
 """, re.X)
 
 re_break = re.compile(r"\s*\bBREAK\b\s*", re.S)
-re_extra_networks = re.compile(r"<(?:lora|lyco|hypernet):[^>]+>")
+# cdt / cdtc: CD Tuner settings, removed from the text like A1111 removes every extra network tag
+re_extra_networks = re.compile(r"<(?:lora|lyco|hypernet|cdt|cdtc):[^>]+>")
 re_prompt_editing = re.compile(r"\[[^\[\]]*:[^\[\]]*\]|\[[^\[\]]*\|[^\[\]]*\]")
 re_and = re.compile(r"\bAND\b")
 

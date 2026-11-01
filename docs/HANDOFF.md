@@ -1,20 +1,46 @@
 # Handoff: bundling the A1111 extension index into stablediffusion-nui
 
-## Active goal reset: ten additional issues then release
+Latest checkpoint (2026-10-31, after #45 acceptance): start with [HANDSOFF.md](../HANDSOFF.md). It records the 9/10 count, #17 implementation, MCP external SDK acceptance work, and the remaining release gate.
 
-On 2026-10-30 the user cleared the previous 20-issue goal and set a new goal to resolve ten issues and release. Treat the new goal as ten further issue resolutions from this reset; #48, #61 and #82 are accepted, making the count 3/10. The earlier ten resolved waves remain project history, not automatic completion of the new objective. Preserve all original scope, real-model and package checks, push and verify before counting, then publish and download/hash-verify the release.
+## Active goal: practical MCP workflows and releases every ten issues
 
-## Current progress: #48, #61 and #82 accepted; #85 and #46 underway
+On 2026-10-31 the user made AI-agent MCP use an explicit goal: discover models/capabilities, select models, generate/edit, inspect progress/results, cancel, and operate supported extensions. Verify actual external MCP clients over both stdio and Streamable HTTP with SD1.5 and SDXL; direct AppServices calls do not establish transport evidence. Preserve the issue-resolution work and release every ten resolved issues. Root MCP worktree is `C:/Users/Mizushima/.codex/worktrees/affc/stablediffusion-nui`. The first gap is AlwaysOn discovery/per-job configuration; also audit complete generation fields and PNG replay. Connection examples still contain historical paths and need refresh.
+
+## Ten-issue batch history
+
+On 2026-10-30 the user cleared the previous 20-issue goal and set a new goal to resolve ten issues and release. Treat the new goal as ten further issue resolutions from this reset; #48, #61, #82, #46, #47, #16, #87, #85 and #45 are accepted, making the count 9/10. The earlier ten resolved waves remain project history, not automatic completion of the new objective. Preserve all original scope, real-model and package checks, push and verify before counting, then publish and download/hash-verify the release.
+
+## Future direction: multilingual support
+
+On 2026-10-31 the user raised multilingual support as a future goal to make the app accessible to more people. Consider localization of settings, errors, and model guidance after the current ten-issue release goal; languages and implementation scope have not yet been specified.
+
+## Current progress: 9/10 accepted
+
+#45 Embedding Editor was pushed as `440a119c1a7126c59d23405c34f161450e9a86f7`, verified local/remote matching with a clean product tree, and closed 2026-10-31T03:35:25Z. Full Torch CPU pytest exited 0; Scala passed 1,493 tests with one skip; focused ledger tests passed 25. Fresh extracted-package SD1.5 model-offload and SDXL sequential-offload passed preview, inversion, exact recovery and collision-safe save/backup/reload with image inspection. Independent review found no remaining Critical or Important issues. See `embedding-editor-verification.md` for evidence and limits. #17 remains underway; the next release is due after one further resolution.
+
+## Historical progress before #85 acceptance
+
+#87 Model Presets was pushed as `5934d8183bb838839e31e0af331c120f8387113f`; local and remote main matched and the tree was clean at verification. Issue closed 2026-10-31T01:18:36Z. Torch Python 1803 passed/1 skipped, Scala 1472 passed/1 skipped, real SD1.5/SDXL native and package checks including protected capture passed. See `model-presets-verification.md`. #45, #85 and #17 remain underway in isolated worktrees.
+
+## Historical progress before #87 acceptance
+
+#16 Conditioning Highres Fix was pushed as `4e0b32c307ad3ec23f4a1889449986acd3955b68`; local and remote main matched and the tree was clean at verification. Issue closed 2026-10-30T23:36:13Z. Torch Python 1803 passed/1 skipped, Scala 1452 passed/1 skipped, real SD1.5/SDXL 9ch and 4ch, native and package checks passed. ControlNet and ADetailer combinations remain untested; see `conditioning-highres-verification.md`. #45, #85 and #17 remain in isolated worktrees.
+
+## Historical progress before #16 acceptance
+
+#47 Embedding Merge was pushed as `3607a8324fc849fc50e4eec2df0c386ccb27ac9d`; local and remote main matched and the tree was clean at verification. Issue closed 2026-10-30T22:27:49Z. Torch Python 1736 passed/1 skipped, Scala 1449 passed/1 skipped, real SD1.5/SDXL native and extracted-package checks and PhotoMaker recovery passed. See `embedding-merge-verification.md` for evidence and limits. #45, #85 and #16 remain in isolated worktrees; release remains pending.
+
+## Historical progress before #47 acceptance
 
 The #82 ledger entry is `done:core:metadata-utils`, because its implementation is a native core tab rather than a registered plugin. The initial #82 entry incorrectly used `done:metadata_utils`; subsequent plugin and native coverage suites passed after correcting the classification. The implementation and accepted issue scope are unchanged.
 
-Current #46 work passed local acceptance in `C:/Users/Mizushima/.codex/worktrees/embedding-inspector-main82/stablediffusion-nui` and is being integrated. Python 1,618 passed/1 skipped, Scala 1,442 passed/1 skipped; SD1.5/SDXL native and extracted-package checks, plus SDXL model/sequential offload, passed. See `embedding-inspector-verification.md` for scope and limits. Count it only after push and issue closure are verified. #47 is underway separately at `C:/Users/Mizushima/.codex/worktrees/690e/stablediffusion-nui`.
+#46 Embedding Inspector was pushed as commit `09202c7447bbe77f4a1866f6efed008f84fc9382`; local and `origin/main` HEAD matched and the working tree was clean at verification. [Issue #46](https://github.com/kmizu/stablediffusion-nui/issues/46) closed 2026-10-30T19:59:31Z. Python 1,618 passed/1 skipped, Scala 1,442 passed/1 skipped; SD1.5/SDXL native and extracted-package checks, plus SDXL model/sequential offload and failure recovery, passed. See `embedding-inspector-verification.md`: actual SD2 and A1111 training interoperability were not tested; eval is arbitrary Python that can write readable files; cancellation can be too late before a file exists; batch publication can leave earlier successful files. The accepted count is 4/10. #47 is underway separately at `C:/Users/Mizushima/.codex/worktrees/690e/stablediffusion-nui`, and #85 remains underway in `C:/Users/Mizushima/.codex/worktrees/d919/stablediffusion-nui`. Neither is integrated; the release remains pending.
 
-#82 metadata utilities was pushed as commit `777d128cd02762d4b8749ddefe3d7d70c83fc353`; local and remote HEAD matched and the working tree was clean at verification. [Issue #82](https://github.com/kmizu/stablediffusion-nui/issues/82) closed 2026-10-30T19:15:43Z. Python 1,535 passed/1 skipped, Scala 1,441 passed/1 skipped, and native/extracted-package SD1.5 and SDXL copy, cancellation and exact generation checks passed. Read-time identity and full-file hash bind a save to the reviewed source. See `metadata-utils-verification.md`, including the retained earlier timeout evidence. Accepted count is 3/10; #46 and #85 remain underway and the release is pending.
+#82 metadata utilities was pushed as commit `777d128cd02762d4b8749ddefe3d7d70c83fc353`; local and remote HEAD matched and the working tree was clean at verification. [Issue #82](https://github.com/kmizu/stablediffusion-nui/issues/82) closed 2026-10-30T19:15:43Z. Python 1,535 passed/1 skipped, Scala 1,441 passed/1 skipped, and native/extracted-package SD1.5 and SDXL copy, cancellation and exact generation checks passed. Read-time identity and full-file hash bind a save to the reviewed source. See `metadata-utils-verification.md`, including the retained earlier timeout evidence. The count was 3/10 at #82 acceptance; #46 subsequently brought it to 4/10. #85 and #47 remain underway and the release is pending.
 
 #48 was pushed as commit `b8a623fdad1d78317a10b37149192a59ccff3499`; local and `origin/main` matched and the working tree was clean at verification. [Issue #48](https://github.com/kmizu/stablediffusion-nui/issues/48) closed 2026-10-30 15:17:54 UTC. See `encrypt-image-verification.md` for evidence and limitations, including readable metadata and temporary files, unsupported 16-bit LA, and no actual SVD-model test. #85 is underway in isolated worktree `C:/Users/Mizushima/.codex/worktrees/d919/stablediffusion-nui`, not yet integrated. The release is pending.
 
-#61 img2img Hires Fix was pushed as commit `65b4ddcc11e8c2438c30cdd57b3d7cfc3732e019`; local and remote HEAD matched and the working tree was clean at verification. [Issue #61](https://github.com/kmizu/stablediffusion-nui/issues/61) closed 2026-10-30T16:36:42Z. Acceptance: Python 1,507 passed/1 skipped, Scala 1,437 passed/1 skipped, and native and extracted-package SD1.5/SDXL generation, replay and interruption checks passed with images inspected. See `img2img-hires-fix-verification.md` for source behavior and limits. The count reached 2/10 at that acceptance; #82 subsequently brought it to 3/10. The release remains pending, and #46 continues in the integrated worktree identified above.
+#61 img2img Hires Fix was pushed as commit `65b4ddcc11e8c2438c30cdd57b3d7cfc3732e019`; local and remote HEAD matched and the working tree was clean at verification. [Issue #61](https://github.com/kmizu/stablediffusion-nui/issues/61) closed 2026-10-30T16:36:42Z. Acceptance: Python 1,507 passed/1 skipped, Scala 1,437 passed/1 skipped, and native and extracted-package SD1.5/SDXL generation, replay and interruption checks passed with images inspected. See `img2img-hires-fix-verification.md` for source behavior and limits. The count reached 2/10 at that acceptance; #82 subsequently brought it to 3/10. The release remains pending.
 
 ## Historical: Image Encryption (#48), eleventh wave
 

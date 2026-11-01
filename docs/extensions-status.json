@@ -1401,7 +1401,7 @@
 "index": 233,
 "name": "CD(Color/Detail) Tuner",
 "url": "https://github.com/hako-mikan/sd-webui-cd-tuner.git",
-"status": "todo:cd_tuner"
+"status": "done:cd_tuner"
 },
 {
 "index": 234,

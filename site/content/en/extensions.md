@@ -108,6 +108,7 @@ For general LoRA use, see [LoRA and embeddings](lora-embeddings.html).
 |---|---|
 | **Detail Daemon** | Tells the model there is less (or more) noise than there is, over a schedule, to add or remove detail. |
 | **Vectorscope CC** | Applies brightness, contrast, saturation and RGB offsets to the latent noise while sampling. |
+| **CD Tuner** | Changes the amount of detail (Detail 1/2, with separate hires values), contrast, brightness, colour tone and saturation by adjusting a few model and VAE weights and one step of the sampling. Color Map steers the colour of image regions in the first steps, which helps the prompt pick up colours. Values of about 5 or less are a good start; more detail also means more noise. `<cdt:d1=2;col1=-3>` and `<cdtc:...>` in the prompt override the settings, also from X/Y/Z Prompt S/R. |
 | **Latent Mirroring** | Mirrors or rotates the latent during the first steps, from balanced compositions up to perfect reflections. |
 | **Asymmetric Tiling** | Makes seamless tiles, configured separately for the X and Y axes (U-Net and VAE). |
 | **Anti-burn** | Skips the last few steps and averages the latents of the steps before them for smoother results. |

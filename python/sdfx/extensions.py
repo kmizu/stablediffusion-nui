@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from . import adapters, agent_attention, guidance, latent_ops, sampling_ext, semantic_guidance, unet_hooks
+from . import adapters, agent_attention, cd_tuner, guidance, latent_ops, sampling_ext, semantic_guidance, unet_hooks
 from .hooks import coerce_bool, hook_config
 from .protocol import INVALID_PARAMS, UNSUPPORTED, EngineError
 
@@ -26,7 +26,7 @@ log = logging.getLogger("sdfx.extensions")
 EXTENSION_HOOKS = ("apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
                    "soft_inpainting", "sag", "neveroom", "reference", "revision", "ip_adapter", "controllllite",
                    "fooocus_inpaint", "photomaker", "face_restore", "img2imgalt", "semantic_guidance",
-                   "agent_attention") + sampling_ext.HOOKS
+                   "agent_attention", "cd_tuner") + sampling_ext.HOOKS
 
 MODEL_SAMPLING_DEFAULTS = {"sampling": "default", "zsnr": False}
 SAG_DEFAULTS = {"scale": 0.5, "blur_sigma": 2.0}
@@ -211,6 +211,17 @@ def install(engine, pipe, task: str, gp, req, kw: dict, ctx, cleanups: list, *, 
         post = lambda x0, progress, lmc=lmc, gen=gen: latent_ops.modify_latents(x0, lmc, progress, gen)  # noqa: E731
         if cfg_scale <= 1.0:
             ctx.warn("latent modifier needs CFG scale > 1; ignored")
+    cdt = cfg(gp, "cd_tuner", cd_tuner.DEFAULTS)
+    if cdt:
+        # Installed before the guidance hooks so its output edit is seen by them, like the source's
+        # on_cfg_denoised runs before CFG is combined.
+        conflicts = [name for name, on in (
+            ("Neutral Prompt / Composable LoRA branches", branch_hooks is not None), ("Self Attention Guidance", bool(plan.sag)),
+            ("Reference", cfg(gp, "reference", {}) is not None), ("APG", bool(apg)), ("Mahiro", bool(mah)),
+            ("Latent Modifier", bool(lm)), ("Dynamic Thresholding", hook_config(hooks, "dynamic_thresholding", {}) is not None))
+            if on]
+        cd_tuner.install(engine, pipe, gp, kw, ctx, cdt, pass_=pass_, sched=sched, chain=_chain_callback,
+                         cleanups=cleanups, cfg_scale=cfg_scale, conflicts=conflicts, composed=branch_hooks is not None)
     if apg or mah or post is not None:
         if "dynamic_thresholding" in hooks and hook_config(hooks, "dynamic_thresholding", {}):
             ctx.warn("APG/Mahiro and Dynamic Thresholding both rewrite CFG; APG/Mahiro is applied on top")

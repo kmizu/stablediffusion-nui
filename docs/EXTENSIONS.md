@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 128, todo 174, na 51.
+Totals: done 129, todo 173, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -239,7 +239,7 @@ Totals: done 128, todo 174, na 51.
 | 230 | [CivBrowser](https://github.com/SignalFlagZ/sd-webui-civbrowser.git) | 117 | todo | `model_downloader` |  |
 | 231 | [NSFW Blurrer-NSFWJS](https://github.com/aria1th/sd-webui-nsfw-filter.git) | 21 | todo | `nsfw_checker` |  |
 | 232 | [NegPiP](https://github.com/hako-mikan/sd-webui-negpip.git) | 263 | done | `negpip` |  |
-| 233 | [CD(Color/Detail) Tuner](https://github.com/hako-mikan/sd-webui-cd-tuner.git) | 226 | todo | `cd_tuner` |  |
+| 233 | [CD(Color/Detail) Tuner](https://github.com/hako-mikan/sd-webui-cd-tuner.git) | 226 | done | `cd_tuner` | AlwaysOn colour/detail tuner as the pinned extension: detail d1/d2 and hires hd1/hd2 via conv_in/norm_out/conv_out weights restored after every pass, hr-scaling, stop steps, Contrast 2, brightness and three colour axes, VAE saturation 1/2, the colour map, <cdt:>/<cdtc:> prompt tags, Apply once and CDT/CDTC infotext with PNG/MCP replay. Source quirks kept (Hr-Stop Step 0). Stop steps count pipeline steps (differs for second-order samplers). SD1.5/SDXL real MCP checks with image inspection. See cd-tuner-verification.md. |
 | 234 | [DevDark theme](https://github.com/devdarktheme/stable-diffusion-webui-devdark.git) | 22 | na | `webui-css` | styles / JavaScript tweaks of the Gradio web page; the JavaFX UI has its own theme and layout |
 | 235 | [auxiliary API](https://github.com/aria1th/webui-model-uploader.git) | 4 | na | `webui-api` | adds HTTP routes to the A1111 server for other tools; this app's integration surface is MCP |
 | 236 | [TensorRT](https://github.com/NVIDIA/Stable-Diffusion-WebUI-TensorRT) | 1978 | todo | `core:compile` |  |

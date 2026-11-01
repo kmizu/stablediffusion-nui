@@ -34,7 +34,8 @@ object StandardPlugins:
     new NovelAIPromptPlugin, new StyleVariablesPlugin(), new LoraBlockWeightPlugin, new WeightGradientPlugin, new NegPipPlugin,
     new NeutralPromptPlugin, new TokenizerPlugin, new VaeToolsPlugin,
     // sampling (extension index)
-    new DetailDaemonPlugin, new VectorscopeCcPlugin, new LatentMirroringPlugin, new AsymmetricTilingPlugin,
+    // after the prompt processors, so CD Tuner reads <cdt:...> from the final prompt
+    new DetailDaemonPlugin, new VectorscopeCcPlugin, new CdTunerPlugin, new LatentMirroringPlugin, new AsymmetricTilingPlugin,
     new AntiBurnPlugin, new ReSharpenPlugin, new ColorGradingPlugin, new CfgSchedulePlugin, new CadsPlugin,
     new SaveIntermediatePlugin, new GridNumbersPlugin
   )

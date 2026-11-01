@@ -2,7 +2,7 @@
 
 The user reset the prior goal on 2026-10-30 and requested ten issue resolutions followed by a release. This tracker counts further distinct issues completed after that reset; the ten waves in `twenty-issue-release-progress.md` are earlier project history.
 
-Baseline local and remote `main`: `83b00b598f48606eafe7266f03fcbab4c1b9c1a7`. At reset, #48 image scrambling was in progress and uncommitted. Accepted under this goal: **3 / 10**.
+Baseline local and remote `main`: `83b00b598f48606eafe7266f03fcbab4c1b9c1a7`. At reset, #48 image scrambling was in progress and uncommitted. Accepted under this goal: **9 / 10**.
 
 ## Accepted
 
@@ -12,11 +12,21 @@ Baseline local and remote `main`: `83b00b598f48606eafe7266f03fcbab4c1b9c1a7`. At
 
 - [#82 metadata utilities](https://github.com/kmizu/stablediffusion-nui/issues/82): commit [`777d128cd02762d4b8749ddefe3d7d70c83fc353`](https://github.com/kmizu/stablediffusion-nui/commit/777d128cd02762d4b8749ddefe3d7d70c83fc353) was pushed to `origin/main`; local HEAD and remote HEAD matched and the working tree was clean at verification. Issue closed 2026-10-30T19:15:43Z. Python 1,535 passed/1 skipped and Scala 1,441 passed/1 skipped; native and extracted-package SD1.5/SDXL checks passed, including source-bound editing, cancellation/recovery and exact generated RGB. See `metadata-utils-verification.md` for safety limits and retained earlier timeout evidence.
 
+- [#46 Embedding Inspector](https://github.com/kmizu/stablediffusion-nui/issues/46): commit [`09202c7447bbe77f4a1866f6efed008f84fc9382`](https://github.com/kmizu/stablediffusion-nui/commit/09202c7447bbe77f4a1866f6efed008f84fc9382) was pushed to `origin/main`; local and remote HEAD matched and the working tree was clean at verification. Issue closed 2026-10-30T19:59:31Z. Whole Python passed 1,618 tests/1 skipped and whole Scala passed 1,442 tests/1 skipped. Native and extracted-package SD1.5/SDXL checks passed, with SDXL model/sequential offload and failure recovery. See `embedding-inspector-verification.md`: no actual SD2 checkpoint or A1111 training interoperability was tested; eval is arbitrary Python and can write readable files, cancellation can be too late before a file exists, and batch publication can leave earlier successful files.
+
+- [#47 Embedding Merge](https://github.com/kmizu/stablediffusion-nui/issues/47): commit [`3607a8324fc849fc50e4eec2df0c386ccb27ac9d`](https://github.com/kmizu/stablediffusion-nui/commit/3607a8324fc849fc50e4eec2df0c386ccb27ac9d) was pushed to `origin/main`; local and remote HEAD matched and the working tree was clean at verification. Issue closed 2026-10-30T22:27:49Z. Torch Python 1,736 passed/1 skipped and Scala 1,449 passed/1 skipped; real SD1.5/SDXL native and extracted-package checks, PhotoMaker recovery and images inspected. See `embedding-merge-verification.md` for evidence and limits.
+
+- [#16 Conditioning Highres Fix](https://github.com/kmizu/stablediffusion-nui/issues/16): commit [`4e0b32c307ad3ec23f4a1889449986acd3955b68`](https://github.com/kmizu/stablediffusion-nui/commit/4e0b32c307ad3ec23f4a1889449986acd3955b68) was pushed to `origin/main`; local and remote HEAD matched and the working tree was clean at verification. Issue closed 2026-10-30T23:36:13Z. Torch Python 1,803 passed/1 skipped, Scala 1,452 passed/1 skipped; 9ch and 4ch SD1.5/SDXL native and extracted-package checks passed. See `conditioning-highres-verification.md`, including untested ControlNet and ADetailer combinations.
+
+- [#87 Model Presets](https://github.com/kmizu/stablediffusion-nui/issues/87): commit [`5934d8183bb838839e31e0af331c120f8387113f`](https://github.com/kmizu/stablediffusion-nui/commit/5934d8183bb838839e31e0af331c120f8387113f) was pushed to `origin/main`; local and remote HEAD matched and the working tree was clean at verification. Issue closed 2026-10-31T01:18:36Z. Torch Python 1,803 passed/1 skipped, Scala 1,472 passed/1 skipped; real SD1.5/SDXL native and extracted-package checks passed. See `model-presets-verification.md` for evidence and limits.
+
+- [#85 Model Keyword](https://github.com/kmizu/stablediffusion-nui/issues/85): commit [`d8375052e07df4295bc593938b63cb36844bdd47`](https://github.com/kmizu/stablediffusion-nui/commit/d8375052e07df4295bc593938b63cb36844bdd47) was pushed to `origin/main`; local and remote HEAD matched and the tree was clean at verification. Issue closed 2026-10-31T02:02:15Z. Full Torch CPU passed; full Scala initially had four failures, then all three affected suites passed after test/fixture/environment corrections. Packaged SD1.5/SDXL passed; final ZIP differs only in notice. See `model-keyword-verification.md` for exact evidence and remaining compatibility constraints.
+
+- [#45 Embedding Editor](https://github.com/kmizu/stablediffusion-nui/issues/45): commit [`440a119c1a7126c59d23405c34f161450e9a86f7`](https://github.com/kmizu/stablediffusion-nui/commit/440a119c1a7126c59d23405c34f161450e9a86f7) was pushed to `origin/main`; local and remote HEAD matched and the product tree was clean at verification. Issue closed 2026-10-31T03:35:25Z. Full Torch CPU pytest exited 0; Scala passed 1,493 tests with one skip; focused ledger tests passed 25. Fresh extracted-package SD1.5 model-offload and SDXL sequential-offload passed preview, inversion, exact recovery and collision-safe save/backup/reload with image inspection. Independent review found no remaining Critical or Important issues. See `embedding-editor-verification.md` for evidence and scope limits.
+
 ## In progress
 
-- #85 is underway in isolated worktree `C:/Users/Mizushima/.codex/worktrees/d919/stablediffusion-nui`, now based on `777d128cd02762d4b8749ddefe3d7d70c83fc353`. No integration into main has occurred yet.
-- #46 passed local acceptance in `C:/Users/Mizushima/.codex/worktrees/embedding-inspector-main82/stablediffusion-nui` and is being integrated. Do not count it until push and issue closure are verified; see `embedding-inspector-verification.md`.
-- #47 is underway in isolated worktree `C:/Users/Mizushima/.codex/worktrees/690e/stablediffusion-nui` at the same base. No integration into main has occurred yet.
+- #17 is underway in isolated worktree `C:/Users/Mizushima/.codex/worktrees/2252/stablediffusion-nui`; it is not yet integrated.
 
 ## Release gate
 

@@ -22,6 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # (repo, how it is used, what)
 BASE = [
     ("Elldreth/loopback_scaler", "reimplemented", "Pinned MIT source 184a53e6d22579c578c6ee1bf55d821479213c49; independent native img2img loop schedule and final filters; no upstream code copied"),
+    ("hako-mikan/sd-webui-cd-tuner", "reimplemented", "Pinned AGPL-3.0 source aafdbdda88b8d4e717fdb9aa9abe9e6df4943d7a; independent weight, latent and VAE adjustments, colour map and prompt tags; no upstream code copied"),
     ("v0xie/sd-webui-agentattention", "reimplemented", "Pinned GPL-3.0 source 8c2fd24ed5203e68450100064a49fa7873eea0bb; independent agent attention and token merging (behaviour of LeapLabTHU/Agent-Attention 207ce3e and dbolya/tomesd 27a14a3 as the source documents them); no upstream code copied"),
     ("v0xie/sd-webui-semantic-guidance", "reimplemented", "Pinned GPL-3.0 source bdbd03c92ab5e2d3926cedd7364da61ed40e48d1; independent conditioning-space concept edit with upstream thresholds, warmup, infotext keys and XYZ axes; no upstream code copied"),
     ("pk5ls20/sd-webui-controlnet-fastload", "reimplemented", "Pinned Apache-2.0 source bbdb929f4285ea69d5099268496e4322dc7203ab; independent data-only pickle interpreter, compatible writer, native load/save, viewer and gallery; ControlNet control mode, canny resolution and mask selection re-implemented from Mikubill/sd-webui-controlnet behaviour; no upstream code copied"),
@@ -189,6 +190,7 @@ BASE = [
 # (commit, license path, SHA-256, SPDX)
 PINNED_LICENSES = {
     "Elldreth/loopback_scaler": ("184a53e6d22579c578c6ee1bf55d821479213c49", "LICENSE", "d664856e8ec3180ea54d889cd2bbbd5971b7cb14f91b882c4af3b94b3e86747a", "MIT"),
+    "hako-mikan/sd-webui-cd-tuner": ("aafdbdda88b8d4e717fdb9aa9abe9e6df4943d7a", "LICENSE", "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef", "AGPL-3.0"),
     "v0xie/sd-webui-agentattention": ("8c2fd24ed5203e68450100064a49fa7873eea0bb", "LICENSE", "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986", "GPL-3.0"),
     "v0xie/sd-webui-semantic-guidance": ("bdbd03c92ab5e2d3926cedd7364da61ed40e48d1", "LICENSE", "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986", "GPL-3.0"),
     "pk5ls20/sd-webui-controlnet-fastload": ("bbdb929f4285ea69d5099268496e4322dc7203ab", "LICENCE", "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1", "Apache-2.0"),

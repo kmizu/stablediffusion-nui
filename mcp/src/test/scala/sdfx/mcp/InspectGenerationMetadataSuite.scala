@@ -52,6 +52,25 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     consumed.foreach(key => assert(!result("unapplied_fields").obj.contains(key), s"$key was returned as unapplied"))
   }
 
+  test("CD Tuner CDT and CDTC restore the plugin and are consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("cd-tuner.png")
+    val text = "cat <cdt:d1=2>\nSteps: 20, Seed: 4, Size: 512x512, CDT: \"2.0,0,0,0,0,0,0,0,0,0,1,4,-1,0,0,0\", CDTC: \"1,1_Vertical_5 0 0;0 0 5_2_1\""
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, new PathPolicy(() => Seq(dir)), dir)
+    val on = result("always_on")("cd_tuner")
+    assertEquals((on("enabled").bool, on("d1").num, on("hrs").bool, on("st1").num), (true, 2.0, true, 4.0))
+    assertEquals((on("split_by").str, on("colors").str), ("Vertical", "5 0 0;0 0 5"))
+    assert(!result("unapplied_fields").obj.contains("CDT"))
+    assert(!result("unapplied_fields").obj.contains("CDTC"))
+    val malformed = dir.resolve("cd-tuner-bad.png")
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), malformed,
+      Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512, CDT: \"1,2\""))
+    val bad = InspectGenerationMetadata.inspect(malformed.toString, new PathPolicy(() => Seq(dir)), dir)
+    assert(!bad("always_on").obj.contains("cd_tuner"))
+    assert(bad("unapplied_fields").obj.contains("CDT"))
+  }
+
   test("replay rejects non-finite variation strength") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("non-finite.png")
