@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from . import adapters, agent_attention, cd_tuner, characteristic_guidance, guidance, incantations, latent_ops, sampling_ext, semantic_guidance, sonar, unet_hooks
+from . import adapters, agent_attention, cd_tuner, characteristic_guidance, guidance, incantations, latent_ops, sampling_ext, semantic_guidance, llul, sonar, unet_hooks
 from .hooks import coerce_bool, hook_config
 from .protocol import INVALID_PARAMS, UNSUPPORTED, EngineError
 
@@ -26,7 +26,7 @@ log = logging.getLogger("sdfx.extensions")
 EXTENSION_HOOKS = ("apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
                    "soft_inpainting", "sag", "neveroom", "reference", "revision", "ip_adapter", "controllllite",
                    "fooocus_inpaint", "photomaker", "face_restore", "img2imgalt", "semantic_guidance",
-                   "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar") + sampling_ext.HOOKS
+                   "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul") + sampling_ext.HOOKS
 
 MODEL_SAMPLING_DEFAULTS = {"sampling": "default", "zsnr": False}
 SAG_DEFAULTS = {"scale": 0.5, "blur_sigma": 2.0}
@@ -329,6 +329,11 @@ def install(engine, pipe, task: str, gp, req, kw: dict, ctx, cleanups: list, *, 
                                          sag=plan.sag is not None)
         if remove is not None:
             cleanups.append(remove)
+
+    # --- LLuL (local latent upscaler: hooks the UNet layers' inputs and outputs) -----------------------------------
+    ll = cfg(gp, "llul", llul.DEFAULTS)
+    if ll:
+        llul.install(engine, pipe, gp, ctx, ll, pass_=pass_, steps=steps, cleanups=cleanups)
 
     # --- characteristic guidance (last: its pre-hook sees the inputs every other hook has prepared) ---------------
     chg = cfg(gp, "characteristic_guidance", characteristic_guidance.DEFAULTS)

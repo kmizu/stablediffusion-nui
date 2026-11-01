@@ -413,3 +413,22 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
     assert(InspectGenerationMetadata.inspect(path.toString, policy, dir)("scripts").obj.isEmpty)
   }
+
+  test("LLuL source infotext becomes a typed candidate and its keys are consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("llul.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val text = "lion\nSteps: 20, Seed: 4, Size: 512x512, LLuL Enabled: True, LLuL Multiply: 4, LLuL Weight: 0.3, " +
+      "LLuL Layers: \"['OUT']\", LLuL Apply to: \"['out']\", LLuL Start steps: 5, LLuL Max steps: 20, " +
+      "LLuL Upscaler: bilinear, LLuL Downscaler: bilinear, LLuL Interpolation: lerp, LLuL x: 192, LLuL y: 192"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("always_on")("llul")
+    assertEquals(candidate("enabled").bool, true)
+    assertEquals(candidate("multiply").num, 2.0)
+    assertEquals(candidate("weight").num, 0.3)
+    assertEquals(candidate("x").str, "192")
+    assert(!result("unapplied_fields").obj.keySet.exists(k => sdfx.plugins.LlulPlugin.InfotextKeys.contains(k)))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("llul"))
+  }

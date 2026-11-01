@@ -216,7 +216,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")
@@ -1994,7 +1994,7 @@ class Engine(BaseEngine):
     # hooks that must not run again on ADetailer's inpainting passes (whole-image effects, or ADetailer itself)
     _ADETAILER_SKIP_HOOKS = ("steps_animation", "adetailer", "save_intermediate", "tiling", "latent_mirroring", "multidiffusion", "kohya_hrfix", "reference",
                              "revision", "ip_adapter", "controllllite", "photomaker", "img2imgalt", "soft_inpainting",
-                             "agent_attention", "incantations", "sonar")
+                             "agent_attention", "incantations", "sonar", "llul")
 
     def _adetailer(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag):
         """ADetailer: detect, then inpaint every detection of every unit (in unit order) at full resolution."""

@@ -19,7 +19,7 @@ object StandardPlugins:
     new PngInfoInjectionPlugin,
     // guidance
     new FreeUPlugin, new DynamicThresholdingPlugin, new ApgPlugin, new MahiroPlugin, new RescaleCfgPlugin, new PagPlugin,
-    new SagPlugin, new SemanticGuidancePlugin, new CharacteristicGuidancePlugin, new IncantationsPlugin, new SonarPlugin,
+    new SagPlugin, new SemanticGuidancePlugin, new CharacteristicGuidancePlugin, new IncantationsPlugin, new SonarPlugin, new LlulPlugin,
     // structure / sampling
     new HyperTilePlugin, new AgentAttentionPlugin, new KohyaHrFixPlugin, new MultiDiffusionPlugin, new ModelSamplingPlugin, new LatentModifierPlugin,
     new RandomResolutionsPlugin,

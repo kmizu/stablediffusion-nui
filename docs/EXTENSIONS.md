@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 136, todo 166, na 51.
+Totals: done 137, todo 165, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -108,7 +108,7 @@ Totals: done 136, todo 166, na 51.
 | 99 | [Visualize Cross-Attention](https://github.com/benkyoujouzu/stable-diffusion-webui-visualize-cross-attention-extension.git) | 114 | todo | `cross_attention_viz` |  |
 | 100 | [Dump U-Net](https://github.com/hnmr293/stable-diffusion-webui-dumpunet.git) | 108 | todo | `dump_unet` |  |
 | 101 | [posex](https://github.com/hnmr293/posex.git) | 591 | todo | `openpose_editor` |  |
-| 102 | [LLuL](https://github.com/hnmr293/sd-webui-llul.git) | 794 | todo | `llul` |  |
+| 102 | [LLuL](https://github.com/hnmr293/sd-webui-llul.git) | 794 | done | `llul` | AlwaysOn LLuL (Local Latent upscaLer): the U-Net draws a region of the image at 2^N times the resolution and blends it back with a weight (optional mask); OUT layer by default, advanced layer filters (Resblock / Transformer / attention, source layer names), up- and downscalers with AA, Lerp / SLerp, step window, 12 XYZ axes, PNG/MCP replay, hires; the extra output images that mark the effective area are not provided. Verified on real SD1.5 and SDXL, docs/llul-verification.md. |
 | 103 | [CFG-Schedule-for-Automatic1111-SD](https://github.com/guzuligo/CFG-Schedule-for-Automatic1111-SD.git) | 41 | done | `cfg_schedule` |  |
 | 104 | [ebsynth_utility](https://github.com/s9roll7/ebsynth_utility.git) | 1273 | todo | `ebsynth_utility` |  |
 | 105 | [VRAM Estimator](https://github.com/space-nuko/a1111-stable-diffusion-webui-vram-estimator.git) | 113 | done | `core:vram-estimator` | Native four-mode CUDA calibration/charts, bounded profile history/import/export and compatible live estimates. Vanilla square calibration excludes extensions; bounded real OOM/recovery and SD1.5/SDXL packaged checks recorded in vram-estimator-verification.md. |
