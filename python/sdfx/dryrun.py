@@ -224,7 +224,7 @@ class FakeEngine(BaseEngine):
             if not (HAVE_NUMPY and HAVE_PIL):
                 raise EngineError(UNSUPPORTED, 'NudeNet NSFW Censor dry-run requires NumPy and Pillow')
             from .nsfw_checker import job_config
-            nsfw_cfg = job_config(gp.hooks)
+            nsfw_cfg = job_config(gp.hooks, ctx)
         auxiliary = []
         seed, subseed = resolve_seed(gp.seed), resolve_seed(gp.subseed)
         bs, n_iter = gp.batch_size, gp.n_iter

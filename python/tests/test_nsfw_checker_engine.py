@@ -141,3 +141,85 @@ def test_preview_detector_failure_drops_the_preview_without_failing(monkeypatch)
     def broken(*args):
         raise RuntimeError('detector failed')
     assert preview_events(monkeypatch, broken) == []
+
+
+# ---------------------------------------------------------------------------- SD safety checker (83) / NSFWJS (231)
+@pytest.fixture
+def classifiers(harness, monkeypatch):
+    """Generation with only the whole-image checkers; both classifiers stubbed to flag everything."""
+    from sdfx import nsfw_safety
+    engine, request, calls = harness
+    request['params'].update(batch_size=1, n_iter=2)
+    request['params']['hires'] = {'enabled': False}
+    seen = []
+    monkeypatch.setattr(nsfw_safety, 'safety_model', lambda **kw: seen.append('load safety'))
+    monkeypatch.setattr(nsfw_safety, 'nsfwjs_session', lambda **kw: seen.append('load nsfwjs'))
+
+    def flags(images, model=None):
+        seen.extend(('safety', im.size) for im in images)
+        return [True] * len(images)
+
+    def scores(img, session=None):
+        seen.append(('nsfwjs', img.size))
+        return np.array([0, 0, 0, 1, 0], dtype=np.float32)
+    monkeypatch.setattr(nsfw_safety, 'safety_flags', flags)
+    monkeypatch.setattr(nsfw_safety, 'nsfwjs_scores', scores)
+    return engine, request, calls, seen
+
+
+def test_safety_checker_blacks_out_saved_images_after_loading_before_sampling(classifiers):
+    engine, request, calls, seen = classifiers
+    request['params']['hooks'] = {'nsfw_checker': {'nudenet': False, 'safety_checker': True}}
+    result = engine.txt2img(request, context())
+    assert seen[0] == 'load safety'
+    assert seen[1:] == [('safety', (64, 64))] * 2
+    assert 'auxiliary_images' not in result
+    for image in result['images']:
+        with Image.open(image['path']) as saved:
+            assert saved.convert('RGB').getextrema() == ((0, 0), (0, 0), (0, 0))
+
+
+def test_nsfwjs_blurs_each_saved_image_in_two_passes(classifiers):
+    engine, request, calls, seen = classifiers
+    request['params']['hooks'] = {'nsfw_checker': {'nudenet': False, 'nsfwjs': True}}
+    result = engine.txt2img(request, context())
+    assert seen[0] == 'load nsfwjs' and [s[0] for s in seen[1:]] == ['nsfwjs'] * 4
+    assert len(result['images']) == 2
+
+
+def test_classifier_model_failure_fails_before_sampling(harness, monkeypatch):
+    from sdfx import nsfw_safety
+    engine, request, calls = harness
+
+    def missing(**kw):
+        raise nsfw_safety.ModelUnavailable('download refused')
+    monkeypatch.setattr(nsfw_safety, 'nsfwjs_session', missing)
+    request['params']['hooks'] = {'nsfw_checker': {'nudenet': False, 'nsfwjs': True}}
+    with pytest.raises(EngineError, match='NSFWJS filter: download refused'):
+        engine.txt2img(request, context())
+    assert not [c for c in calls if isinstance(c, dict)]
+
+
+def test_nsfwjs_live_preview_is_blurred_before_it_is_emitted(monkeypatch):
+    from sdfx import nsfw_safety
+    from sdfx.engine import Engine
+    from sdfx.params import GenerationParams, GenerationRequest
+    engine = Engine()
+    engine.kind = 'sd15'
+    events = []
+    ctx = SimpleNamespace(interrupted=False, start_pass=lambda: None, progress=lambda *a, **kw: None,
+                          preview=lambda data, step: events.append(data))
+    blurred = []
+
+    def blur(img, level, session=None, passes=1, log_fn=None):
+        blurred.append((level, passes))
+        return Image.new('RGB', img.size, (1, 2, 3)), ['porn']
+    monkeypatch.setattr(nsfw_safety, 'nsfwjs_censor', blur)
+    hooks = {'nsfw_checker': {'nudenet': False, 'nsfwjs': True, 'nsfwjs_safety_level': 'questionable'}}
+    request = GenerationRequest(preview_every=1, preview_method='approx', params=GenerationParams(hooks=hooks))
+    callback = engine._callback(ctx, request, 'base', 0, 1, 3)
+    values = {'latents': torch.zeros(1, 4, 8, 8)}
+    assert callback(SimpleNamespace(_num_timesteps=3), 0, 0, values) is values
+    assert blurred == [('questionable', 1)] and len(events) == 1
+    with Image.open(io.BytesIO(base64.b64decode(events[0]))) as image:
+        assert max(image.convert('RGB').getpixel((2, 2))) < 12

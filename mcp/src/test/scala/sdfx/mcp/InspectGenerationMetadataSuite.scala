@@ -280,6 +280,32 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!InspectGenerationMetadata.inspect(plain.toString, new PathPolicy(() => Seq(dir)), dir)("always_on").obj.contains("nsfw_checker"))
   }
 
+  test("SD safety checker and NSFWJS candidate reproduces the hook without NudeNet and consumes both keys") {
+    import sdfx.core.model.GenerationParams
+    import sdfx.core.infotext.{Infotext, ImageFacts}
+    import sdfx.core.plugins.api.Values
+    val plugin = new sdfx.plugins.NsfwCheckerPlugin
+    val values = Values(Values.defaults(plugin.controls).map ++ Map("enabled" -> "true", "nudenet" -> "false",
+      "safety_checker" -> "true", "nsfwjs" -> "true", "nsfwjs_safety_level" -> "questionable"))
+    val params = plugin.process(GenerationParams(prompt = "portrait"), values)
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("classifiers.png")
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> Infotext.write(params, ImageFacts(42L))))
+    val inspected = InspectGenerationMetadata.inspect(path.toString, new PathPolicy(() => Seq(dir)), dir)
+    val candidate = inspected("always_on")("nsfw_checker")
+    assertEquals((candidate("nudenet").bool, candidate("safety_checker").bool, candidate("nsfwjs").bool), (false, true, true))
+    assertEquals(candidate("nsfwjs_safety_level").str, "questionable")
+    for key <- sdfx.plugins.NsfwCheckerPlugin.InfotextKeys do assert(!inspected("unapplied_fields").obj.contains(key), key)
+    val restored = Values(candidate.obj.toSeq.map { (k, value) =>
+      k -> (value match
+        case ujson.Str(v) => v
+        case ujson.Bool(v) => v.toString
+        case ujson.Num(v) => Values.fmt(v)
+        case _ => fail("invalid candidate type"))
+    }.toMap)
+    assertEquals(plugin.process(GenerationParams(), restored).hooks(plugin.id), params.hooks(plugin.id))
+  }
+
   test("unknown FreeU version and malformed or out-of-range values stay unapplied") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("replay.png")

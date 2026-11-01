@@ -501,7 +501,7 @@
 "index": 83,
 "name": "NSFW checker",
 "url": "https://github.com/AUTOMATIC1111/stable-diffusion-webui-nsfw-censor.git",
-"status": "todo:nsfw_checker"
+"status": "done:nsfw_checker"
 },
 {
 "index": 84,
@@ -1389,7 +1389,7 @@
 "index": 231,
 "name": "NSFW Blurrer-NSFWJS",
 "url": "https://github.com/aria1th/sd-webui-nsfw-filter.git",
-"status": "todo:nsfw_checker"
+"status": "done:nsfw_checker"
 },
 {
 "index": 232,

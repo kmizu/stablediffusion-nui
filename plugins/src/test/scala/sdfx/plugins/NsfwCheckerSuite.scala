@@ -128,3 +128,92 @@ class NsfwCheckerSuite extends munit.FunSuite:
     assertEquals(none.map(_._2), Seq(Seq(NsfwCheckerPlugin.ExtrasInfotextKey -> "nothing detected")))
     assert(ctx.logs.exists(_.contains("nothing to censor")))
     assert(files.forall(f => !Files.exists(f)), s"leaked: ${files.filter(Files.exists(_))}")
+
+  // ------------------------------------------------------------------ SD safety checker (83) / NSFWJS filter (231)
+  test("checker switches default to NudeNet only and the whole-image checkers are opt-in"):
+    val o = hook(enabled())
+    assertEquals(o("nudenet"), ujson.Bool(true))
+    assertEquals(o("safety_checker"), ujson.Bool(false))
+    assertEquals(o("safety_checker_live_preview"), ujson.Bool(false))
+    assertEquals(o("nsfwjs"), ujson.Bool(false))
+    assertEquals(o("nsfwjs_safety_level").str, "safe")
+    val keys = plugin.process(GenerationParams(), enabled()).extra.keySet
+    assert(!keys.contains(NsfwCheckerPlugin.SafetyInfotextKey) && !keys.contains(NsfwCheckerPlugin.NsfwjsInfotextKey))
+    assertEquals(plugin.controls.collect { case c: Control.Choice if c.key == "nsfwjs_safety_level" => c.options }.head,
+      Seq("safe", "questionable", "explicit"))
+    intercept[IllegalArgumentException](hook(enabled("nsfwjs" -> "true", "nsfwjs_safety_level" -> "strict")))
+
+  test("each enabled checker writes its own infotext key and replay restores exactly those checkers"):
+    val values = enabled("nudenet" -> "false", "safety_checker" -> "true", "safety_checker_live_preview" -> "true",
+      "nsfwjs" -> "true", "nsfwjs_safety_level" -> "questionable")
+    val params = plugin.process(GenerationParams(prompt = "portrait"), values)
+    assertEquals(params.extra.get(NsfwCheckerPlugin.InfotextKey), None)
+    assertEquals(params.extra(NsfwCheckerPlugin.SafetyInfotextKey), NsfwCheckerPlugin.SafetyFinalAndPreviews)
+    assertEquals(params.extra(NsfwCheckerPlugin.NsfwjsInfotextKey), "questionable")
+    val fields = Infotext.parse(Infotext.write(params, ImageFacts(seed = 1))).fields
+    val restored = NsfwCheckerPlugin.replay(fields).get
+    for key <- Seq("enabled", "nudenet", "safety_checker", "safety_checker_live_preview", "nsfwjs", "nsfwjs_safety_level") do
+      assertEquals(restored.str(key), values.str(key), key)
+    assertEquals(hook(restored), hook(values))
+    // all three together, safety checker on final images only
+    val all = enabled("safety_checker" -> "true", "nsfwjs" -> "true", "gen_filter_type" -> "Pixelate")
+    val allFields = Infotext.parse(Infotext.write(plugin.process(GenerationParams(), all), ImageFacts(seed = 2))).fields
+    assertEquals(allFields(NsfwCheckerPlugin.SafetyInfotextKey), NsfwCheckerPlugin.SafetyFinal)
+    assertEquals(hook(NsfwCheckerPlugin.replay(allFields).get), hook(all))
+
+  test("images written before indices 83 / 231 restore NudeNet only; malformed checker values restore nothing"):
+    val old = NsfwCheckerPlugin.replay(Map(NsfwCheckerPlugin.InfotextKey -> """{"gen_filter_type":"Fill color"}""")).get
+    assertEquals(Seq("nudenet", "safety_checker", "nsfwjs").map(old.bool(_)), Seq(true, false, false))
+    val safetyOnly = NsfwCheckerPlugin.replay(Map(NsfwCheckerPlugin.SafetyInfotextKey -> NsfwCheckerPlugin.SafetyFinal)).get
+    assertEquals(Seq("enabled", "nudenet", "safety_checker", "safety_checker_live_preview", "nsfwjs").map(safetyOnly.bool(_)),
+      Seq(true, false, true, false, false))
+    for bad <- Seq(NsfwCheckerPlugin.SafetyInfotextKey -> "always", NsfwCheckerPlugin.NsfwjsInfotextKey -> "strict") do
+      assertEquals(NsfwCheckerPlugin.replay(Map(bad)), None, bad.toString)
+    assertEquals(NsfwCheckerPlugin.replay(Map(NsfwCheckerPlugin.NsfwjsInfotextKey -> "explicit")).map(_.str("nsfwjs_safety_level")),
+      Some("explicit"))
+
+  test("Extras whole-image checkers send only their parameters and reject NudeNet-only outputs"):
+    val base = Values.defaults(extras.controls).map
+    assertEquals(extras.toolParams(Values(base)).toMap.get("checker"), None)
+    val nsfwjs = extras.toolParams(Values(base ++ Map("checker" -> "NSFWJS", "nsfwjs_safety_level" -> "questionable",
+      "report_only" -> "true"))).toMap
+    assertEquals(nsfwjs, Map("checker" -> ujson.Str("nsfwjs"), "report_only" -> ujson.Bool(true),
+      "safety_level" -> ujson.Str("questionable")))
+    assertEquals(extras.toolParams(Values(base + ("checker" -> "SD safety checker"))).toMap,
+      Map("checker" -> ujson.Str("safety_checker"), "report_only" -> ujson.Bool(false)))
+    for bad <- Seq(Map("checker" -> "NSFWJS", "mask_only" -> "true"), Map("checker" -> "SD safety checker", "mask" -> "C:/m.png"),
+        Map("checker" -> "CLIP")) do
+      intercept[IllegalArgumentException](extras.toolParams(Values(base ++ bad)))
+
+  private def classifierContext(info: ujson.Obj, files: ArrayBuffer[Path], calls: ArrayBuffer[ujson.Obj]): FakeContext =
+    new FakeContext():
+      override def engineCall(kind: String, params: ujson.Obj): ujson.Value =
+        assertEquals((kind, params("tool").str), ("image_tool", "nsfw_checker"))
+        calls += params
+        val main = Paths.get(initImage(10, 10))
+        files ++= Seq(Paths.get(params("image_path").str), main)
+        ujson.Obj("path" -> main.toString, "outputs" -> ujson.Obj(), "info" -> info)
+
+  test("Extras NSFWJS and SD safety checker results go to the infotext; temporary files are removed"):
+    val files = ArrayBuffer[Path](); val calls = ArrayBuffer[ujson.Obj]()
+    val image = new java.awt.image.BufferedImage(10, 10, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    val base = Values.defaults(extras.controls).map
+    def run(values: Map[String, String], info: ujson.Obj) =
+      val out = extras.transform(image, GenerationParams(), Values(base ++ values), classifierContext(info, files, calls))
+      assertEquals(out.size, 1)
+      out.head._2
+    assertEquals(run(Map("checker" -> "NSFWJS"), ujson.Obj("is_nsfw" -> 1, "label" -> "porn", "censored" -> 1)),
+      Seq(NsfwCheckerPlugin.NsfwjsExtrasInfotextKey -> "safe; NSFW (blurred); top class porn"))
+    assertEquals(run(Map("checker" -> "NSFWJS", "report_only" -> "true"), ujson.Obj("is_nsfw" -> 1, "label" -> "sexy")),
+      Seq(NsfwCheckerPlugin.NsfwjsExtrasInfotextKey -> "safe; NSFW (reported only); top class sexy"))
+    assertEquals(run(Map("checker" -> "NSFWJS", "nsfwjs_safety_level" -> "questionable"), ujson.Obj("is_nsfw" -> 0, "label" -> "drawings")),
+      Seq(NsfwCheckerPlugin.NsfwjsExtrasInfotextKey -> "questionable; not NSFW; top class drawings"))
+    assertEquals(run(Map("checker" -> "NSFWJS", "nsfwjs_safety_level" -> "explicit"), ujson.Obj("is_nsfw" -> 0, "label" -> "")),
+      Seq(NsfwCheckerPlugin.NsfwjsExtrasInfotextKey -> "explicit; not classified"))
+    assertEquals(run(Map("checker" -> "SD safety checker"), ujson.Obj("is_nsfw" -> 1)),
+      Seq(NsfwCheckerPlugin.SafetyExtrasInfotextKey -> "NSFW (black image)"))
+    assertEquals(run(Map("checker" -> "SD safety checker"), ujson.Obj("is_nsfw" -> 0)),
+      Seq(NsfwCheckerPlugin.SafetyExtrasInfotextKey -> "not NSFW"))
+    assertEquals(calls.map(_.obj.get("checker").map(_.str)).toSeq,
+      Seq.fill(4)(Some("nsfwjs")) ++ Seq.fill(2)(Some("safety_checker")))
+    assert(files.forall(f => !Files.exists(f)), s"leaked: ${files.filter(Files.exists(_))}")

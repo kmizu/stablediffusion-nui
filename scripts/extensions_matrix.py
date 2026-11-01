@@ -42,7 +42,7 @@ S = {
     67: "todo:asymmetric_tiling", 68: "todo:latent_mirroring", 69: "todo:sonar", 70: "todo:depth_image_io",
     71: "todo:ultimate_sd_upscale", 72: "todo:prompt_fusion", 73: "todo:neutral_prompt", 74: "done:dynamic_thresholding",
     75: "todo:anti_burn", 76: "done:core:controlnet", 77: "todo:latent_couple", 78: "todo:composable_lora",
-    79: "na:server-ops", 80: "todo:booru_prompt", 81: "todo:booru_prompt", 82: "todo:booru_prompt", 83: "todo:nsfw_checker",
+    79: "na:server-ops", 80: "todo:booru_prompt", 81: "todo:booru_prompt", 82: "todo:booru_prompt", 83: "done:nsfw_checker",
     84: "todo:prompt_filter", 85: "na:obsolete", 86: "todo:riffusion", 87: "todo:save_intermediate", 88: "todo:grid_numbers",
     89: "todo:hypernetworks", 90: "todo:core:system-info", 91: "todo:openpose_editor", 92: "na:account", 93: "na:account",
     94: "todo:minecraft_schematic", 95: "todo:aesthetic_score", 96: "todo:aesthetic_score", 97: "todo:aesthetic_score",
@@ -79,7 +79,7 @@ S = {
     217: "todo:batch_interrogate", 218: "done:core:gallery", 219: "todo:depth_library", 220: "todo:model_downloader",
     221: "todo:scenario_loader", 222: "todo:prompt_library", 223: "todo:model_merge", 224: "done:core:png-info",
     225: "todo:mov2mov", 226: "todo:easyphoto", 227: "todo:rich_text", 228: "todo:remove_background",
-    229: "todo:booru_prompt", 230: "todo:model_downloader", 231: "todo:nsfw_checker", 232: "todo:negpip",
+    229: "todo:booru_prompt", 230: "todo:model_downloader", 231: "done:nsfw_checker", 232: "todo:negpip",
     233: "done:cd_tuner", 234: "na:webui-css", 235: "na:webui-api", 236: "todo:core:compile",
     237: "done:core:image-scrambling", 238: "done:nsfw_checker", 239: "todo:lcm", 240: "todo:cads",
     241: "todo:face_swap", 242: "todo:hotshot_xl", 243: "done:inpaint_difference", 244: "todo:temporal",
@@ -145,7 +145,7 @@ IMPLEMENTED = {
 
 SCOPE_NOTES = {
     "characteristic_guidance": "AlwaysOn characteristic guidance as the pinned extension: per-step iteration with all 13 controls, eps/v models, k-diffusion/DDIM/UniPC, SD1.5/SD2/SDXL incl. 9-channel inpainting, base pass only (hires restarts, ADetailer skipped), CHG infotext with PNG/MCP replay. QR solve replaces CPU lstsq so replays are exact. Many other guidance/branch plugins are rejected by name. SD1.5/SDXL real MCP checks with image inspection. See characteristic-guidance-verification.md.",
-    "nsfw_checker": "Index 238 (NudeNet NSFW Censor) only: bundled pinned NudeNet 320n ONNX with hash check, 18 categories with per-category threshold and expansion, NMS, all mask shapes and censor filters, generation censoring after refinement with optional before-censor/mask outputs, live preview censoring, Extras with custom-mask union, image_tool/MCP and PNG replay. Indices 83 (A1111 nsfw-censor) and 231 (NSFWJS blurrer) remain todo under #91. SD1.5/SDXL real MCP checks with image inspection. See nsfw-checker-verification.md.",
+    "nsfw_checker": "Indices 238 (NudeNet NSFW Censor), 83 (A1111 safety-checker censor) and 231 (NSFWJS blurrer) in one plugin: bundled pinned NudeNet ONNX with hash check, 18 categories with thresholds/expansion, NMS, all mask shapes and filters, generation censoring after refinement with optional before/mask outputs, live preview, Extras with custom-mask union, MCP and PNG replay; SD safety checker (black image) and NSFWJS (safe/questionable/explicit blur, report-only Extras) are downloaded on first use with pinned revisions and SHA-256 checks. Classifiers have known false negatives; no HTTP /nudenet or /safety routes. SD1.5/SDXL real MCP checks with image inspection. See nsfw-checker-verification.md.",
     "cd_tuner": "AlwaysOn colour/detail tuner as the pinned extension: detail d1/d2 and hires hd1/hd2 via conv_in/norm_out/conv_out weights restored after every pass, hr-scaling, stop steps, Contrast 2, brightness and three colour axes, VAE saturation 1/2, the colour map, <cdt:>/<cdtc:> prompt tags, Apply once and CDT/CDTC infotext with PNG/MCP replay. Source quirks kept (Hr-Stop Step 0). Stop steps count pipeline steps (differs for second-order samplers). SD1.5/SDXL real MCP checks with image inspection. See cd-tuner-verification.md.",
     "agent_attention": "AlwaysOn agent attention with token merging as the pinned extension: first/second pass sx, sy, ratio and agent ratio, second pass step, max downsample, FP32, hires-only, source infotext keys, PNG/MCP replay and all 13 XYZ axes. Merging uses a deterministic reduction (seeded from the image seed) so PNG replays are pixel-exact, not pixel-equal to A1111. Rejects PAG, SAG, HyperTile, Token Downsampling, Reference-only and ControlNet-LLLite combinations. SD1.5/SDXL real MCP checks with image inspection. See agent-attention-verification.md.",
     "loopback_scaler": "Native img2img Script with every source control: eased per-loop sizes to the max or scaled target, denoise change factor, per-loop seeds, batch restarts, saved loop outputs with source infotext and the final Pillow filters. Fixes the source's landscape height bug; rejects txt2img and batch size > 1. SD1.5/SDXL real MCP runs including cancel/recovery with image inspection (SD1.5 colour drift comes from repeated img2img with that model). See loopback-scaler-verification.md.",

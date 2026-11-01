@@ -17,6 +17,7 @@ and the `image_tool` request (tool `nsfw_checker`):
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import os
 import threading
@@ -68,6 +69,12 @@ GENERATION_DEFAULTS = {
     "thresholds": list(DEFAULT_THRESHOLDS),
     "expand_horizontal": list(DEFAULT_EXPAND),
     "expand_vertical": list(DEFAULT_EXPAND),
+    # which checkers run (NudeNet keeps its default so settings from before indices 83 / 231 behave the same)
+    "nudenet": True,
+    "safety_checker": False,
+    "safety_checker_live_preview": False,
+    "nsfwjs": False,
+    "nsfwjs_safety_level": "safe",
 }
 
 
@@ -148,7 +155,31 @@ def generation_config(raw: Optional[dict]) -> dict:
         "thresholds": _vector(cfg["thresholds"], "thresholds", DEFAULT_THRESHOLDS),
         "expand_horizontal": _vector(cfg["expand_horizontal"], "expand_horizontal", DEFAULT_EXPAND, 0.0),
         "expand_vertical": _vector(cfg["expand_vertical"], "expand_vertical", DEFAULT_EXPAND, 0.0),
+        "nudenet": _flag(cfg["nudenet"], True),
+        "safety_checker": _flag(cfg["safety_checker"], False),
+        "safety_checker_live_preview": _flag(cfg["safety_checker_live_preview"], False),
+        "nsfwjs": _flag(cfg["nsfwjs"], False),
+        "nsfwjs_safety_level": _safety().check_level(cfg["nsfwjs_safety_level"]),
     }
+
+
+def _safety():
+    from . import nsfw_safety
+    return nsfw_safety
+
+
+def nudenet_active(cfg: dict, preview: bool = False) -> bool:
+    key = "live_preview_filter_type" if preview else "gen_filter_type"
+    return bool(cfg.get("nudenet", True)) and cfg[key] != "Disable"
+
+
+def nsfwjs_active(cfg: dict) -> bool:
+    """NSFWJS runs unless it is off or the level is "explicit" (which never flags)."""
+    return bool(cfg.get("nsfwjs")) and bool(_safety().SAFETY_LEVELS[cfg.get("nsfwjs_safety_level", "safe")])
+
+
+def safety_active(cfg: dict, preview: bool = False) -> bool:
+    return bool(cfg.get("safety_checker")) and (not preview or bool(cfg.get("safety_checker_live_preview")))
 
 
 def scale_factor(size) -> float:
@@ -412,8 +443,22 @@ def censor_generation(img, cfg: dict, model_path=None, log=None, detector=None):
 
 
 def censor_preview(img, cfg: dict, model_path=None, detector=None):
-    """Live preview censor (assign_current_image wrapper). Like upstream, the blend radius follows the generation
-    filter while the live preview filter is applied."""
+    """Live preview censor (assign_current_image wrappers): the SD safety checker when its live preview option is on
+    (NUI addition; upstream does not check previews), one NSFWJS pass, then NudeNet's live preview filter. Returns
+    `img` itself when nothing changed."""
+    out = img
+    if safety_active(cfg, preview=True):
+        out, _ = _safety().safety_censor(out)
+    if nsfwjs_active(cfg):
+        out, _ = _safety().nsfwjs_censor(out, cfg["nsfwjs_safety_level"])
+    if nudenet_active(cfg, preview=True):
+        out = _nudenet_preview(out, cfg, model_path, detector)
+    return out
+
+
+def _nudenet_preview(img, cfg: dict, model_path=None, detector=None):
+    """NudeNet live preview censor. Like upstream, the blend radius follows the generation filter while the live
+    preview filter is applied."""
     from PIL import ImageFilter
     filter_type = cfg["live_preview_filter_type"]
     if filter_type == "Disable":
@@ -460,6 +505,9 @@ def censor_tool(img, params: dict, model_path=None, log=None, detector=None):
     """
     from PIL import Image, ImageFilter
     p = dict(params or {})
+    checker = _choice(_optional(p, "checker") or "nudenet", "checker", TOOL_CHECKERS)
+    if checker != "nudenet":
+        return _classify_tool(img, checker, p, log)
     filter_type = _choice(_optional(p, "filter_type") or "Variable blur", "filter_type", FILTERS)
     mask_shape = _choice(_optional(p, "mask_shape") or "Ellipse", "mask_shape", MASK_SHAPES + (ENTIRE_IMAGE_ALWAYS,))
     enable_nudenet = _flag(p.get("enable_nudenet"), True)
@@ -509,6 +557,41 @@ def censor_tool(img, params: dict, model_path=None, log=None, detector=None):
     return (out.copy() if out is img else out), extras
 
 
+TOOL_CHECKERS = ("nudenet", "nsfwjs", "safety_checker")
+
+
+def _classify_tool(img, checker: str, p: dict, log=None):
+    """Whole-image check for Extras / image_tool: the SD safety checker (black image) or NSFWJS (blur radius 20, one
+    pass as for an Extras save). `report_only` keeps the image (NSFWJS's /safety/predict: is_nsfw only)."""
+    from PIL import ImageFilter
+    safety = _safety()
+    report_only = _flag(p.get("report_only"), False)
+    name = "SD safety checker" if checker == "safety_checker" else "NSFWJS filter"
+    try:
+        if checker == "safety_checker":
+            flagged = safety.safety_flags([img])[0]
+            extras = {"checker": checker, "is_nsfw": int(flagged)}
+            out = safety.black(img) if flagged and not report_only else img.copy()
+        else:
+            level = safety.check_level(p.get("safety_level"))
+            flagged, label, scores = safety.nsfwjs_classify(img, level)
+            extras = {"checker": checker, "is_nsfw": int(flagged), "safety_level": level, "label": label or ""}
+            if scores is not None:
+                extras.update({f"score_{label_}": round(float(score), 6)
+                               for label_, score in zip(safety.NSFWJS_LABELS, scores)})
+            blurred = flagged and not report_only
+            out = img.filter(ImageFilter.GaussianBlur(safety.NSFWJS_BLUR_RADIUS)) if blurred else img.copy()
+    except ValueError:
+        raise
+    except (ImportError, OSError) as exc:
+        raise _engine_error(exc, name) from exc
+    extras.update(censored=int(flagged and not report_only), detected=int(flagged))
+    if log is not None:
+        log(f"{name}: {'NSFW' if flagged else 'not NSFW'}"
+            + (f" (top class {extras['label']})" if extras.get("label") else ""))
+    return out, extras
+
+
 # ------------------------------------------------------------------------------------------------ engine glue
 AUXILIARY_SUFFIXES = ("-before-censor", "-censor-mask")
 
@@ -519,25 +602,42 @@ def available() -> bool:
     return bool(find_spec("onnxruntime") and find_spec("cv2") and find_spec("PIL") and default_model_path().is_file())
 
 
-def _engine_error(exc: Exception):
+def _engine_error(exc: Exception, name: str = "NudeNet NSFW Censor"):
     from .protocol import INVALID_PARAMS, UNSUPPORTED, EngineError
     code = INVALID_PARAMS if isinstance(exc, ValueError) and "refusing to load" not in str(exc) else UNSUPPORTED
-    return EngineError(code, f"NudeNet NSFW Censor: {exc}")
+    return EngineError(code, f"{name}: {exc}")
 
 
-def job_config(hooks: Optional[dict]) -> Optional[dict]:
-    """Validated generation settings for the `nsfw_checker` hook, or None. Loads (and hash-checks) the detector up
-    front so a missing or altered model fails the job before sampling instead of saving uncensored images."""
+def job_config(hooks: Optional[dict], ctx=None) -> Optional[dict]:
+    """Validated generation settings for the `nsfw_checker` hook, or None. Loads (and hash-checks; the SD safety
+    checker and NSFWJS download on first use) every enabled model up front, so a missing or altered model fails the
+    job before sampling instead of saving unchecked images."""
     from .hooks import hook_config
     raw = hook_config(hooks or {}, "nsfw_checker", {})
     if raw is None:
         return None
     try:
         cfg = generation_config(raw)
-        if cfg["gen_filter_type"] != "Disable" or cfg["live_preview_filter_type"] != "Disable":
-            session()
-    except (ImportError, OSError, ValueError) as exc:
+    except ValueError as exc:
         raise _engine_error(exc) from exc
+    safety = _safety()
+
+    def progress(name):
+        if ctx is not None:
+            return lambda line: ctx.log("info", f"{name}: {line}")
+        return lambda line: logging.getLogger(__name__).info("%s: %s", name, line)
+    steps = []
+    if nudenet_active(cfg) or nudenet_active(cfg, preview=True):
+        steps.append(("NudeNet NSFW Censor", session))
+    if cfg["safety_checker"]:
+        steps.append(("SD safety checker", lambda: safety.safety_model(progress=progress("SD safety checker"))))
+    if nsfwjs_active(cfg):
+        steps.append(("NSFWJS filter", lambda: safety.nsfwjs_session(progress=progress("NSFWJS filter"))))
+    for name, load in steps:
+        try:
+            load()
+        except (ImportError, OSError, ValueError) as exc:
+            raise _engine_error(exc, name) from exc
     return cfg
 
 
@@ -551,7 +651,8 @@ def preview_config(hooks: Optional[dict]) -> Optional[dict]:
         cfg = generation_config(raw)
     except ValueError:
         return None
-    return None if cfg["live_preview_filter_type"] == "Disable" else cfg
+    active = nudenet_active(cfg, preview=True) or safety_active(cfg, preview=True) or nsfwjs_active(cfg)
+    return cfg if active else None
 
 
 def censor_final(img, cfg: Optional[dict], ctx=None, detector=None):
@@ -559,10 +660,34 @@ def censor_final(img, cfg: Optional[dict], ctx=None, detector=None):
     if cfg is None:
         return img, []
     log = (lambda line: ctx.log("info", f"NudeNet: {line}")) if ctx is not None else None
+    if ctx is not None:
+        def note(line):
+            ctx.log("warning", line)
+    else:
+        def note(line):
+            logging.getLogger(__name__).warning("%s", line)
+    safety = _safety()
+    level = cfg.get("nsfwjs_safety_level", "safe")
+    name = "SD safety checker"
     try:
-        censored, before, mask = censor_generation(img, cfg, log=log, detector=detector)
+        # index 83 (postprocess_batch upstream): here on the final image, after every refinement
+        if safety_active(cfg):
+            img, _ = safety.safety_censor(img, log_fn=note)
+        name = "NSFWJS filter"
+        if nsfwjs_active(cfg):  # index 231: postprocess_image
+            img, _ = safety.nsfwjs_censor(img, level, log_fn=note)
+        name = "NudeNet NSFW Censor"
+        if nudenet_active(cfg):  # index 238: postprocess_image_after_composite
+            censored, before, mask = censor_generation(img, cfg, log=log, detector=detector)
+        else:
+            censored, before, mask = img, None, None
+        name = "NSFWJS filter"
+        if nsfwjs_active(cfg):  # index 231: on_before_image_saved, for every file written
+            censored, _ = safety.nsfwjs_censor(censored, level, log_fn=note)
+            before = safety.nsfwjs_censor(before, level, log_fn=note)[0] if before is not None else None
+            mask = safety.nsfwjs_censor(mask, level, log_fn=note)[0] if mask is not None else None
     except (ImportError, OSError, ValueError) as exc:
-        raise _engine_error(exc) from exc
+        raise _engine_error(exc, name) from exc
     auxiliaries = [(suffix, image) for suffix, image in zip(AUXILIARY_SUFFIXES, (before, mask)) if image is not None]
     return censored, auxiliaries
 
@@ -585,4 +710,5 @@ __all__ = ["LABELS", "FRIENDLY", "DEFAULT_SELECTED", "DEFAULT_THRESHOLDS", "MASK
            "default_model_path", "verify_model", "session", "preprocess", "mask_from_outputs", "detect",
            "detect_with", "blur_radii", "variable_blur", "gaussian_blur", "pixelate", "fill_color", "apply_filter",
            "censor_generation", "censor_preview", "censor_preview_b64", "censor_tool", "AUXILIARY_SUFFIXES", "available",
-           "job_config", "preview_config", "censor_final", "save_auxiliaries"]
+           "job_config", "preview_config", "censor_final", "save_auxiliaries", "TOOL_CHECKERS", "nudenet_active",
+           "nsfwjs_active", "safety_active"]

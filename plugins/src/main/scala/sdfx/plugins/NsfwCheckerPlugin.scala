@@ -6,8 +6,10 @@ import sdfx.core.plugins.api.Control.*
 
 import java.awt.image.BufferedImage
 
-/** Shared settings of w-e-w/sd-webui-nudenet-nsfw-censor (pinned 1fb21cf, AGPL-3.0); the engine side is
-  * python/sdfx/nsfw_checker.py.
+/** Shared settings of the `nsfw_checker` target: w-e-w/sd-webui-nudenet-nsfw-censor (index 238, pinned 1fb21cf,
+  * AGPL-3.0), and, re-implemented from behaviour only (neither repository has a licence),
+  * AUTOMATIC1111/stable-diffusion-webui-nsfw-censor (index 83, SD safety checker) and aria1th/sd-webui-nsfw-filter
+  * (index 231, NSFWJS filter). The engine side is python/sdfx/nsfw_checker.py and python/sdfx/nsfw_safety.py.
   */
 object NsfwCheckerPlugin:
   /** NudeNet labels in model output order (the engine's threshold / expansion arrays use this order). */
@@ -26,6 +28,19 @@ object NsfwCheckerPlugin:
   val EntireImageAlways = "Entire image (always)"
   val InfotextKey = "NudeNet NSFW Censor"
   val ExtrasInfotextKey = "NudeNet NSFW Censor Extras"
+  /** Index 83: written when the SD safety checker is on (upstream writes nothing). */
+  val SafetyInfotextKey = "SD safety checker"
+  val SafetyFinal = "final images"
+  val SafetyFinalAndPreviews = "final images and live previews"
+  val SafetyExtrasInfotextKey = "SD safety checker Extras"
+  /** Index 231: written when the NSFWJS filter is on, with its safety level (upstream writes nothing). */
+  val NsfwjsInfotextKey = "NSFWJS filter"
+  val NsfwjsExtrasInfotextKey = "NSFWJS filter Extras"
+  /** Top NSFWJS classes treated as NSFW: safe = hentai, porn, sexy; questionable = hentai, porn; explicit = none. */
+  val SafetyLevels: Seq[String] = Seq("safe", "questionable", "explicit")
+  val InfotextKeys: Seq[String] = Seq(InfotextKey, SafetyInfotextKey, NsfwjsInfotextKey)
+  /** Extras checker labels and their engine names. */
+  val Checkers: Seq[(String, String)] = Seq("NudeNet" -> "nudenet", "NSFWJS" -> "nsfwjs", "SD safety checker" -> "safety_checker")
 
   def thresholdKey(label: String) = s"threshold_$label"
   def horizontalKey(label: String) = s"horizontal_$label"
@@ -40,6 +55,12 @@ object NsfwCheckerPlugin:
       sorted.flatMap(l => Seq(
         Text(horizontalKey(l), s"${friendly(l)} - horizontal multiplier", "1", placeholder = "1"),
         Text(verticalKey(l), s"${friendly(l)} - vertical multiplier", "1", placeholder = "1")))
+
+  private[plugins] def safetyLevel(v: Values): String =
+    val level = v.str("nsfwjs_safety_level", "safe").trim
+    if !SafetyLevels.contains(level) then
+      throw new IllegalArgumentException(s"NSFWJS filter: safety level must be one of ${SafetyLevels.mkString(", ")} (got '$level')")
+    level
 
   private[plugins] def number(v: Values, key: String, default: Double, nonNegative: Boolean = false): Double =
     val raw = v.str(key, Values.fmt(default)).trim
@@ -72,9 +93,27 @@ object NsfwCheckerPlugin:
     val keep = o.value.toSeq.filter((k, value) => Defaults.contains(k) && (k == "gen_filter_type" || !Defaults.get(k).contains(value)))
     ujson.Obj.from(keep).render()
 
-  /** PNG / MCP restoration. Images without the key leave the current setting alone (upstream keeps it in global
-    * settings, not per image); a malformed value restores nothing. */
+  /** PNG / MCP restoration. Images without any of the three keys leave the current setting alone (upstream keeps it
+    * in global settings, not per image); otherwise each checker is on exactly when its key is present (images from
+    * before indices 83 / 231 carry only the NudeNet key). A malformed value restores nothing. */
   def replay(fields: Map[String, String]): Option[Values] =
+    if !InfotextKeys.exists(fields.contains) then None
+    else
+      val safety: Option[Map[String, String]] = fields.get(SafetyInfotextKey) match
+        case None => Some(Map("safety_checker" -> "false", "safety_checker_live_preview" -> "false"))
+        case Some(SafetyFinal) => Some(Map("safety_checker" -> "true", "safety_checker_live_preview" -> "false"))
+        case Some(SafetyFinalAndPreviews) => Some(Map("safety_checker" -> "true", "safety_checker_live_preview" -> "true"))
+        case _ => None
+      val nsfwjs: Option[Map[String, String]] = fields.get(NsfwjsInfotextKey) match
+        case None => Some(Map("nsfwjs" -> "false"))
+        case Some(level) if SafetyLevels.contains(level) => Some(Map("nsfwjs" -> "true", "nsfwjs_safety_level" -> level))
+        case _ => None
+      val nudenet: Option[Values] =
+        if fields.contains(InfotextKey) then replayNudeNet(fields)
+        else Some(Values(Values.defaults(new NsfwCheckerPlugin().controls).map ++ Map("enabled" -> "true", "nudenet" -> "false")))
+      for n <- nudenet; s <- safety; j <- nsfwjs yield Values(n.map ++ s ++ j)
+
+  private def replayNudeNet(fields: Map[String, String]): Option[Values] =
     fields.get(InfotextKey).flatMap { raw =>
       scala.util.Try(ujson.read(raw)).toOption.collect { case o: ujson.Obj if raw.length <= 8192 => o }.flatMap { o =>
         def str(k: String, options: Seq[String]): Option[Option[String]] = o.value.get(k) match
@@ -113,22 +152,34 @@ object NsfwCheckerPlugin:
           val restored = scalars.flatMap((k, v) => v.get.map(k -> _)) ++
             arrays.flatMap((key, values) => Labels.zip(values.get).map((l, value) => key(l) -> value))
           val defaults = Values.defaults(new NsfwCheckerPlugin().controls).map
-          Some(Values(defaults ++ restored.toMap + ("enabled" -> "true")))
+          Some(Values(defaults ++ restored.toMap + ("enabled" -> "true") + ("nudenet" -> "true")))
       }
     }
 
-/** NudeNet NSFW Censor for generation and live preview (w-e-w/sd-webui-nudenet-nsfw-censor). */
+/** NSFW checks for generation and live preview: NudeNet region censoring (w-e-w/sd-webui-nudenet-nsfw-censor), the
+  * SD safety checker (AUTOMATIC1111/stable-diffusion-webui-nsfw-censor) and the NSFWJS filter
+  * (aria1th/sd-webui-nsfw-filter). */
 class NsfwCheckerPlugin extends HookPlugin:
   import NsfwCheckerPlugin.*
   def id = "nsfw_checker"
-  def name = "NudeNet NSFW Censor"
+  def name = "NSFW Checker"
   def hook = "nsfw_checker"
   override def description =
-    "Detects NSFW regions with the bundled NudeNet detector (CPU) and censors them in the final images, after " +
-    "ADetailer and Hires refinement, and in live previews. Detected images can also save an uncensored " +
-    "-before-censor copy and the -censor-mask; choose the categories, thresholds and region expansion below."
+    "Checks every final image after ADetailer and Hires refinement, just before it is saved. NudeNet (bundled, CPU) " +
+    "censors detected regions, also in live previews, and can save an uncensored -before-censor copy and the " +
+    "-censor-mask. The SD safety checker (CompVis/stable-diffusion-safety-checker, 1.2 GB, downloaded and hash-checked " +
+    "on first use; its model card states no licence) replaces flagged images with black; it does not check live " +
+    "previews unless asked. The NSFWJS filter (deepghs/imgutils-models nsfwjs.onnx, MIT, 10 MB, downloaded on first " +
+    "use) blurs images whose top class is NSFW at the safety level, in previews and in every saved file. The checks " +
+    "can miss content; they are not a guarantee."
   override def controls: Seq[Control] = Seq(
     Check("enabled", "Enabled"),
+    Check("nudenet", "NudeNet: censor detected regions (settings below)", true),
+    Check("safety_checker", "SD safety checker: replace flagged images with black"),
+    Check("safety_checker_live_preview", "SD safety checker: also black out flagged live previews (NUI addition, slow on CPU)"),
+    Check("nsfwjs", "NSFWJS filter: blur flagged images (radius 20)"),
+    Choice("nsfwjs_safety_level", "NSFWJS safety level (safe: hentai, porn, sexy; questionable: hentai, porn; explicit: off)",
+      SafetyLevels, "safe"),
     Choice("gen_filter_type", "Generation censor filter", Filters, "Gaussian Blur"),
     Choice("live_preview_filter_type", "Live preview censor filter", Filters, "Gaussian Blur"),
     Check("save_before_censor", "Save a copy of the image before applying censor", true),
@@ -159,20 +210,37 @@ class NsfwCheckerPlugin extends HookPlugin:
     "pixelation_factor" -> ujson.Num(v.double("pixelation_factor", 5)),
     "fill_color" -> ujson.Str(v.str("fill_color", "#000000").trim),
     "nms_threshold" -> ujson.Num(v.double("nms_threshold", 0.5)),
-    "verbose_detection" -> ujson.Bool(v.bool("verbose_detection"))) ++ categoryFields(v))
+    "verbose_detection" -> ujson.Bool(v.bool("verbose_detection")),
+    "nudenet" -> ujson.Bool(v.bool("nudenet", true)),
+    "safety_checker" -> ujson.Bool(v.bool("safety_checker")),
+    "safety_checker_live_preview" -> ujson.Bool(v.bool("safety_checker_live_preview")),
+    "nsfwjs" -> ujson.Bool(v.bool("nsfwjs")),
+    "nsfwjs_safety_level" -> ujson.Str(safetyLevel(v))) ++ categoryFields(v))
 
-  def infotextKeys(o: ujson.Obj): Seq[(String, String)] = Seq(InfotextKey -> encode(o))
+  def infotextKeys(o: ujson.Obj): Seq[(String, String)] =
+    def on(k: String) = o.value.get(k).contains(ujson.Bool(true))
+    (if o.value.get("nudenet").forall(_ == ujson.Bool(true)) then Seq(InfotextKey -> encode(o)) else Nil) ++
+      (if on("safety_checker") then Seq(SafetyInfotextKey -> (if on("safety_checker_live_preview") then SafetyFinalAndPreviews else SafetyFinal)) else Nil) ++
+      (if on("nsfwjs") then Seq(NsfwjsInfotextKey -> o.value.get("nsfwjs_safety_level").map(_.str).getOrElse("safe")) else Nil)
 
-/** NudeNet NSFW Censor for Extras: auto-detected regions and/or a custom mask, with upstream's override settings. */
+/** NSFW checks for Extras. NudeNet: auto-detected regions and/or a custom mask, with upstream's override settings.
+  * NSFWJS: the filter's save-time pass (and its /safety/predict check with Only report). SD safety checker: the
+  * generation check applied to one image (NUI addition). */
 class NsfwCheckerExtrasPlugin extends ExtrasPlugin:
   import NsfwCheckerPlugin.*
   def id = "nsfw_checker_extras"
-  def name = "NudeNet NSFW Censor"
+  def name = "NSFW Checker"
   override def description =
-    "Censors the image (or each txt2img result) like the extension's Extras tab: NudeNet auto-detection and an " +
+    "NudeNet censors the image (or each txt2img result) like the extension's Extras tab: auto-detection and an " +
     "optional custom mask (white = censor) are combined. The blur radius is in pixels; the mask blend scales with the " +
-    "image. No censor with Output only the mask gives just the mask."
+    "image. No censor with Output only the mask gives just the mask. NSFWJS blurs the whole image (radius 20) when " +
+    "its top class is NSFW at the safety level; the SD safety checker replaces a flagged image with black. With Only " +
+    "report the image is kept and the result is written to the infotext. Both download their model on first use."
   override def controls: Seq[Control] = Seq(
+    Choice("checker", "Checker", Checkers.map(_._1), "NudeNet"),
+    Choice("nsfwjs_safety_level", "NSFWJS safety level (safe: hentai, porn, sexy; questionable: hentai, porn; explicit: off)",
+      SafetyLevels, "safe"),
+    Check("report_only", "Only report (NSFWJS / SD safety checker): keep the image, write the result to the infotext"),
     Check("enable_nudenet", "NudeNet auto-detect", true),
     ImageFile("mask", "Custom mask (optional, white = censor)"),
     Choice("filter_type", "Censor filter", Filters.filterNot(_ == "Disable"), "Variable blur"),
@@ -190,7 +258,21 @@ class NsfwCheckerExtrasPlugin extends ExtrasPlugin:
     Check("verbose_detection", "Log detection details")
   ) ++ categoryControls
 
+  private[plugins] def checker(v: Values): String =
+    val label = v.str("checker", "NudeNet")
+    Checkers.collectFirst { case (`label`, engine) => engine }.getOrElse(
+      throw new IllegalArgumentException(s"NSFW Checker: checker must be one of ${Checkers.map(_._1).mkString(", ")} (got '$label')"))
+
   private[plugins] def toolParams(v: Values): Seq[(String, ujson.Value)] =
+    checker(v) match
+      case "nudenet" => nudenetParams(v)
+      case other =>
+        if v.bool("mask_only") || v.str("mask").trim.nonEmpty then
+          throw new IllegalArgumentException(s"NSFW Checker: a custom mask and Output only the mask need the NudeNet checker")
+        Seq("checker" -> ujson.Str(other), "report_only" -> ujson.Bool(v.bool("report_only"))) ++
+          (if other == "nsfwjs" then Seq("safety_level" -> ujson.Str(safetyLevel(v))) else Nil)
+
+  private def nudenetParams(v: Values): Seq[(String, ujson.Value)] =
     val filter = v.str("filter_type", "Variable blur")
     val blend = if filter == "Variable blur" then v.double("mask_blend_radius_variable_blur", 10) else v.double("mask_blend_radius", 0)
     Seq(
@@ -210,7 +292,32 @@ class NsfwCheckerExtrasPlugin extends ExtrasPlugin:
       categoryFields(v)
 
   def transform(img: BufferedImage, p: GenerationParams, v: Values, ctx: PluginContext): Seq[(BufferedImage, Seq[(String, String)])] =
-    val r = ImageTools.run(ctx, "nsfw_checker", img, toolParams(v)*)
+    val params = toolParams(v)
+    checker(v) match
+      case "nudenet" => nudenet(img, v, ctx, params)
+      case kind =>
+        val r = ImageTools.run(ctx, "nsfw_checker", img, params*)
+        try
+          val flagged = r.info.get("is_nsfw").contains("1")
+          val kept = v.bool("report_only")
+          val verdict = (flagged, kind) match
+            case (false, _) => "not NSFW"
+            case (true, "nsfwjs") => if kept then "NSFW (reported only)" else "NSFW (blurred)"
+            case (true, _) => if kept then "NSFW (reported only)" else "NSFW (black image)"
+          val post =
+            if kind == "nsfwjs" then
+              val level = safetyLevel(v)
+              val label = r.info.get("label").filter(_.nonEmpty)
+              NsfwjsExtrasInfotextKey -> (if level == "explicit" then "explicit; not classified"
+                else s"$level; $verdict${label.map(l => s"; top class $l").getOrElse("")}")
+            else SafetyExtrasInfotextKey -> verdict
+          if v.bool("save_mask") then ctx.log("NSFW Checker: only NudeNet produces a mask; none saved")
+          ctx.log(s"NSFW Checker: ${post._2}")
+          Seq((r.image, Seq(post)))
+        finally Support.deleteQuietly(r.outputs.values.toSeq*)
+
+  private def nudenet(img: BufferedImage, v: Values, ctx: PluginContext, params: Seq[(String, ujson.Value)]): Seq[(BufferedImage, Seq[(String, String)])] =
+    val r = ImageTools.run(ctx, "nsfw_checker", img, params*)
     try
       val censored = r.info.get("censored").contains("1")
       val custom = if v.str("mask").trim.nonEmpty then "; custom mask" else ""

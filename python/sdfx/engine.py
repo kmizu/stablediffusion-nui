@@ -1566,7 +1566,7 @@ class Engine(BaseEngine):
         req = self.parse_generation(params, mode, ctx)
         gp = req.params
         from . import nsfw_checker
-        nsfw_cfg = nsfw_checker.job_config(gp.hooks)
+        nsfw_cfg = nsfw_checker.job_config(gp.hooks, ctx)
         from . import img2img_hires_fix
         refine_config = hooks_mod.hook_config(gp.hooks, 'img2img_hires_fix', {})
         refine_config = img2img_hires_fix.normalize(refine_config) if refine_config is not None else None

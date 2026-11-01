@@ -201,7 +201,7 @@ object InspectGenerationMetadata:
       (if on.value.contains("semantic_guidance") then Set("SEGA Active", "SEGA Prompt", "SEGA Negative Prompt", "SEGA Warmup Period", "SEGA Edit Guidance Scale", "SEGA Tail Percentage Threshold", "SEGA Momentum Scale", "SEGA Momentum Beta") else Set.empty[String]) ++
       (if on.value.contains("agent_attention") then AgentAttentionPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("cd_tuner") then Set("CDT", "CDTC") else Set.empty[String]) ++
-      (if on.value.contains("nsfw_checker") then Set(NsfwCheckerPlugin.InfotextKey) else Set.empty[String]) ++
+      (if on.value.contains("nsfw_checker") then NsfwCheckerPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("characteristic_guidance") then Set(CharacteristicGuidancePlugin.Key) else Set.empty[String])
     val unconsumed = f.filterNot((key, _) => represented.contains(key))
     ujson.Obj("infotext" -> text, "generation_args" -> args, "always_on" -> on,
