@@ -16,7 +16,7 @@ foreach ($module in $modules) {
 }
 $before = (Get-FileHash -LiteralPath $jar -Algorithm SHA256).Hash
 $env:PYTHONPATH = Join-Path $package 'python'
-$classes = Join-Path $repo 'ui/target/scala-3.3.6/test-classes'
+$classes = Join-Path $repo 'target/out/jvm/scala-3.3.6/sdfx-ui/test-classes'
 $python = Join-Path $repo 'python/.venv-smoke/Scripts/python.exe'
 # Only the test harness is from test-classes; all product Scala/Python is extracted.
 # jpackage omits java.exe; SDNUI.exe bundled-runtime startup is checked separately.

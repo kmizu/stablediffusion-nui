@@ -231,7 +231,7 @@ claude mcp add stablediffusion-nui-dry -- D:/path/to/stablediffusion-nui/run.bat
 
 ### HTTP(起動中の GUI に接続)
 
-Settings → MCP で **Enable MCP HTTP server** を有効にし(ポート既定 7861、トークン任意)、アプリを再起動します。
+Settings → MCP で **Enable MCP HTTP server** を有効にし(ポート既定 7861、トークン任意)、OK を押すとすぐに起動します(再起動は不要です)。
 エンドポイントは `http://127.0.0.1:7861/mcp`(127.0.0.1 のみ)。ジョブは GUI のキューを通るので、プレビューとギャラリーに出ます。
 
 ```

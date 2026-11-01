@@ -22,6 +22,8 @@ lazy val commonSettings = Seq(
     "com.twelvemonkeys.imageio" % "imageio-webp" % "3.12.0",
     "org.scalameta" %% "munit" % munitV % Test
   ),
+  // sbt 2 puts jars on the classpath by default; tests read fixture resources as files.
+  exportJars := false,
   Test / fork := true,
   Test / baseDirectory := (ThisBuild / baseDirectory).value,
   Test / parallelExecution := false,

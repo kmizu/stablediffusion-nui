@@ -22,7 +22,7 @@ if ($before -ne (Get-FileHash -LiteralPath (Join-Path $repo 'target/stablediffus
   throw 'Extracted jar differs from the fresh assembly.'
 }
 $env:PYTHONPATH = Join-Path $package 'python'
-$classes = Join-Path $repo 'ui/target/scala-3.3.6/test-classes'
+$classes = Join-Path $repo 'target/out/jvm/scala-3.3.6/sdfx-ui/test-classes'
 $arguments = @('-cp', "$classes;$jar", 'sdfx.ui.RealImg2ImgHiresGenerationCheck', $OutputHome, $Python, $Model, $Lora)
 if ($Sdxl) { $arguments += 'sdxl' }
 # Only the harness comes from test classes; all product Scala/Python is extracted.

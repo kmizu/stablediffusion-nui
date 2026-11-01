@@ -14,7 +14,7 @@ foreach ($check in @(
   @{ project='engine'; main='sdfx.engine.RealVramServiceCheck'; home='service' },
   @{ project='ui'; main='sdfx.ui.RealVramViewCheck'; home='view' }
 )) {
-  $testClasses = Join-Path $repoRoot ($check.project + '/target/scala-3.3.6/test-classes')
+  $testClasses = Join-Path $repoRoot ('target/out/jvm/scala-3.3.6/sdfx-' + $check.project + '/test-classes')
   & $javaExe '-cp' "$testClasses;$packagedJar" $check.main (Join-Path $OutputHome $check.home) $pythonExe $Model
   if ($LASTEXITCODE -ne 0) { throw "Packaged VRAM check failed: $($check.main)" }
 }

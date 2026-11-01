@@ -55,7 +55,7 @@ $run = [ordered]@{
 $run | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $logDir 'run.json') -Encoding utf8
 git -C $repo status --short | Set-Content -LiteralPath (Join-Path $logDir 'git-status.txt') -Encoding utf8
 $env:PYTHONPATH = Join-Path $package 'python'
-$classes = Join-Path $repo 'ui/target/scala-3.3.6/test-classes'
+$classes = Join-Path $repo 'target/out/jvm/scala-3.3.6/sdfx-ui/test-classes'
 Get-ChildItem -LiteralPath (Join-Path $classes 'sdfx/ui') -Filter 'RealModelKeyword*Check*.class' |
   ForEach-Object { '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash, $_.Name } |
   Set-Content -LiteralPath (Join-Path $logDir 'harness-sha256.txt') -Encoding utf8

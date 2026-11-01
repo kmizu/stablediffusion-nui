@@ -269,7 +269,12 @@ class TransportSuite extends munit.FunSuite:
       Files.copy(script, pkg.resolve("__main__.py"))
       Files.writeString(home2.root.resolve("config/settings.json"), """{"last_model": "foo"}""")
       val java = Paths.get(System.getProperty("java.home"), "bin", "java").toString
-      val pb = new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), "sdfx.mcp.McpMain", "--mcp", "--dry-run", "--home", home2.root.toString)
+      // sbt 2 runs forked tests in a worker whose java.class.path lists only its own jars; use the test loader's URLs.
+      val loaders = Iterator.iterate(getClass.getClassLoader)(_.getParent).takeWhile(_ != null)
+      val urls = loaders.collect { case u: _root_.java.net.URLClassLoader => u.getURLs.toSeq }.flatten.map(u => Paths.get(u.toURI).toString)
+      val classpath = (urls.toSeq ++ System.getProperty("java.class.path").split(_root_.java.io.File.pathSeparator)).distinct
+        .mkString(_root_.java.io.File.pathSeparator)
+      val pb = new ProcessBuilder(java, "-cp", classpath, "sdfx.mcp.McpMain", "--mcp", "--dry-run", "--home", home2.root.toString)
       pb.redirectError(ProcessBuilder.Redirect.DISCARD)
       val p = pb.start()
       val w = p.getOutputStream

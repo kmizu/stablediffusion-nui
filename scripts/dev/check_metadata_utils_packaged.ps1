@@ -29,7 +29,7 @@ if ($WorkerDiagnostics) {
   [IO.Directory]::CreateDirectory([IO.Path]::GetFullPath($OutputHome)) | Out-Null
   $env:SDFX_METADATA_DIAGNOSTIC_FILE = Join-Path ([IO.Path]::GetFullPath($OutputHome)) 'metadata-worker-phases.log'
 }
-$classes = Join-Path $repo 'ui/target/scala-3.3.6/test-classes'
+$classes = Join-Path $repo 'target/out/jvm/scala-3.3.6/sdfx-ui/test-classes'
 $arguments = @('-cp', "$classes;$jar", 'sdfx.ui.RealMetadataUtilsCheck', $OutputHome, $Python, $StagedModel, $StagedLora)
 if ($ModelFamily -ne 'dry-run') { $arguments += $ModelFamily }
 & 'C:/Program Files/Java/jdk-21/bin/java.exe' @arguments

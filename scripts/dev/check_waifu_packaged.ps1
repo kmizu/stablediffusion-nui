@@ -36,7 +36,7 @@ if ($assets.Count -ne 9) { throw 'Packaged model manifest must contain all nine 
 $before = (Get-FileHash -LiteralPath $jar -Algorithm SHA256).Hash
 $env:PYTHONPATH = $pythonRoot
 $env:SDFX_WAIFU2X_CACHE = Join-Path $repoRoot 'outputs/waifu2x-models'
-$testClasses = Join-Path $repoRoot 'ui/target/scala-3.3.6/test-classes'
+$testClasses = Join-Path $repoRoot 'target/out/jvm/scala-3.3.6/sdfx-ui/test-classes'
 $pythonExe = Join-Path $repoRoot 'python/.venv-smoke/Scripts/python.exe'
 & $java '-cp' "$testClasses;$jar" 'sdfx.ui.RealWaifuCheck' $OutputHome $pythonExe $Model $InputImage
 if ($LASTEXITCODE -ne 0) { throw "Packaged Waifu2x acceptance failed: $LASTEXITCODE" }

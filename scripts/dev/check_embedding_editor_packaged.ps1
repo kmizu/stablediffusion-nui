@@ -29,7 +29,7 @@ $output = [IO.Path]::GetFullPath($OutputHome)
 [IO.Directory]::CreateDirectory($output) | Out-Null
 $reportPath = Join-Path $output 'package-run-complete.txt'
 if (Test-Path -LiteralPath $reportPath) { throw 'Use a fresh output directory for packaged acceptance.' }
-$classes = Join-Path $repo 'ui/target/scala-3.3.6/test-classes'
+$classes = Join-Path $repo 'target/out/jvm/scala-3.3.6/sdfx-ui/test-classes'
 $config = Join-Path $package 'app/SDNUI.cfg'
 Add-Type -Path (Join-Path $PSScriptRoot 'EditorOwnedJob.cs')
 $ownedJob = $null
