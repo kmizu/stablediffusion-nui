@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 133, todo 169, na 51.
+Totals: done 134, todo 168, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -308,7 +308,7 @@ Totals: done 133, todo 169, na 51.
 | 299 | [Card Master](https://github.com/SenshiSentou/sd-webui-cardmaster.git) | 53 | todo | `model_organizer` |  |
 | 300 | [cli-interruption](https://github.com/light-and-ray/sd-webui-cli-interruption.git) | 10 | na | `server-ops` | operating a shared web server (tunnels, TLS, multi-instance, kill buttons) |
 | 301 | [DemoFusion](https://github.com/sebaxakerhtc/sd-webui-demofusion.git) | 23 | todo | `demofusion` |  |
-| 302 | [Incantations](https://github.com/v0xie/sd-webui-incantations.git) | 153 | todo | `incantations` |  |
+| 302 | [Incantations](https://github.com/v0xie/sd-webui-incantations.git) | 153 | done | `incantations` | AlwaysOn Incantations: Smoothed Energy Guidance, S-CFG, Perturbed Attention Guidance with Saliency-Adaptive Noise Fusion, CFG scheduler with noise interval (17 schedule types) and Multi-Concept T2I-Zero (CbS, CTNMS), 29 XYZ axes, PNG/MCP replay, hires; Seek for Incantations (needs interrogators) and the attention-map saver are not provided; native PAG/SAG/Reference/Neutral/Composable combinations are rejected. Verified on real SD1.5 and SDXL, docs/incantations-verification.md. |
 | 303 | [Old SD firstpasser](https://github.com/light-and-ray/sd-webui-old-sd-firstpasser.git) | 32 | todo | `old_sd_firstpasser` |  |
 | 304 | [SD Image Editor](https://github.com/sontungdo/sd-image-editor.git) | 50 | todo | `image_editor` |  |
 | 305 | [TripoSR](https://github.com/AlbedoFire/sd-webui-triposr.git) | 16 | todo | `triposr` |  |

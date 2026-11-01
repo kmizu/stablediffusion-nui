@@ -97,7 +97,7 @@ S = {
     290: "todo:color_grading", 291: "na:webui-ux", 292: "todo:old_photo_restoration", 293: "na:webui-ux",
     294: "todo:core:prompt-tools", 295: "todo:token_downsampling", 296: "done:core:size-presets",
     297: "done:hires_fix_tweaks", 298: "todo:manga_maker", 299: "todo:model_organizer", 300: "na:server-ops",
-    301: "todo:demofusion", 302: "todo:incantations", 303: "todo:old_sd_firstpasser", 304: "todo:image_editor",
+    301: "todo:demofusion", 302: "done:incantations", 303: "todo:old_sd_firstpasser", 304: "todo:image_editor",
     305: "todo:triposr", 306: "na:webui-ux", 307: "todo:core:prompt-tools", 308: "todo:model_merge",
     309: "todo:core:hardware-info", 310: "done:core:png-info", 311: "na:webui-css", 312: "done:core:metadata-utils",
     313: "todo:prompt_expansion", 314: "todo:core:localization", 315: "na:external-app",
@@ -144,6 +144,7 @@ IMPLEMENTED = {
 
 
 SCOPE_NOTES = {
+    "incantations": "AlwaysOn Incantations: Smoothed Energy Guidance, S-CFG, Perturbed Attention Guidance with Saliency-Adaptive Noise Fusion, CFG scheduler with noise interval (17 schedule types) and Multi-Concept T2I-Zero (CbS, CTNMS), 29 XYZ axes, PNG/MCP replay, hires; Seek for Incantations (needs interrogators) and the attention-map saver are not provided; native PAG/SAG/Reference/Neutral/Composable combinations are rejected. Verified on real SD1.5 and SDXL, docs/incantations-verification.md.",
     "characteristic_guidance": "AlwaysOn characteristic guidance as the pinned extension: per-step iteration with all 13 controls, eps/v models, k-diffusion/DDIM/UniPC, SD1.5/SD2/SDXL incl. 9-channel inpainting, base pass only (hires restarts, ADetailer skipped), CHG infotext with PNG/MCP replay. QR solve replaces CPU lstsq so replays are exact. Many other guidance/branch plugins are rejected by name. SD1.5/SDXL real MCP checks with image inspection. See characteristic-guidance-verification.md.",
     "nsfw_checker": "Indices 238 (NudeNet NSFW Censor), 83 (A1111 safety-checker censor) and 231 (NSFWJS blurrer) in one plugin: bundled pinned NudeNet ONNX with hash check, 18 categories with thresholds/expansion, NMS, all mask shapes and filters, generation censoring after refinement with optional before/mask outputs, live preview, Extras with custom-mask union, MCP and PNG replay; SD safety checker (black image) and NSFWJS (safe/questionable/explicit blur, report-only Extras) are downloaded on first use with pinned revisions and SHA-256 checks. Classifiers have known false negatives; no HTTP /nudenet or /safety routes. SD1.5/SDXL real MCP checks with image inspection. See nsfw-checker-verification.md.",
     "cd_tuner": "AlwaysOn colour/detail tuner as the pinned extension: detail d1/d2 and hires hd1/hd2 via conv_in/norm_out/conv_out weights restored after every pass, hr-scaling, stop steps, Contrast 2, brightness and three colour axes, VAE saturation 1/2, the colour map, <cdt:>/<cdtc:> prompt tags, Apply once and CDT/CDTC infotext with PNG/MCP replay. Source quirks kept (Hr-Stop Step 0). Stop steps count pipeline steps (differs for second-order samplers). SD1.5/SDXL real MCP checks with image inspection. See cd-tuner-verification.md.",

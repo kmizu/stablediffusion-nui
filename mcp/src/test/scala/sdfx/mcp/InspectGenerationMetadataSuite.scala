@@ -342,3 +342,29 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("agent_attention"))
   }
+
+  test("Incantations source infotext becomes a typed candidate and its keys are consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("incant.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val text = "lion\nSteps: 20, Seed: 4, Size: 512x512, SEG Active: True, SEG Blur Sigma: 11, SEG Start Step: 0, " +
+      "SEG End Step: 150, PAG Active: True, PAG SANF: False, PAG Scale: 3, PAG Start Step: 0, PAG End Step: 150, " +
+      "CFG Interval Enable: True, CFG Interval Schedule: PCS (s=1.0), CFG Interval Low: 0.28, " +
+      "CFG Interval High: 5.42, T2I-0 Active: True, T2I-0 Tokens: \"1, 4\", INCANT Active: True"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("always_on")("incantations")
+    assertEquals(candidate("enabled").bool, true)
+    assertEquals(candidate("seg_active").bool, true)
+    assertEquals(candidate("pag_sanf").bool, false)
+    assertEquals(candidate("pag_scale").num, 3.0)
+    assertEquals(candidate("cfg_interval_schedule").str, "PCS (s=1.0)")
+    assertEquals(candidate("t2i0_tokens").str, "1, 4")
+    assertEquals(candidate("scfg_active").bool, false)
+    val unapplied = result("unapplied_fields").obj.keySet
+    assert(!unapplied.exists(k => sdfx.plugins.IncantationsPlugin.InfotextKeys.contains(k)), unapplied)
+    assert(unapplied.contains("INCANT Active"), unapplied) // Seek for Incantations is not provided
+    assert(!result("always_on").obj.contains("pag")) // the native PAG plugin uses other keys
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("incantations"))
+  }

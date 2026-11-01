@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from . import adapters, agent_attention, cd_tuner, characteristic_guidance, guidance, latent_ops, sampling_ext, semantic_guidance, unet_hooks
+from . import adapters, agent_attention, cd_tuner, characteristic_guidance, guidance, incantations, latent_ops, sampling_ext, semantic_guidance, unet_hooks
 from .hooks import coerce_bool, hook_config
 from .protocol import INVALID_PARAMS, UNSUPPORTED, EngineError
 
@@ -26,7 +26,7 @@ log = logging.getLogger("sdfx.extensions")
 EXTENSION_HOOKS = ("apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
                    "soft_inpainting", "sag", "neveroom", "reference", "revision", "ip_adapter", "controllllite",
                    "fooocus_inpaint", "photomaker", "face_restore", "img2imgalt", "semantic_guidance",
-                   "agent_attention", "cd_tuner", "characteristic_guidance") + sampling_ext.HOOKS
+                   "agent_attention", "cd_tuner", "characteristic_guidance", "incantations") + sampling_ext.HOOKS
 
 MODEL_SAMPLING_DEFAULTS = {"sampling": "default", "zsnr": False}
 SAG_DEFAULTS = {"scale": 0.5, "blur_sigma": 2.0}
@@ -298,6 +298,24 @@ def install(engine, pipe, task: str, gp, req, kw: dict, ctx, cleanups: list, *, 
             cleanups.append(pipe.vae.disable_slicing)
             if engine.cuda:
                 cleanups.append(torch.cuda.empty_cache)
+
+    # --- Incantations (SEG, S-CFG, PAG / CFG Scheduler, T2I-Zero) --------------------------------------------------
+    inc = cfg(gp, "incantations", incantations.DEFAULTS)
+    if inc:
+        others = {
+            "APG": bool(apg), "Mahiro": bool(mah), "Latent Modifier": bool(lm), "Rescale CFG": bool(rc),
+            "Dynamic Thresholding": hook_config(hooks, "dynamic_thresholding", {}) is not None,
+            "CFG Schedule": hook_config(hooks, "cfg_schedule", {}) is not None, "CD Tuner": bool(cdt),
+            "Detail Daemon": hook_config(hooks, "detail_daemon", {}) is not None,
+            "CADS": hook_config(hooks, "cads", {}) is not None, "Semantic Guidance": bool(sega),
+            "Reference": hook_config(hooks, "reference", {}) is not None, "MultiDiffusion": bool(md),
+            "HyperTile": hook_config(hooks, "hypertile", {}) is not None,
+            "Token Downsampling": hook_config(hooks, "token_downsampling", {}) is not None,
+            "Agent Attention": hook_config(hooks, "agent_attention", {}) is not None,
+            "PAG": "pag_scale" in kw, "Self Attention Guidance": plan.sag is not None,
+            "Neutral Prompt / Composable LoRA branches": branch_hooks is not None}
+        incantations.install(engine, pipe, gp, kw, ctx, inc, pass_=pass_, w=w, h=h, cfg_scale=cfg_scale, sched=sched,
+                             cleanups=cleanups, others=others)
 
     # --- self-attention token merging (last, so it wraps the final attn1 processors) -------------------------------
     aa = cfg(gp, "agent_attention", agent_attention.DEFAULTS)
