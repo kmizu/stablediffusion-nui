@@ -3,7 +3,7 @@ package sdfx.ui
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
 import javafx.application.Platform
-import javafx.scene.control.TextArea
+import javafx.scene.control.{ComboBox, TextArea}
 import javafx.stage.Stage
 import sdfx.core.config.TagCompleteSettings
 import sdfx.ui.view.TagSettingsPane
@@ -19,6 +19,18 @@ object NativeTagColorSettingsCheck:
           .getOrElse(throw new IllegalStateException("custom colour settings are unavailable"))
         val valid = """{"dataset":{"4":["red","blue"]}}"""
         field.setText(valid)
+        val modes = pane.node.lookup("#tac-wildcard-path-mode").asInstanceOf[ComboBox[String]]
+        require(modes.getSelectionModel.getSelectedIndex == 0, "old settings default to first difference")
+        modes.getSelectionModel.select(1)
+        require(pane.read()._2.wildcardPathMode == "next-folder", "selected mode must be saved")
+        modes.getSelectionModel.select(2)
+        require(pane.read()._2.wildcardPathMode == "always-full", "full-completion mode must be saved")
+        val future = new TagSettingsPane(None, TagCompleteSettings(wildcardPathMode = "future-mode"), stage)
+        val futureModes = future.node.lookup("#tac-wildcard-path-mode").asInstanceOf[ComboBox[String]]
+        require(futureModes.getValue.contains("future-mode"), "unknown saved mode must be visible")
+        require(future.read()._2.wildcardPathMode == "future-mode", "unmodified unknown mode must be retained")
+        futureModes.getSelectionModel.select(0)
+        require(future.read()._2.wildcardPathMode == "first-difference", "explicit change replaces the unknown mode")
         require(sdfx.core.json.SnakePickle.write(pane.read()._2).contains("dataset"), "valid settings must be retained")
         field.setText("{broken")
         require(scala.util.Try(pane.read()).isFailure, "invalid JSON must not be accepted")

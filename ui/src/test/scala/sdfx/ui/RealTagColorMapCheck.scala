@@ -75,6 +75,7 @@ object RealTagColorMapCheck:
         val root = dialog.get.getScene.getRoot.asInstanceOf[DialogPane]
         window.localization.localizer.sweepNow()
         require(root.lookupAll(".label").asScala.exists { case l: Label => l.getText.contains("指定したファイルでは"); case _ => false }, "Japanese palette explanation")
+        require(root.lookupAll(".label").asScala.exists { case l: Label => l.getText.contains("ワイルドカードの Tab 補完"); case _ => false }, "Japanese wildcard mode label")
         root.applyCss(); root.layout()
         require(ImageIO.write(SwingFXUtils.fromFXImage(dialog.get.getScene.snapshot(null), null), "png", out.resolve("settings-ja.png").toFile))
         root.lookup("#tac-tags").asInstanceOf[TextField].setText(tags.toString)

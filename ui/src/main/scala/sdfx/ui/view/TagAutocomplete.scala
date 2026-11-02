@@ -2,7 +2,7 @@ package sdfx.ui.view
 
 import javafx.application.Platform
 import javafx.geometry.Insets
-import javafx.scene.control.{Button, ButtonType, CheckBox, Dialog, Label, ListCell, ListView, Spinner, TextArea, TextField}
+import javafx.scene.control.{Button, ButtonType, CheckBox, ComboBox, Dialog, Label, ListCell, ListView, Spinner, TextArea, TextField}
 import javafx.scene.image.{Image, ImageView}
 import javafx.scene.input.{InputMethodEvent, KeyCode, KeyEvent}
 import javafx.scene.layout.{GridPane, HBox, StackPane, VBox}
@@ -185,6 +185,13 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
   private val preview = box("tac-preview", "Show extra network preview images", cfg.extraNetworkPreview)
   private val max = new Spinner[Integer](1, 50, cfg.maxResults)
   max.setId("tac-max"); max.setEditable(true)
+  private val pathModes = Vector("first-difference", "next-folder", "always-full")
+  private val pathMode = new ComboBox[String]()
+  pathMode.setId("tac-wildcard-path-mode")
+  pathMode.getItems.addAll("To first difference", "To next folder", "Always fully")
+  private val currentPathMode = pathModes.indexOf(cfg.wildcardPathMode)
+  if currentPathMode < 0 then pathMode.getItems.add(s"Unsupported saved mode: ${cfg.wildcardPathMode}")
+  pathMode.getSelectionModel.select(if currentPathMode < 0 then pathModes.size else currentPathMode)
   private val colors = new TextArea(cfg.categoryColorMap)
   colors.setId("tac-colormap"); colors.setPrefRowCount(3); colors.setWrapText(true)
   colors.setPromptText("{\"danbooru\": {\"4\": [\"lightgreen\", \"darkgreen\"]}}")
@@ -217,7 +224,7 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
       new Label("Local files only; nothing is downloaded. Leave a path empty to turn that source off."),
       row("Tag CSV", tags, csv), row("Translation CSV", translation, csv), row("Extra tag CSV", extra, csv),
       row("Chants JSON", chantsField, new FileChooser.ExtensionFilter("JSON", "*.json")),
-      options, maxRow, new Label("Category colours JSON (source: category: [dark, light])"),
+      options, maxRow, new HBox(6, new Label("Wildcard Tab completion"), pathMode), new Label("Category colours JSON (source: category: [dark, light])"),
       missingHelp, colors, colorError, help)
     v.setPadding(new Insets(4))
     v
@@ -231,7 +238,8 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
       chantsJson = opt(chantsField), maxResults = n, replaceUnderscores = underscores.isSelected, escapeParens = escape.isSelected,
       appendComma = comma.isSelected, searchByAlias = alias.isSelected, onlyShowAlias = onlyAlias.isSelected,
       wildcards = wildcards.isSelected, extraNetworks = networks.isSelected, chants = chantsBox.isSelected,
-      loraTriggerWords = trigger.isSelected, extraNetworkPreview = preview.isSelected, categoryColorMap = colors.getText))
+      loraTriggerWords = trigger.isSelected, extraNetworkPreview = preview.isSelected, categoryColorMap = colors.getText,
+      wildcardPathMode = pathModes.lift(pathMode.getSelectionModel.getSelectedIndex).getOrElse(cfg.wildcardPathMode)))
 
 /** What the popup needs from its owner. */
 trait CompletionSource:
@@ -244,6 +252,7 @@ trait CompletionSource:
   def wildcardContext: Any = ()
   def wildcardError(error: Throwable): Unit = ()
   def maxResults: Int = 12
+  def wildcardPathMode: String = "first-difference"
 
 /** Popup does not take focus, so native text editing and IME stay in the TextArea. */
 final class TagAutocomplete(area: TextArea, source: CompletionSource):
@@ -262,7 +271,8 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
       override def wildcardLines(name: String)(done: Either[Throwable, Vector[String]] => Unit): Unit = dictionary.wildcardLines(name)(done)
       override def wildcardContext: Any = dictionary.wildcardContext
       override def wildcardError(error: Throwable): Unit = dictionary.wildcardError(error)
-      override def maxResults: Int = dictionary.config.maxResults)
+      override def maxResults: Int = dictionary.config.maxResults
+      override def wildcardPathMode: String = dictionary.config.wildcardPathMode)
   private val popup = new Popup()
   private val list = new ListView[Suggestion]()
   private val linePrevious = new Button("Previous")
@@ -420,16 +430,23 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
     current.exists { (text, result) =>
       val items = result.items
       val caret = area.getCaretPosition
-      if selectedByKeyboard || result.wildcardPrefix.isEmpty || !items.forall(_.kind == sdfx.ui.vm.SuggestionKind.Wildcard) ||
-          caret < result.start + 2 || caret > result.end || text != area.getText then false
+      val mode = source.wildcardPathMode
+      if items.isEmpty || !items.forall(_.kind == sdfx.ui.vm.SuggestionKind.Wildcard) ||
+          caret < result.start + 2 || caret > result.end || text != area.getText || mode == "always-full" then false
       else
         val typed = text.substring(result.start + 2, caret)
-        val common = result.wildcardPrefix.get
-        if caret < result.end || common.length <= typed.length || !common.regionMatches(true, 0, typed, 0, typed.length) then true
+        val prefix = if mode == "next-folder" then
+          Option(list.getSelectionModel.getSelectedItem).flatMap { item =>
+            val slash = item.label.indexOf('/', typed.length)
+            if slash < 0 then None else Some(item.label.substring(0, slash + 1))
+          }
+        else if selectedByKeyboard then None else result.wildcardPrefix
+        if prefix.isEmpty then false
+        else if caret < result.end || prefix.get.length <= typed.length || !prefix.get.regionMatches(true, 0, typed, 0, typed.length) then true
         else
           accepting = true
           try
-            val extension = common.substring(typed.length)
+            val extension = prefix.get.substring(typed.length)
             area.insertText(caret, extension)
             area.positionCaret(caret + extension.length)
           finally accepting = false

@@ -54,6 +54,8 @@ object RealTagAutocompleteExtrasCheck:
     Files.writeString(wildcardDir.resolve("animals.txt"), "a red fox\n")
     Files.writeString(wildcardDir.resolve("hair.txt"), "short hair\n")
     Files.createDirectories(wildcardDir.resolve("colors"))
+    Files.createDirectories(wildcardDir.resolve("costumes"))
+    Files.writeString(wildcardDir.resolve("costumes/blue.txt"), "blue dress\n")
     Files.writeString(wildcardDir.resolve("colors/warm.txt"), (Vector("orange") ++ (2 to 15).map(n => s"item $n")).mkString("\n"))
     Files.writeString(wildcardDir.resolve("colors/cold.txt"), "blue\n")
     val files = Files.createDirectories(run.resolve("data"))
@@ -124,13 +126,14 @@ object RealTagAutocompleteExtrasCheck:
         field("tac-tags").setText(tagCsv.toString); field("tac-translation").setText(translationCsv.toString)
         field("tac-extra").setText(extraCsv.toString); field("tac-chants-file").setText(chantsJson.toString)
         root.lookup("#tac-colormap").asInstanceOf[TextArea].setText("""{"tags":{"4":["red","blue"],"1":["gold","purple"]},"extra":{"0":["lime","orange"]}}""")
+        root.lookup("#tac-wildcard-path-mode").asInstanceOf[javafx.scene.control.ComboBox[String]].getSelectionModel.select(1)
         check("dialog exposes the new options")(Seq("tac-underscores", "tac-escape", "tac-comma", "tac-alias", "tac-wildcards",
           "tac-networks", "tac-chants", "tac-trigger", "tac-preview", "tac-legacy", "tac-extra-after").forall(id => root.lookup("#" + id).isInstanceOf[CheckBox]))
         ImageIO.write(SwingFXUtils.fromFXImage(dialog.getScene.snapshot(null), null), "png", run.resolve("01-dialog.png").toFile)
         root.getButtonTypes.asScala.find(_.getText == "Save").map(root.lookupButton).get.asInstanceOf[Button].fire()
       }
       eventually("data loaded") { fx { window.ctx.tagDictionary.data.translations.size == 2 && window.ctx.tagDictionary.data.chants.size == 1 &&
-        window.ctx.tagDictionary.data.extra.size == 1 && window.ctx.tagDictionary.tags.size == 3 && window.ctx.tagDictionary.data.wildcards.size == 4 } }
+        window.ctx.tagDictionary.data.extra.size == 1 && window.ctx.tagDictionary.tags.size == 3 && window.ctx.tagDictionary.data.wildcards.size == 5 } }
       check("dialog Save persisted paths in settings")(services.settings.tagComplete.translationCsv.contains(translationCsv.toString) &&
         services.settings.tagAutocompleteCsv.contains(tagCsv.toString) && services.settings.tagComplete.chantsJson.contains(chantsJson.toString))
       fx { area.requestFocus() }
@@ -138,6 +141,10 @@ object RealTagAutocompleteExtrasCheck:
 
       // The real dictionary scans the real wildcard roots and reads the chosen file asynchronously.
       fx {
+        check("next-folder mode saved")(services.settings.tagComplete.wildcardPathMode == "next-folder")
+        area.setText("__co"); area.positionCaret(area.getLength)
+        key(area, KeyCode.TAB)
+        check("next-folder Tab follows the first matching branch")(area.getText == "__colors/")
         area.setText("__col"); area.positionCaret(area.getLength)
         key(area, KeyCode.TAB)
         check("partial wildcard path")(area.getText == "__colors/")

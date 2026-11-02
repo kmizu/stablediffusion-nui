@@ -152,7 +152,7 @@ class CompletionEngineSuite extends FunSuite:
     assertEquals(old.tagComplete, TagCompleteSettings())
     assertEquals(old.tagAutocompleteCsv, Some("tags.csv"))
     val changed = old.copy(tagComplete = TagCompleteSettings(translationCsv = Some("t.csv"), maxResults = 7, appendComma = true, extraAfter = false,
-      categoryColorMap = """{"danbooru":{"4":["red","blue"]}}"""))
+      categoryColorMap = """{"danbooru":{"4":["red","blue"]}}""", wildcardPathMode = "next-folder"))
     sdfx.core.config.Settings.save(file, changed)
     assertEquals(sdfx.core.config.Settings.load(file).tagComplete, changed.tagComplete)
   }

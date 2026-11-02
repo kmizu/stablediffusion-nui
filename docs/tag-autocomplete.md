@@ -29,7 +29,11 @@ text around it stay.
 Wildcard folders: `wildcards/` and `models/wildcards/` of the app home, plus the Dynamic Prompts plugin's
 "Extra wildcard folders". LoRA and embedding names come from the model lists.
 
-With several wildcard paths, Tab extends the common prefix; use Up/Down then Enter or Tab to choose a file.
+Wildcard Tab completion has three modes in the Tags settings. The default, **To first difference**,
+extends the shared prefix and an arrow-key selection followed by Tab chooses that file. **To next
+folder** follows the highlighted candidate to its next `/`; **Always fully** chooses the highlighted
+file immediately. Enter always chooses the highlighted file. Partial completion leaves text to
+the right of the caret untouched.
 After a file is chosen, its lines appear as a second list. Choose a line to insert its text, or press Escape
 to keep the `__name__` reference. When there are more lines than the configured maximum, use PageUp/PageDown
 or the Previous/Next buttons to change pages. Files are limited to 1 MiB and the first 5,000 non-comment,

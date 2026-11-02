@@ -8,7 +8,7 @@ is in `tag-autocomplete-verification.md`; new work remains unverified until its 
 | Area | Existing implementation / evidence | Remaining work or limit |
 |---|---|---|
 | Tag CSV, aliases, rank, translations, extra file | Native completion and settings; real MainWindow checks | Large dictionaries not timed; full-prompt translation preview absent |
-| Wildcard files | Nested `.txt` names, first-difference Tab completion and line selection; real MainWindow, native mouse and SD1.5/SDXL generation checked in `tag24-wildcard-verification.md` | Upstream next-folder and always-fully modes have no settings yet; extracted-package GUI unverified |
+| Wildcard files | Nested `.txt` names, three Tab modes and line selection; next-folder real MainWindow and SD1.5/SDXL generation checked in `tag24-wildcard-modes-verification.md` | Always-full and selected-branch next-folder have native synthetic checks only; extracted-package GUI unverified |
 | Extra networks | LoRA, LyCORIS spelling, embedding, sidecar activation text and previews; real LoRA checked | Actual embedding and LyCORIS UI/model use unverified; embedding v1/v2 filter and model-keyword lists absent; hypernetworks unavailable in host |
 | Chants | JSON parsing, term matching and prompt insertion; numeric colour categories use the current main tag CSV's palette | Source-key collision for files sharing a stem is inherited from the format |
 | Display and controls | Keyboard, mouse, options, synthetic IME composition checks; source-keyed dark/light category colour JSON | Configurable keys and delay, wiki links, per-model lists absent; physical Japanese IME untested |
