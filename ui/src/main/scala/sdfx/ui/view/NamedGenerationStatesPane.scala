@@ -8,7 +8,7 @@ import java.nio.file.Files
 import java.nio.file.{LinkOption, StandardOpenOption}
 import sdfx.core.presets.*
 import sdfx.ui.Fx
-import sdfx.ui.presets.{GenerationHistoryStore, NamedGenerationStates, NativePresetFields, NativePresetsController, NativePresetsSession, StateCategory}
+import sdfx.ui.presets.{GenerationHistory, GenerationHistoryStore, NamedGenerationStates, NativePresetFields, NativePresetsController, NativePresetsSession, StateCategory}
 import sdfx.ui.vm.Mode
 
 /** Separate full-state library plus automatic history; selected-field presets are never read or mutated here. */
@@ -63,12 +63,20 @@ final class NamedGenerationStatesPane(
   favouritesList.setId("generation-favourites-list")
   favouritesList.setPrefHeight(150)
   favouritesList.getSelectionModel.setSelectionMode(SelectionMode.MULTIPLE)
+  private val historySearch = new TextField()
+  historySearch.setId("generation-history-search")
+  historySearch.setPromptText("Search name, prompts, checkpoint or sampler; separate terms with commas")
+  private val favouritesSearch = new TextField()
+  favouritesSearch.setId("generation-favourites-search")
+  favouritesSearch.setPromptText("Search name, prompts, checkpoint or sampler; separate terms with commas")
   private val autosave = new CheckBox("Record every generation automatically (newest 50 per mode)")
   autosave.setId("generation-history-auto")
   autosave.setSelected(history.autosave)
   private var historyEntries = Vector.empty[PresetRecord]
   private var favouriteEntries = Vector.empty[PresetRecord]
   private var historyPending = false
+  private var historyLoading = false
+  private var historyRequest = 0L
   private val categoryBoxes = StateCategory.values.toVector.map { c =>
     val box = new CheckBox(c.label)
     box.setId("generation-states-cat-" + c.id)
@@ -126,16 +134,16 @@ final class NamedGenerationStatesPane(
   private def failure(error: PresetError): Unit = status.setText(NamedGenerationStates.describe(error))
   private def refreshButtons(): Unit =
     save.setDisable(pending || readOnly || loaded.isEmpty)
-    restore.setDisable(pending || selected.isEmpty)
-    restoreField.setDisable(pending || selected.isEmpty || fieldPicker.getValue == null)
+    restore.setDisable(pending || (historyActive && (historyPending || historyLoading)) || selected.isEmpty)
+    restoreField.setDisable(pending || (historyActive && (historyPending || historyLoading)) || selected.isEmpty || fieldPicker.getValue == null)
     delete.setDisable(pending || readOnly || namedSelected.isEmpty)
-    keep.setDisable(pending || readOnly || loaded.isEmpty || historySelected.size != 1)
-    historyDelete.setDisable(historyPending || historySelected.isEmpty)
-    favouritesDelete.setDisable(historyPending || historySelected.isEmpty)
-    historyFavourite.setDisable(historyPending || historySelected.isEmpty)
-    favouritesToggle.setDisable(historyPending || historySelected.isEmpty)
-    historyClear.setDisable(historyPending || historyEntries.isEmpty)
-    historyImport.setDisable(historyPending)
+    keep.setDisable(pending || historyPending || historyLoading || readOnly || loaded.isEmpty || historySelected.size != 1)
+    historyDelete.setDisable(historyPending || historyLoading || historySelected.isEmpty)
+    favouritesDelete.setDisable(historyPending || historyLoading || historySelected.isEmpty)
+    historyFavourite.setDisable(historyPending || historyLoading || historySelected.isEmpty)
+    favouritesToggle.setDisable(historyPending || historyLoading || historySelected.isEmpty)
+    historyClear.setDisable(historyPending || historyLoading || historyEntries.isEmpty)
+    historyImport.setDisable(historyPending || historyLoading)
     reload.setDisable(pending)
     backup.setDisable(pending)
 
@@ -310,7 +318,7 @@ final class NamedGenerationStatesPane(
   favouritesToggle.setId("generation-favourites-toggle")
   private val historyClear = W.button("Clear history", "Remove non-favourite history entries of this mode") {
     val target = mode
-    if confirm("Clear history?", s"Delete non-favourite ${target.key} history entries? Favourites are kept.") then
+    if confirm("Clear history?", s"Delete all non-favourite ${target.key} history entries, including those hidden by search? Favourites are kept.") then
       historyPending = true
       refreshButtons()
       history.clear(target) { result =>
@@ -415,11 +423,11 @@ final class NamedGenerationStatesPane(
   private val namedTab = new Tab("Named states", new VBox(8, list))
   namedTab.setId("generation-states-tab-named")
   namedTab.setClosable(false)
-  private val historyTab = new Tab("History", new VBox(8, autosave, historyList,
+  private val historyTab = new Tab("History", new VBox(8, autosave, historySearch, historyList,
     new HBox(8, keep, historyFavourite, historyDelete, historyClear, historyImport)))
   historyTab.setId("generation-states-tab-history")
   historyTab.setClosable(false)
-  private val favouritesTab = new Tab("Favourites", new VBox(8, favouritesList, new HBox(8, favouritesToggle, favouritesDelete)))
+  private val favouritesTab = new Tab("Favourites", new VBox(8, favouritesSearch, favouritesList, new HBox(8, favouritesToggle, favouritesDelete)))
   favouritesTab.setId("generation-states-tab-favourites")
   favouritesTab.setClosable(false)
   tabs.getTabs.addAll(namedTab, historyTab, favouritesTab)
@@ -434,9 +442,18 @@ final class NamedGenerationStatesPane(
   node.setPadding(new Insets(16))
   VBox.setVgrow(detail, Priority.ALWAYS)
   history.onChange(() => refreshHistory())
+  historySearch.textProperty.addListener((_, _, _) => applyHistoryFilter())
+  favouritesSearch.textProperty.addListener((_, _, _) => applyHistoryFilter())
   refreshButtons()
 
   def openMode(value: Mode): Unit =
+    if mode != value then
+      historyEntries = Vector.empty
+      favouriteEntries = Vector.empty
+      historyList.getSelectionModel.clearSelection()
+      favouritesList.getSelectionModel.clearSelection()
+      historyList.getItems.clear()
+      favouritesList.getItems.clear()
     mode = value
     heading.setText(s"Named generation states — ${mode.key}")
     refreshList()
@@ -444,19 +461,35 @@ final class NamedGenerationStatesPane(
 
   private def refreshHistory(): Unit =
     val target = mode
+    historyRequest += 1
+    val request = historyRequest
+    historyLoading = true
+    refreshButtons()
     history.listGroups(target) {
-      case Left(error) => if !closed then failure(error)
-      case Right((entries, favourites)) => if !closed && target == mode then
-        val old = historyList.getSelectionModel.getSelectedItems.toArray.toVector.collect { case r: PresetRecord => r.id }.toSet
-        val oldFav = favouritesList.getSelectionModel.getSelectedItems.toArray.toVector.collect { case r: PresetRecord => r.id }.toSet
-        historyEntries = entries.reverse
-        favouriteEntries = favourites.reverse
-        historyList.getItems.setAll(historyEntries*)
-        historyEntries.filter(e => old(e.id)).foreach(historyList.getSelectionModel.select)
-        favouritesList.getItems.setAll(favouriteEntries*)
-        favouriteEntries.filter(e => oldFav(e.id)).foreach(favouritesList.getSelectionModel.select)
-        showSelected()
+      case result if !closed && target == mode && request == historyRequest =>
+        historyLoading = false
+        result match
+          case Left(error) =>
+            historyEntries = Vector.empty
+            favouriteEntries = Vector.empty
+            applyHistoryFilter()
+            failure(error)
+          case Right((entries, favourites)) =>
+            historyEntries = entries.reverse
+            favouriteEntries = favourites.reverse
+            applyHistoryFilter()
+      case _ => ()
     }
+
+  private def applyHistoryFilter(): Unit =
+    def update(list: ListView[PresetRecord], records: Vector[PresetRecord], query: String): Unit =
+      val selected = list.getSelectionModel.getSelectedItems.toArray.toVector.collect { case r: PresetRecord => r.id }.toSet
+      val visible = records.filter(GenerationHistory.matchesSearch(_, query))
+      list.getItems.setAll(visible*)
+      visible.filter(r => selected(r.id)).foreach(list.getSelectionModel.select)
+    update(historyList, historyEntries, historySearch.getText)
+    update(favouritesList, favouriteEntries, favouritesSearch.getText)
+    showSelected()
 
   private def refreshList(): Unit =
     val old = Option(list.getSelectionModel.getSelectedItem)

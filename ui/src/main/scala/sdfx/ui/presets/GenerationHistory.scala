@@ -38,6 +38,13 @@ object StateCategory:
 /** Automatic, capped per-mode generation history kept apart from the manual named-state library. */
 object GenerationHistory:
   val DefaultLimit = 50
+  /** Comma-separated terms all need to match one of the searchable saved fields or the name. */
+  def matchesSearch(record: PresetRecord, query: String): Boolean =
+    val terms = Option(query).getOrElse("").split(",").toVector.map(_.trim.toLowerCase(java.util.Locale.ROOT)).filter(_.nonEmpty)
+    val keys = Set("generation.prompt", "generation.negativePrompt", "generation.sampler", "model.checkpoint")
+    val values = record.fields.toVector.collect { case (key, PresetAtom.Text(text)) if keys(key.render) => text }
+    val searchable = (record.name +: values).map(_.toLowerCase(java.util.Locale.ROOT))
+    terms.forall(term => searchable.exists(_.contains(term)))
   def collectionId(mode: Mode): String = s"history-${mode.key}"
   def favouritesId(mode: Mode): String = s"favourites-${mode.key}"
   private val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")

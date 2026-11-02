@@ -1,5 +1,19 @@
 # State Manager history and category restore (#23, partial)
 
+## 2026-11-03 履歴検索と mode 切替
+
+main への部分統合時、`GenerationHistorySuite` 14件、`RealNamedGenerationStatesCheck`、`ui/assembly` が exit 0。JAR SHA-256 は `f4c7ca9245c0bcc1f003f482c7cef3a186971963e87dfdc2efb53085cda184fe`。下記の実モデル試験は分離 worktree の source-class GUI によるもので、この main JAR や配布版の実測ではない。
+
+上流固定 revision の検索は名前・prompt・negative prompt・checkpoint・sampler をカンマ区切りの AND 条件で検索する。NUI の History / Favourites それぞれに同じ対象の検索を追加し、大文字小文字を区別しない。検索で隠れた選択は解除し、Clear history はフィルタ外も消すことを確認画面に明示した。
+
+独立レビューで、mode 切替直後に古い mode の一覧・選択が非同期読込み完了まで残る問題が見つかった。旧一覧を直ちに消して履歴操作を読込み中無効化し、古い request の成功・失敗 callback は無視する。修正前 GUI は旧項目残存で失敗し、修正後 `GenerationHistorySuite` 14/14 と source-class の実 MainWindow offline GUI が成功。検索と選択解除・2 mode の切替を確認し `outputs/history-search-final/named-states-history-search.png` を目視した。callback の到着順を人工的に逆転させた試験、配布 EXE、物理操作は未検証。この時点では追加 GPU 試験は行っていなかった。
+
+追加 SD1.5 実機試験では画像2枚の生成・履歴記録後、お気に入り2件を待つ箇所で timeout（`outputs/history-search-real-sd15`）。サムネイル生成後の非同期再読込み中はボタンが一時無効になるため、テストが無効なボタンを発火した可能性がある。テストで選択数とボタン有効を同じ FX callback で確認して発火するよう改めたが、再試験まで原因確定・成功とは扱わない。SDXL は実行されなかった。
+
+再試験 `outputs/history-search-real2-sd15` と診断 `outputs/history-search-diagnose-sd15` でも test の待機条件が失敗。診断では items=2、selected=2、button disabled=true。test helper が成功した条件をもう一度評価するため、条件内でボタンを発火した直後の pending 状態を見て失敗していた。発火を一回に限定して修正、初回 timeout の原因は確定していない。
+
+修正後の source-class 実 MainWindow と実エンジンで SD1.5 512×512、SDXL 832×832、各8 steps の両方が `HISTORY_REAL_OK`。2 件の favourites を検索語 `girl, KIMONO` で絞り、prompt を復元して seed 7102 で生成、PNG metadata に prompt・seed を確認。結果 `outputs/history-search-real3-sd15/history-real-700894323517528573` と `outputs/history-search-real3-sdxl/history-real-1538823375784163188` の `00002-7102.png` を目視し、両方とも桜と赤い着物の人物と確認した。SHA-256 はそれぞれ `720006d73e6113b03c2435a3123a4467e69a31eb6293118c54b8c1711e134533` と `c92e297e7a04cba17c2d6933696fafc08f8447176bd21019d764c205cc381803`。配布 EXE は未検証。
+
 ## 2026-11-03: お気に入りと複数選択（部分統合）
 
 main 統合時に `PresetStoreSuite` 18件、`NamedGenerationStatesSuite` と `GenerationHistorySuite` 計18件、`RealNamedGenerationStatesCheck`、`ui/assembly` が exit 0。JAR SHA-256 は `58cc4ac59ec7abbfa98b1c63c12d83cc731c0e001f394f375b22847db3d407ba`。下記の実モデル検証は分離 worktree の source-class GUI によるもので、main JAR や配布 EXE GUI の実測ではない。

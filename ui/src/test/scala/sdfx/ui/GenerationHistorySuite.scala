@@ -27,6 +27,19 @@ class GenerationHistorySuite extends munit.FunSuite:
   private def values(n: Int): Map[FieldKey, PresetAtom] =
     Map(FieldKey(Vector("generation", "steps")) -> PresetAtom.Integer(n))
 
+  test("history search requires each comma term across supported fields without case sensitivity") {
+    val fields = Map(FieldKey(Vector("generation", "prompt")) -> PresetAtom.Text("Blue Fox"),
+      FieldKey(Vector("generation", "negativePrompt")) -> PresetAtom.Text("blurry"),
+      FieldKey(Vector("generation", "sampler")) -> PresetAtom.Text("Euler"),
+      FieldKey(Vector("model", "checkpoint")) -> PresetAtom.Text("DreamXL"),
+      FieldKey(Vector("plugin", "secret")) -> PresetAtom.Text("not searched"))
+    val record = PresetRecord(java.util.UUID.randomUUID(), "My Scene", fields, None, Set.empty, Vector.empty, Vector.empty)
+    assert(GenerationHistory.matchesSearch(record, " FOX,  dreamxl, BLURRY, euler, scene"))
+    assert(GenerationHistory.matchesSearch(record, " , "))
+    assert(!GenerationHistory.matchesSearch(record, "fox, absent"))
+    assert(!GenerationHistory.matchesSearch(record, "not searched"))
+  }
+
   test("imported history precedes existing history and is evicted first") {
     val json = """{"defaults":{"d":{"txt2img/Prompt":"imported"}},"entries":{"1700000000000":{"saveVersion":"2.0","type":"txt2img","defaults":"d","groups":["history"],"quickSettings":{},"componentSettings":{}}}}"""
     val out = new java.io.ByteArrayOutputStream()

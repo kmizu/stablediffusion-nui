@@ -159,19 +159,39 @@ object RealGenerationHistoryCheck:
       require(historyItems.head.fields.exists((k, v) => k.render == "generation.seed" && v.toString.contains("7102")), "newest entry must be first")
       note("second Generate recorded a second entry, newest first")
       selectHistory(0, 1)
-      fx { control[Button]("generation-history-favourite").fire() }
+      var favouriteFired = false
+      try eventually("history selection ready after thumbnail refresh") { fx {
+        val list = control[ListView[PresetRecord]]("generation-history-list")
+        val button = control[Button]("generation-history-favourite")
+        if favouriteFired then true
+        else if list.getSelectionModel.getSelectedItems.size == 2 && !button.isDisabled then
+          button.fire()
+          favouriteFired = true
+          true
+        else false
+      }}
+      catch case error: Throwable =>
+        val state = fx {
+          val list = control[ListView[PresetRecord]]("generation-history-list")
+          s"items=${list.getItems.size} selected=${list.getSelectionModel.getSelectedItems.size} disabled=${control[Button]("generation-history-favourite").isDisabled} tab=${control[TabPane]("generation-states-tabs").getSelectionModel.getSelectedIndex} status=${control[TextArea]("generation-states-status").getText}"
+        }
+        throw new IllegalStateException(state, error)
       eventually("two favourites") { fx {
         control[TabPane]("generation-states-tabs").getSelectionModel.select(2)
         control[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 2
       }}
       fx {
-        control[ListView[PresetRecord]]("generation-favourites-list").getSelectionModel.clearAndSelect(1)
+        control[TextField]("generation-favourites-search").setText("girl, KIMONO")
+        val filtered = control[ListView[PresetRecord]]("generation-favourites-list")
+        require(filtered.getItems.size == 1, "favourites search should find the kimono prompt")
+        filtered.getSelectionModel.clearAndSelect(0)
         control[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
       }
       confirmFire("generation-states-restore-field")
       fx {
         require(window.vms(Mode.Txt2Img).prompt.get == paramsA.prompt)
         require(window.vms(Mode.Txt2Img).seed.get == 7102L)
+        control[TextField]("generation-favourites-search").clear()
         control[CheckBox]("generation-history-auto").setSelected(false)
       }
       val imageFavourite = generate()

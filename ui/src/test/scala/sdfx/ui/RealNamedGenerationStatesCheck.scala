@@ -325,6 +325,30 @@ object RealNamedGenerationStatesCheck:
       eventually("two history entries") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 2) }
       fx {
         val list = node[ListView[PresetRecord]]("generation-history-list")
+        list.getSelectionModel.clearAndSelect(0)
+        window.openGenerationStates(Mode.Txt2Img)
+        require(list.getItems.isEmpty && list.getSelectionModel.getSelectedItems.isEmpty, "old mode history remains actionable")
+        require(node[Button]("generation-history-delete").isDisabled, "history actions active while loading")
+        window.openGenerationStates(mode)
+      }
+      eventually("history reload after mode switch") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 2) }
+      checked("mode switch clears old history before asynchronous reload")
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-history-list")
+        list.getSelectionModel.clearAndSelect(0)
+        node[TextField]("generation-history-search").setText("FIRST")
+        require(list.getItems.size == 1 && list.getItems.get(0).fields.values.exists(_ == PresetAtom.Text("first favourite")))
+        require(list.getSelectionModel.getSelectedItems.isEmpty, "filtered-out selection must not remain actionable")
+      }
+      screenshot("named-states-history-search")
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-history-list")
+        node[TextField]("generation-history-search").clear()
+        require(list.getItems.size == 2)
+      }
+      checked("history search filters prompt and clears hidden selection")
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-history-list")
         list.getSelectionModel.clearAndSelect(0); list.getSelectionModel.select(1)
         node[Button]("generation-history-favourite").fire()
       }
@@ -332,6 +356,15 @@ object RealNamedGenerationStatesCheck:
         node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
         node[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 2
       }}
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-favourites-list")
+        list.getSelectionModel.clearAndSelect(0)
+        node[TextField]("generation-favourites-search").setText("FIRST, favourite")
+        require(list.getItems.size == 1 && list.getSelectionModel.getSelectedItems.isEmpty)
+        node[TextField]("generation-favourites-search").clear()
+        require(list.getItems.size == 2)
+      }
+      checked("favourites search requires all terms and clears hidden selection")
       fx {
         val list = node[ListView[PresetRecord]]("generation-favourites-list")
         list.getSelectionModel.clearAndSelect(0)
