@@ -116,7 +116,8 @@ final class ModelKeywordMappingsPane(ctx: UiContext, onChoices: (String, Seq[Str
               removed.map(v => if v then " · custom mapping deleted" else " · no custom mapping to delete").getOrElse("") +
               (if words.nonEmpty then s"\n$words" else " · no keywords") +
               (if !result("default_catalog_available").bool then
-                s"\nNo LoRA catalog is installed; only custom mappings are searched. Add lora-keyword.txt to ${ctx.services.home.configDir.resolve("model-keyword")} to search a catalog."
+                val catalogName = if requestKind == "lora" then "lora-keyword.txt" else "model-keyword.txt"
+                s"\nNo $requestKind catalog is installed; only custom mappings are searched. Add $catalogName to ${ctx.services.home.configDir.resolve("model-keyword")} to search a catalog."
                else ""))
         } { error =>
           if requestRevision == revision then

@@ -43,8 +43,16 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       val swapped=Await.result(client.setVae(Some(root.resolve("vae/diffusion_pytorch_model.safetensors").toString)),20.seconds)
       assert(swapped.vaeHash.exists(_.matches("[0-9a-f]{64}")))
       assertEquals(Await.result(client.setVae(None),20.seconds).vaeName,None)
+      def mapping(action: String)=Await.result(client.raw("model_keyword",ujson.Obj("action"->action,
+        "kind"->"checkpoint","model_path"->root.toString,"mapping_dir"->temp.toString,"keywords"->"a red")),10.seconds)
+      assertEquals(mapping("check")("source").str,"no match")
+      val saved=mapping("save")
+      assertEquals(saved("hash").str,loaded.hash)
+      assertEquals(saved("source").str,"custom")
+      assertEquals(mapping("check")("keywords").arr.map(_.str).toVector,Vector("a red"))
       val events=new ConcurrentLinkedQueue[EngineEvent]()
-      val request=GenerationRequest(GenerationParams(prompt="a red cat",width=64,height=64,steps=3,seed=42),temp.toString)
+      val request=GenerationRequest(GenerationParams(prompt="cat",width=64,height=64,steps=3,seed=42,
+        hooks=Map("model_keyword"->ujson.Obj("_mapping_dir"->temp.toString))),temp.toString)
       val result=Await.result(client.generate(request,GenerationMode.Txt2Img,event => { events.add(event);() }).result,45.seconds)
       assertEquals(result.images.size,1)
       assertEquals(result.images.head.seed,42L)
@@ -52,6 +60,9 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       assertEquals(image.getWidth,64);assertEquals(image.getHeight,64)
       assertEquals(events.asScala.collect { case p: EngineEvent.Progress => p.step }.toVector,Vector(1,2,3))
       assert(events.asScala.exists(_.isInstanceOf[EngineEvent.Preview]))
+      assertEquals(result.images.head.effectivePrompt,Some("a red cat"))
+      assert(mapping("delete")("deleted").bool)
+      assertEquals(mapping("check")("source").str,"no match")
       Await.result(client.unload(),10.seconds)
     finally
       supervisor.close()
