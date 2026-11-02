@@ -91,3 +91,9 @@ Success (the GPU was shared with a 18 GB job of another user, so `model_offload`
 - The GUI form (the JavaFX controls render from the plugin's control list like every other plugin; not opened here).
 - Compatibility with PNGs and `.pt` files written by the original extension: the key names and the file layout follow the documented method and the original embeddings' (1, 768) shape, not a byte-level check.
 - SD 2.x (rejected by design), negpip and Embedding Merge text paths (bypassed), ADetailer passes (skipped), Characteristic Guidance / Neutral Prompt style multi-branch encoders.
+
+## Windows packaged GUI chooser check (2026-11-03)
+
+A local test ZIP was built from main product jar SHA-256 `36dcbd696365bcbf7bd9d56359948f78bd236d824a1d382c0844632e46cc6271` (main `0f9ff4a`; `7cc6322` changes handoff only). ZIP SHA-256: `c65d1f924ec7b54f57037e31c7868bcfd3672c45d63980051dd5e1fa69cc8241`. The extracted `SDNUI.exe` was launched with an isolated home in dry-run mode.
+
+Using computer-use clicks and text input in the actual Windows file chooser, two synthetic PNGs were added in separate operations; cancelling a subsequent chooser preserved both. In a later single chooser operation, two additional PNG filenames were entered together in quotes and opened; the GUI accessibility tree showed all four paths. This checks chooser-to-list wiring, including multiple files in one operation and cancellation. It does not check physical Ctrl-click, real embedding creation, a model, or GPU generation through this packaged GUI. The earlier historical unverified notes above refer to their own original test run. Original extension `.pt` and PNG compatibility remains unverified without an authorized authentic fixture.
