@@ -8,7 +8,8 @@ private[mcp] final class AlwaysOnInputs(
     plugins: () => Seq[Plugin], choices: ChoiceSource => Seq[String],
     image: (String, String) => String, localFile: (String, String) => String,
     directory: Option[(String, String) => String] = None,
-    activeControlNet: Boolean = false
+    activeControlNet: Boolean = false,
+    aestheticName: Option[(String, String, Option[String]) => String] = None
 ):
   def available(tab: Tab): Seq[Plugin] = plugins().filter(p => p.kind == PluginKind.AlwaysOn && p.tabs.contains(tab))
 
@@ -68,6 +69,21 @@ private[mcp] final class AlwaysOnInputs(
         case _ =>
           val v = args.str(key).getOrElse(control.default)
           if plugin.id == "inpaint_difference" && Set("painted_path", "altered_path")(key) && v.nonEmpty then image(v, field)
+          else if plugin.id == "aesthetic_gradients" && key == "embedding_sha256" && v.nonEmpty then
+            if !v.matches("(?i)[0-9a-f]{64}") then throw ToolError(s"$field: invalid SHA-256")
+            v.toLowerCase(java.util.Locale.ROOT)
+          else if plugin.id == "aesthetic_gradients" && key == "embedding" && v.nonEmpty then
+            if v.contains('/') || v.contains('\\') || v.contains(':') || v.startsWith(".") then localFile(v, field)
+            else if aestheticName.isDefined then
+              val hash = args.str("embedding_sha256").map(_.trim).filter(_.nonEmpty)
+              aestheticName.get(v, field, hash)
+            else
+              // Resolve names only within the MCP-managed output folder, never in the worker's current directory.
+              val candidates = if v.toLowerCase.endsWith(".pt") || v.toLowerCase.endsWith(".safetensors") then Seq(v)
+                else Seq(v + ".pt", v + ".safetensors")
+              candidates.iterator.map(n => scala.util.Try(localFile("aesthetic_embeddings/" + n, field)).toOption)
+                .collectFirst { case Some(path) => path }
+                .getOrElse(throw ToolError(s"$field: embedding not found inside the allowed folders"))
           else if plugin.id == "controlnet_fastload" && key == "path" && v.nonEmpty then
             def setting(name: String): String = args.str(name).getOrElse(controls.find(_.key == name).map(_.default).getOrElse(""))
             if setting("mode") == "save_only" || (activeControlNet && setting("priority") == "current_first") then ""

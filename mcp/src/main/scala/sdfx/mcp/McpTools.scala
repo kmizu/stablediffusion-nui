@@ -532,6 +532,16 @@ final class McpTools(
         ToolResult(Seq(Content.text(text), Content.text(ujson.write(base))), Some(base), isError = aj.status == "failed")
 
   private def pluginInput(addTemp: Path => Unit, activeControlNet: Boolean = false): AlwaysOnInputs =
+    def aestheticName(name: String, field: String, hash: Option[String]): String =
+      val base = outputsDir.toAbsolutePath.normalize()
+      def permitted(path: Path): Boolean =
+        scala.util.Try(pathPolicy.resolveDirectory(path.toString, field, base))
+          .orElse(scala.util.Try(pathPolicy.resolve(path.toString, field, base))).isSuccess
+      val index = services.home.configDir.resolve("aesthetic-embedding-directories.json")
+      val dirs = sdfx.core.aesthetic.AestheticEmbeddingDirectories.read(index, permitted)
+        .fold(error => throw ToolError(error), identity)
+      sdfx.core.aesthetic.AestheticEmbeddingLocator.resolve(name, hash, base.resolve("aesthetic_embeddings") +: dirs, permitted)
+        .fold(error => throw ToolError(s"$field: $error"), _.toString)
     new AlwaysOnInputs(() => services.registry.enabled, src => catalog.choices(src),
       (spec, field) => {
         val (path, temporary) = Images.materialize(spec, field, pathPolicy, outputsDir.toAbsolutePath, tempFile)
@@ -541,7 +551,8 @@ final class McpTools(
       (spec, field) => (if field.endsWith(".image_encoder") then
         pathPolicy.resolveDirectory(spec, field, outputsDir.toAbsolutePath)
       else pathPolicy.resolve(spec, field, outputsDir.toAbsolutePath)).toString,
-      Some((spec, field) => pathPolicy.resolveDirectory(spec, field, outputsDir.toAbsolutePath).toString), activeControlNet)
+      Some((spec, field) => pathPolicy.resolveDirectory(spec, field, outputsDir.toAbsolutePath).toString), activeControlNet,
+      Some(aestheticName))
 
   // ---- scripts ---------------------------------------------------------------------------------------------
 
@@ -761,8 +772,9 @@ final class McpTools(
     o
 
   val all: Seq[McpTool] = Seq(
+    new AestheticEmbeddingTool(services, pathPolicy, () => outputsDir, tempFile, ctx => ready(ctx)),
     new ControlNetFastloadTool(services, pathPolicy, outputsDir, ctx => ready(ctx)),
-    new InspectGenerationMetadataTool(pathPolicy, outputsDir),
+    new InspectGenerationMetadataTool(pathPolicy, () => outputsDir, Some(services.home.configDir.resolve("aesthetic-embedding-directories.json"))),
     new ModelPresetsTool(services),
     new ClipInterrogatorTool(services, pathPolicy, outputsDir, tempFile, ctx => ready(ctx)),
     new ControlNetPreprocessTool(services, pathPolicy, outputsDir.toAbsolutePath.normalize(), tempFile, ctx => ready(ctx)),

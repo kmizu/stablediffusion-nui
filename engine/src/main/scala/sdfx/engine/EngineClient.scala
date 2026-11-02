@@ -33,6 +33,10 @@ final class EmbeddingMergeHandle(val result: Future[EmbeddingMergeResult], inter
 final class ClipInterrogatorHandle(val result: Future[ujson.Value], interruptFn: () => Future[InterruptionDecision]):
   def interrupt(): Future[InterruptionDecision] = interruptFn()
 
+/** One aesthetic embedding operation with scoped cancellation. */
+final class AestheticEmbeddingHandle(val result: Future[ujson.Value], interruptFn: () => Future[InterruptionDecision]):
+  def interrupt(): Future[InterruptionDecision] = interruptFn()
+
 final class MetadataUtilsHandle(val result: Future[MetadataUtilsResult], interruptFn: () => Future[InterruptionDecision]):
   def interrupt(): Future[InterruptionDecision] = interruptFn()
 
@@ -176,6 +180,14 @@ final class EngineClient(val supervisor: EngineSupervisor):
       () => gate.beforeDispatch(), () => gate.dispatched())
     result.onComplete(_ => gate.completed())(using ExecutionContext.parasitic)
     new ClipInterrogatorHandle(result, () => gate.cancel())
+
+  def aestheticEmbeddingOwned(params: ujson.Obj, listener: EngineEvent => Unit = _ => ()): AestheticEmbeddingHandle =
+    val owner = java.util.UUID.randomUUID().toString
+    val gate = new TemporalLabCancelGate(owner, id => supervisor.captureInterrupt(Some(id), restartOnTimeout = false))
+    val result = supervisor.requestExtras(Protocol.Types.AestheticEmbedding, params, listener, owner,
+      () => gate.beforeDispatch(), () => gate.dispatched())
+    result.onComplete(_ => gate.completed())(using ExecutionContext.parasitic)
+    new AestheticEmbeddingHandle(result, () => gate.cancel())
 
   def metadataUtilsOwned(request: MetadataUtilsRequest, listener: EngineEvent => Unit = _ => ()): MetadataUtilsHandle =
     val owner = java.util.UUID.randomUUID().toString

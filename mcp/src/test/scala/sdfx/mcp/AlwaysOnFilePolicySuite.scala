@@ -10,6 +10,18 @@ class AlwaysOnFilePolicySuite extends munit.FunSuite:
     def kind = PluginKind.AlwaysOn
     override def controls = Seq(Control.Text("head", "Head file"), Control.Text("image_encoder", "Encoder"))
 
+  test("aesthetic embedding names and paths all go through the local file policy") {
+    val aesthetic = new sdfx.plugins.AestheticGradientsPlugin
+    var checked = Vector.empty[String]
+    val input = new AlwaysOnInputs(() => Seq(aesthetic), _ => Nil, (_, _) => "image",
+      (v, _) => { checked :+= v; if v == "aesthetic_embeddings/sunset.pt" then "resolved-file" else throw ToolError("outside roots") })
+    assertEquals(input.validate(aesthetic, ujson.Obj("embedding" -> "sunset")).str("embedding"), "resolved-file")
+    assertEquals(input.validate(aesthetic, ujson.Obj("embedding" -> "sunset.pt")).str("embedding"), "resolved-file")
+    intercept[ToolError] { input.validate(aesthetic, ujson.Obj("embedding" -> "../../secret.pt")) }
+    intercept[ToolError] { input.validate(aesthetic, ujson.Obj("embedding" -> "\\\\server\\share\\secret.pt")) }
+    assertEquals(checked, Vector("aesthetic_embeddings/sunset.pt", "aesthetic_embeddings/sunset.pt", "../../secret.pt", "\\\\server\\share\\secret.pt"))
+  }
+
   test("relative model file paths cannot bypass the file policy; HF encoder identifiers remain identifiers") {
     var checked = Vector.empty[String]
     val input = new AlwaysOnInputs(() => Seq(plugin), _ => Nil, (_, _) => "image",
@@ -33,6 +45,17 @@ class AlwaysOnFilePolicySuite extends munit.FunSuite:
       intercept[ToolError] { policy.resolveDirectory("\\\\server\\share", "encoder", root) }
     finally
       Files.deleteIfExists(nested); Files.deleteIfExists(root); Files.deleteIfExists(outside)
+  }
+
+  test("paths returned as real paths remain usable when an allowed root has a filesystem alias") {
+    val root = Files.createTempDirectory("mcp-root-alias-")
+    val file = Files.writeString(root.resolve("fixture.pt"), "fixture")
+    try
+      val policy = new PathPolicy(() => Seq(root))
+      assertEquals(policy.resolve(file.toRealPath().toString, "embedding", root), file.toRealPath())
+    finally
+      Files.deleteIfExists(file)
+      Files.deleteIfExists(root)
   }
 
   test("multiple image values keep actual newline separators") {

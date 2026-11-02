@@ -150,6 +150,26 @@ def handle_work(rid, typ, params):
     try:
         if typ in ("txt2img", "img2img"):
             generate(rid, typ, params)
+        elif typ == "aesthetic_embedding":
+            if params.get("op") == "list":
+                result(rid, {"embeddings": ["fixture"], "folders": []})
+            elif params.get("op") == "create" and params.get("images") and all(
+                    os.path.isfile(p) for p in params["images"]):
+                if params["name"] == "slow":
+                    time.sleep(1)
+                if params["name"] == "cancellable":
+                    with open(os.path.join(params["output_dir"], ".cancellable-started"), "wb") as stream:
+                        stream.write(b"started")
+                    if interrupted.wait(4):
+                        error(rid, "interrupted", "interrupted")
+                        return
+                output = os.path.join(params["output_dir"], params["name"] + ".pt")
+                with open(output, "wb") as stream:
+                    stream.write(b"fake embedding")
+                result(rid, {"name": params["name"], "count": len(params["images"]),
+                             "image_path": params["images"][0], "output_dir": params.get("output_dir", ""), "path": output})
+            else:
+                error(rid, "invalid_params", "invalid aesthetic embedding request")
         elif typ == "controlnet_fastload_data":
             if params.get('operation') == 'version':
                 result(rid, {'version': 1, 'upstream_version': 1.1})

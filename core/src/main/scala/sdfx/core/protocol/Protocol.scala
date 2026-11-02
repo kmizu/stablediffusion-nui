@@ -33,6 +33,7 @@ object Protocol:
     val Tokenize = "tokenize"
     val MetadataUtils = "metadata_utils"
     val ClipInterrogator = "clip_interrogator"
+    val AestheticEmbedding = "aesthetic_embedding"
     val ControlNetFastloadData = "controlnet_fastload_data"
     val EmbeddingMerge = "embedding_merge"
     val SystemInfo = "system_info"

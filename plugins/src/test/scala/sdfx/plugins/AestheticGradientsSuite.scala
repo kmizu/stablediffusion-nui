@@ -48,6 +48,15 @@ class AestheticGradientsSuite extends munit.FunSuite:
     assertEquals(restored.double("slerp_angle"), 0.25)
     assertEquals(plugin.process(GenerationParams(prompt = "castle"), restored).hooks(plugin.id), params.hooks(plugin.id))
 
+  test("fingerprinted metadata pins the actual embedding request without recording a path"):
+    val hash = "a" * 64
+    val restored = AestheticGradientsPlugin.replay(Map("Aesthetic embedding" -> "style", "Aesthetic embedding SHA256" -> hash)).get
+    assertEquals(restored.str("embedding_sha256"), hash)
+    val params = plugin.process(GenerationParams(), restored)
+    assertEquals(params.hooks(plugin.id)("embedding_sha256").str, hash)
+    assert(!params.extra.contains("Aesthetic embedding SHA256")) // worker supplies the hash of the consumed bytes
+    assertEquals(AestheticGradientsPlugin.replay(Map("Aesthetic embedding" -> "style", "Aesthetic embedding SHA256" -> "bad")), None)
+
   test("replay disables the plugin for other PNGs and rejects malformed values"):
     assertEquals(AestheticGradientsPlugin.replay(Map.empty).get.str("enabled"), "false")
     val on = "Aesthetic embedding" -> "sunset"

@@ -432,6 +432,35 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("aesthetic_gradients"))
   }
 
+  test("fingerprinted aesthetic metadata resolves only matching currently allowed registered files") {
+    val dir = Files.createTempDirectory("mcp-aesthetic-inspect-")
+    val custom = Files.createDirectory(dir.resolve("custom"))
+    val embedding = Files.writeString(custom.resolve("style.pt"), "original bytes")
+    val registry = dir.resolve("aesthetic-directories.json")
+    val policy = new PathPolicy(() => Seq(dir))
+    val allowed: java.nio.file.Path => Boolean = p => scala.util.Try(policy.resolveDirectory(p.toString, "dir", dir)).isSuccess
+    assert(sdfx.core.aesthetic.AestheticEmbeddingDirectories.register(registry, custom, allowed).isRight)
+    val hash = sdfx.core.aesthetic.AestheticEmbeddingLocator.fingerprint(embedding)
+    val png = dir.resolve("image.png")
+    val text = s"cat\nSteps: 20, Seed: 4, Size: 512x512, Aesthetic embedding: style, Aesthetic embedding SHA256: $hash"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), png, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(png.toString, policy, dir, Some(registry))
+    val candidate = result("always_on")("aesthetic_gradients")
+    assertEquals(java.nio.file.Path.of(candidate("embedding").str), embedding.toRealPath())
+    assertEquals(candidate("embedding_sha256").str, hash)
+    assert(!result("unapplied_fields").obj.contains("Aesthetic embedding SHA256"))
+    Files.writeString(embedding, "changed bytes")
+    val changed = InspectGenerationMetadata.inspect(png.toString, policy, dir, Some(registry))
+    assert(!changed("always_on").obj.contains("aesthetic_gradients"))
+    assert(changed("unapplied_fields").obj.contains("Aesthetic embedding SHA256"))
+    assert(changed("warnings").arr.exists(_.str.contains("not restored")))
+    val mixed = text.replace(hash, "ambiguous")
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), png, Seq("parameters" -> mixed))
+    val refused = InspectGenerationMetadata.inspect(png.toString, policy, dir, Some(registry))
+    assert(!refused("always_on").obj.contains("aesthetic_gradients"))
+    assert(refused("warnings").arr.exists(_.str.contains("ambiguous")))
+  }
+
   test("Batch Face Swap infotext becomes a typed candidate and its key is consumed") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("bfs.png")

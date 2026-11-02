@@ -54,6 +54,167 @@ class McpToolsSuite extends munit.FunSuite:
     assert(!r("isError").bool, s"$tool failed: ${textOf(r)}")
     r
 
+  test("Aesthetic embedding creation is discoverable and refuses paths outside the permitted roots") {
+    val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
+    val tool = ts.find(_("name").str == "aesthetic_embedding").getOrElse(fail("aesthetic embedding tool missing"))
+    assert(tool("inputSchema")("properties").obj.contains("images"))
+    val outside = Files.createTempFile("aesthetic-outside-", ".png")
+    try
+      val denied = call("aesthetic_embedding", ujson.Obj("operation" -> "create", "name" -> "style",
+        "images" -> ujson.Arr(outside.toString)))
+      assert(denied("isError").bool)
+      assert(textOf(denied).contains("allowed folders"), textOf(denied))
+    finally Files.deleteIfExists(outside)
+  }
+
+  test("Aesthetic embeddings submit owned image inputs and clean temporary files") {
+    val result = ok("aesthetic_embedding", ujson.Obj("operation" -> "create", "name" -> "style",
+      "images" -> ujson.Arr(pngBase64()), "overwrite" -> false))
+    val data = result("structuredContent")
+    assertEquals(data("name").str, "style")
+    assertEquals(data("count").num.toInt, 1)
+    val temporary = Paths.get(data("image_path").str)
+    assert(!Files.exists(temporary), s"temporary image was not removed: $temporary")
+    assert(data("output_dir").str.contains("aesthetic_embeddings"))
+    assert(Files.exists(Paths.get(data("path").str)), s"fake worker did not save ${data("path").str}")
+    val list = ok("aesthetic_embedding", ujson.Obj("operation" -> "list"))
+    assertEquals(list("structuredContent")("output_dir").str, data("output_dir").str)
+    val file = Paths.get(data("path").str)
+    assertEquals(tools.pathPolicy.resolve(file.toString, "embedding", home.outputs(services.settings)), file.toRealPath())
+    assertEquals(list("structuredContent")("embeddings").arr.map(_("name").str).toSeq, Seq("style.pt"))
+  }
+
+  test("Aesthetic embeddings reject protected sessions and unsafe output names") {
+    val params = ujson.Obj("operation" -> "create", "name" -> "../style", "images" -> ujson.Arr(pngBase64()))
+    assert(call("aesthetic_embedding", params)("isError").bool)
+    services.imageScrambleSession.unlock("test-only-password")
+    try
+      val blocked = call("aesthetic_embedding", ujson.Obj("operation" -> "create", "name" -> "style",
+        "images" -> ujson.Arr(pngBase64())))
+      assert(blocked("isError").bool)
+      assert(textOf(blocked).contains("protected image session"), textOf(blocked))
+    finally services.imageScrambleSession.lock()
+  }
+
+  test("Aesthetic names resolve only uniquely in explicitly registered permitted directories") {
+    val base = home.outputs(services.settings)
+    val custom = Files.createDirectories(base.resolve("custom-aesthetic"))
+    val created = ok("aesthetic_embedding", ujson.Obj("operation" -> "create", "name" -> "unique-replay",
+      "images" -> ujson.Arr(pngBase64()), "output_dir" -> custom.toString))
+    assert(!created("structuredContent").obj.contains("directory_registration_warning"))
+    def generation(name: String, hash: Option[String] = None) = call("txt2img", ujson.Obj("prompt" -> "test", "steps" -> 1,
+      "width" -> 64, "height" -> 64, "return_images" -> false,
+      "always_on" -> ujson.Obj("aesthetic_gradients" -> ujson.Obj.from(Seq("enabled" -> ujson.Bool(true),
+        "embedding" -> ujson.Str(name)) ++ hash.toSeq.map(h => "embedding_sha256" -> ujson.Str(h))))))
+    val replay = generation("unique-replay")
+    assert(!replay("isError").bool, textOf(replay))
+    val managed = Files.createDirectories(base.resolve("aesthetic_embeddings"))
+    val collision = Files.writeString(managed.resolve("unique-replay.pt"), "different")
+    try
+      val ambiguous = generation("unique-replay")
+      assert(ambiguous("isError").bool && textOf(ambiguous).contains("ambiguous"), textOf(ambiguous))
+      val expected = sdfx.core.aesthetic.AestheticEmbeddingLocator.fingerprint(Paths.get(created("structuredContent")("path").str))
+      val byHash = generation("unique-replay", Some(expected))
+      assert(!byHash("isError").bool, textOf(byHash))
+      val state = Await.result(services.client.raw("get_state"), 10.seconds)
+      val hook = state("last_generation")("request")("params")("hooks")("aesthetic_gradients")
+      assertEquals(Paths.get(hook("embedding").str), Paths.get(created("structuredContent")("path").str).toRealPath())
+      assertEquals(hook("embedding_sha256").str, expected)
+      val wrong = generation("unique-replay", Some("0" * 64))
+      assert(wrong("isError").bool, textOf(wrong))
+      val explicit = generation(created("structuredContent")("path").str)
+      assert(!explicit("isError").bool, textOf(explicit))
+    finally Files.deleteIfExists(collision)
+  }
+
+  test("an existing permitted aesthetic file becomes discoverable after explicit generation use") {
+    val base = home.outputs(services.settings)
+    val dir = Files.createDirectories(base.resolve("existing-aesthetic"))
+    val file = Files.writeString(dir.resolve("existing-replay.pt"), "pre-existing embedding")
+    val generated = call("txt2img", ujson.Obj("prompt" -> "test", "steps" -> 1, "width" -> 64, "height" -> 64,
+      "return_images" -> false, "always_on" -> ujson.Obj("aesthetic_gradients" -> ujson.Obj("enabled" -> true, "embedding" -> file.toString))))
+    assert(!generated("isError").bool, textOf(generated))
+    val hash = sdfx.core.aesthetic.AestheticEmbeddingLocator.fingerprint(file)
+    val png = base.resolve("existing-aesthetic-replay.png")
+    PngMetadata.write(new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB), png,
+      Seq("parameters" -> s"cat\nSteps: 1, Seed: 1, Size: 64x64, Aesthetic embedding: existing-replay, Aesthetic embedding SHA256: $hash"))
+    val inspected = ok("inspect_generation_metadata", ujson.Obj("image" -> png.toString))
+    assertEquals(Paths.get(inspected("structuredContent")("always_on")("aesthetic_gradients")("embedding").str), file.toRealPath())
+  }
+
+  test("timed-out aesthetic creation retains temporary input until the worker terminates") {
+    var materialized: Option[java.nio.file.Path] = None
+    val tool = new AestheticEmbeddingTool(services, tools.pathPolicy, () => home.outputs(services.settings),
+      suffix => {
+        val p = Files.createTempFile(home.outputs(services.settings), "aesthetic-timeout-", suffix)
+        materialized = Some(p)
+        p
+      }, _ => (), timeout = 100.millis)
+    intercept[ToolError] {
+      tool.call(ujson.Obj("operation" -> "create", "name" -> "slow", "images" -> ujson.Arr(pngBase64())), ToolContext.none)
+    }
+    val path = materialized.getOrElse(fail("temporary input was not made"))
+    assert(Files.exists(path), "worker may still be using the input")
+    val end = System.nanoTime() + 10.seconds.toNanos
+    while Files.exists(path) && System.nanoTime() < end do Thread.sleep(25)
+    assert(!Files.exists(path), "temporary input was not removed after the worker terminated")
+  }
+
+  test("interrupted aesthetic caller retains temporary input until the worker terminates") {
+    val registered = new java.util.concurrent.CountDownLatch(1)
+    val materialized = new java.util.concurrent.atomic.AtomicReference[java.nio.file.Path]()
+    val thrown = new java.util.concurrent.atomic.AtomicReference[Throwable]()
+    val tool = new AestheticEmbeddingTool(services, tools.pathPolicy, () => home.outputs(services.settings),
+      suffix => {
+        val p = Files.createTempFile(home.outputs(services.settings), "aesthetic-interrupt-", suffix)
+        materialized.set(p)
+        p
+      }, _ => (), timeout = 30.seconds)
+    val ctx = new ToolContext:
+      def progress(progress: Double, total: Option[Double], message: String): Unit = ()
+      def onCancel(f: () => Unit): Unit = registered.countDown()
+      def isCancelled: Boolean = false
+    val caller = new Thread(() => {
+      try
+        tool.call(ujson.Obj("operation" -> "create", "name" -> "slow", "images" -> ujson.Arr(pngBase64())), ctx)
+        ()
+      catch case e: Throwable => thrown.set(e)
+    })
+    caller.start()
+    try
+      assert(registered.await(10, java.util.concurrent.TimeUnit.SECONDS), "request was not registered")
+      val path = materialized.get()
+      assert(path != null && Files.exists(path), "temporary input was not made")
+      caller.interrupt()
+      caller.join(3000)
+      assert(!caller.isAlive, "caller did not stop")
+      assert(thrown.get().isInstanceOf[InterruptedException], s"unexpected result: ${thrown.get()}")
+      assert(Files.exists(path), "worker may still be using the input")
+      val end = System.nanoTime() + 10.seconds.toNanos
+      while Files.exists(path) && System.nanoTime() < end do Thread.sleep(25)
+      assert(!Files.exists(path), "temporary input was not removed after the worker terminated")
+    finally
+      if caller.isAlive then { caller.interrupt(); caller.join(3000) }
+  }
+
+  test("aesthetic embedding tools follow a changed output directory") {
+    val before = services.settings
+    val moved = home.root.resolve("moved-output")
+    Files.createDirectories(moved)
+    try
+      services.updateSettings(_.copy(outputDir = moved.toString))
+      val listed = ok("aesthetic_embedding", ujson.Obj("operation" -> "list"))
+      assertEquals(Paths.get(listed("structuredContent")("output_dir").str), moved.resolve("aesthetic_embeddings").toRealPath())
+      val embedding = Files.writeString(moved.resolve("aesthetic_embeddings/change.pt"), "fixture")
+      val hash = sdfx.core.aesthetic.AestheticEmbeddingLocator.fingerprint(embedding)
+      val image = moved.resolve("new.png")
+      PngMetadata.write(new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB), image,
+        Seq("parameters" -> s"cat\nSteps: 1, Seed: 1, Size: 64x64, Aesthetic embedding: change, Aesthetic embedding SHA256: $hash"))
+      val inspected = ok("inspect_generation_metadata", ujson.Obj("image" -> "new.png"))
+      assertEquals(Paths.get(inspected("structuredContent")("always_on")("aesthetic_gradients")("embedding").str), embedding.toRealPath())
+    finally services.updateSettings(_ => before)
+  }
+
   test("ControlNet Fastload is discoverable with an explicit operation schema") {
     val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
     val tool = ts.find(_("name").str == "controlnet_fastload").getOrElse(fail("Fastload tool missing"))

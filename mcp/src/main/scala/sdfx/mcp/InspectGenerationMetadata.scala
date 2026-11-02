@@ -9,7 +9,8 @@ import sdfx.plugins.{CompilePlugin, ClipIoPlugin, CnAnimationPlugin, AnimateDiff
 import scala.util.control.NonFatal
 
 /** Inspect only: no model load, plugin execution, script execution or generation. */
-final class InspectGenerationMetadataTool(policy: PathPolicy, base: Path) extends McpTool:
+final class InspectGenerationMetadataTool(policy: PathPolicy, baseProvider: () => Path, aestheticRegistry: Option[Path] = None) extends McpTool:
+  def this(policy: PathPolicy, base: Path) = this(policy, () => base, None)
   def name = "inspect_generation_metadata"
   override def title = "Inspect generation metadata"
   def description = "Read PNG parameters and return typed txt2img arguments and explicit AlwaysOn replay candidates. Never starts generation; missing inputs, unsupported settings and unknown metadata require review."
@@ -18,7 +19,7 @@ final class InspectGenerationMetadataTool(policy: PathPolicy, base: Path) extend
     val args = Args(input, Seq("image"))
     if ctx.isCancelled then throw ToolError("cancelled")
     if !input.value.get("image").exists(_.isInstanceOf[ujson.Str]) then throw ToolError("image must be a string")
-    ToolResult.json(InspectGenerationMetadata.inspect(args.reqStr("image"), policy, base))
+    ToolResult.json(InspectGenerationMetadata.inspect(args.reqStr("image"), policy, baseProvider().toAbsolutePath.normalize(), aestheticRegistry))
 
 object InspectGenerationMetadata:
   private val MaxBytes = 16 * 1024 * 1024
@@ -98,7 +99,7 @@ object InspectGenerationMetadata:
       key -> v
     }})
 
-  def inspect(spec: String, policy: PathPolicy, base: Path): ujson.Obj =
+  def inspect(spec: String, policy: PathPolicy, base: Path, aestheticRegistry: Option[Path] = None): ujson.Obj =
     val bytes = read(spec, policy, base)
     validateChunks(bytes)
     val temp = Files.createTempFile("sdfx-mcp-infotext-", ".png")
@@ -166,6 +167,23 @@ object InspectGenerationMetadata:
     )
     val plugins = StandardPlugins.alwaysOn.map(p => p.id -> p).toMap
     val on = ujson.Obj.from(candidates.flatMap { (id, values) => values.flatMap(v => plugins.get(id).map(p => id -> typed(p, v))) })
+    // Fingerprinted metadata may only produce a replay candidate when the exact
+    // local file is present and currently permitted. Do not turn an unresolved
+    // identity back into a name-only request that could select a different file.
+    val aestheticError = f.get("Aesthetic embedding SHA256").flatMap { hash =>
+      on.value.get("aesthetic_gradients").map { candidate =>
+        def permitted(path: Path): Boolean =
+          scala.util.Try(policy.resolveDirectory(path.toString, "embedding", base))
+            .orElse(scala.util.Try(policy.resolve(path.toString, "embedding", base))).isSuccess
+        val dirs = aestheticRegistry.fold[Either[String, Vector[Path]]](Right(Vector.empty))(path =>
+          sdfx.core.aesthetic.AestheticEmbeddingDirectories.read(path, permitted))
+        val resolved = dirs.flatMap(registered => sdfx.core.aesthetic.AestheticEmbeddingLocator.resolve(
+          candidate("embedding").str, Some(hash), base.resolve("aesthetic_embeddings") +: registered, permitted))
+        resolved match
+          case Right(path) => candidate("embedding") = ujson.Str(path.toString); None
+          case Left(error) => on.value.remove("aesthetic_gradients"); Some(s"Aesthetic embedding not restored: $error")
+      }.getOrElse(Some("Aesthetic embedding not restored: invalid or ambiguous recorded settings."))
+    }
     PluginMetadataCandidates.freeu(f).foreach(v => on("freeu") = v)
     PluginMetadataCandidates.hypertile(f).foreach(v => on("hypertile") = v)
     PluginMetadataCandidates.pag(f).foreach(v => on("pag") = v)
@@ -217,6 +235,7 @@ object InspectGenerationMetadata:
       (if on.value.contains("clip_io") then ClipIoPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("compile") then CompilePlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("aesthetic_gradients") then AestheticGradientsPlugin.InfotextKeys.toSet else Set.empty[String]) ++
+      (if on.value.contains("aesthetic_gradients") && f.contains("Aesthetic embedding SHA256") then Set("Aesthetic embedding SHA256") else Set.empty[String]) ++
       (if on.value.contains("aesthetic_score") then AestheticScorePlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("batch_face_swap") then Set(BatchFaceSwapPlugin.InfotextKey) else Set.empty[String])
     // Script candidates: only reported, run_script is called by the agent with these values and generation_args.
@@ -230,4 +249,4 @@ object InspectGenerationMetadata:
     val unconsumed = f.filterNot((key, _) => represented.contains(key) || scriptKeys.contains(key))
     ujson.Obj("infotext" -> text, "generation_args" -> args, "always_on" -> on, "scripts" -> scripts,
       "unapplied_fields" -> ujson.Obj.from(unconsumed.map((k, v) => k -> ujson.Str(v))),
-      "warnings" -> ujson.Arr("Review candidates and missing model, LoRA, image, mask and unsupported plugin settings before replay; nothing was executed."))
+      "warnings" -> ujson.Arr.from(Seq("Review candidates and missing model, LoRA, image, mask and unsupported plugin settings before replay; nothing was executed.") ++ aestheticError))

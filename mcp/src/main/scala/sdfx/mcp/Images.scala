@@ -37,14 +37,16 @@ final class PathPolicy(roots: () => Seq[Path]):
       catch case NonFatal(_) => throw denied(field)
     val abs = (if p.isAbsolute then p else base.resolve(p)).normalize()
     val rs = allowedRoots
-    if !abs.isAbsolute || !rs.exists(r => abs.startsWith(r)) then throw denied(field)
-    val real =
-      try abs.toRealPath()
-      catch case NonFatal(_) => throw denied(field)
+    // Windows temp paths can use short names while toRealPath returns their long-name aliases.
+    // Accept lexical paths under either spelling, then still enforce containment on real paths.
     val realRoots = rs.flatMap(r =>
       try Some(r.toRealPath())
       catch case NonFatal(_) => None
     )
+    if !abs.isAbsolute || !(rs ++ realRoots).exists(r => abs.startsWith(r)) then throw denied(field)
+    val real =
+      try abs.toRealPath()
+      catch case NonFatal(_) => throw denied(field)
     if !realRoots.exists(r => real.startsWith(r) && (directory || real != r)) ||
         !(if directory then Files.isDirectory(real) else Files.isRegularFile(real)) then throw denied(field)
     real

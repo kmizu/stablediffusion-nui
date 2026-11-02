@@ -513,7 +513,9 @@ def main(argv=()):
                 lic = f"upstream file unavailable; archived license ([text](licenses/{fname}))"
             else:
                 lic = "no license file published"
-        rows.append(f"| [{repo}](https://github.com/{repo}) | {how} | {lic} | {what} |")
+        source_url = (f"https://huggingface.co/{repo}" if repo == "openai/clip-vit-large-patch14"
+                      else f"https://github.com/{repo}")
+        rows.append(f"| [{repo}]({source_url}) | {how} | {lic} | {what} |")
         print(f"{repo:60s} {lic.split(' ', 1)[0]}")
     md = [
         "# Third-party notices",

@@ -8,6 +8,7 @@ import java.nio.file.Paths
 /** Infotext keys of the Aesthetic Gradients extension, so its PNGs restore and NUI PNGs paste back into it. */
 object AestheticGradientsPlugin:
   val EmbeddingKey = "Aesthetic embedding"
+  val FingerprintKey = "Aesthetic embedding SHA256"
   val InfotextKeys: Seq[String] = Seq("Aesthetic LR", "Aesthetic weight", "Aesthetic steps", EmbeddingKey,
     "Aesthetic slerp", "Aesthetic text", "Aesthetic slerp angle", "Aesthetic text negative")
 
@@ -42,6 +43,8 @@ object AestheticGradientsPlugin:
         fields.get("Aesthetic text").foreach(v => set("text" -> v))
         fields.get("Aesthetic slerp angle").foreach(v => number(v).filter(n => n >= 0 && n <= 1).fold(bad())(n => set("slerp_angle" -> Values.fmt(n))))
         fields.get("Aesthetic text negative").foreach(v => flag(v).fold(bad())(b => set("negative" -> b.toString)))
+        fields.get(FingerprintKey).foreach(v =>
+          if v.matches("(?i)[0-9a-f]{64}") then set("embedding_sha256" -> v.toLowerCase(java.util.Locale.ROOT)) else bad())
         Option.when(ok)(Values(out))
 
 /** Aesthetic Gradients (AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients, index 8): moves the CLIP text
@@ -62,6 +65,7 @@ class AestheticGradientsPlugin extends HookPlugin:
   override def controls: Seq[Control] = Seq(
     Check("enabled", "Enabled"),
     Text("embedding", "Aesthetic embedding (name or path of a .pt / .safetensors file)", placeholder = "e.g. sunset"),
+    Text("embedding_sha256", "Embedding SHA-256 (optional: require an exact match)"),
     Slider("weight", "Aesthetic weight", 0, 1, 0.01, 0.9),
     IntField("steps", "Aesthetic steps", 0, 200, 20),
     Text("lr", "Aesthetic learning rate", "0.0001"),
@@ -70,11 +74,15 @@ class AestheticGradientsPlugin extends HookPlugin:
     Slider("slerp_angle", "Slerp angle", 0, 1, 0.01, 0.1),
     Check("negative", "Apply to the negative prompt instead of the positive prompt"))
 
-  def hookFields(v: Values): ujson.Obj = ujson.Obj(
+  def hookFields(v: Values): ujson.Obj =
+    val result = ujson.Obj(
     "embedding" -> v.str("embedding").trim,
     "weight" -> v.double("weight", 0.9), "steps" -> v.int("steps", 20), "lr" -> v.double("lr", 0.0001),
     "slerp" -> v.bool("slerp"), "slerp_angle" -> v.double("slerp_angle", 0.1), "text" -> v.str("text"),
     "negative" -> v.bool("negative"))
+    val hash = v.str("embedding_sha256").trim
+    if hash.nonEmpty then result("embedding_sha256") = ujson.Str(hash)
+    result
 
   def infotextKeys(o: ujson.Obj): Seq[(String, String)] =
     def flag(k: String) = o.value.get(k).contains(ujson.Bool(true))

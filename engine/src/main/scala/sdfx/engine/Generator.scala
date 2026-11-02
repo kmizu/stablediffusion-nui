@@ -305,7 +305,7 @@ final class Generator(
     val refinement = Img2ImgHiresMetadata.active(composed.hooks)
     val recorded = composed.copy(seed = seed, subseed = subseed,
       extra = p0.extra.filterNot((key, _) => HardwareInfo.fieldNames(key) ||
-        Set("Hires prompt mode", "NUI Hires template", "NUI Manual LoRAs", Img2ImgHiresMetadata.key)(key)) ++
+        Set("Hires prompt mode", "NUI Hires template", "NUI Manual LoRAs", "Aesthetic embedding SHA256", Img2ImgHiresMetadata.key)(key)) ++
         refinement.map(h => Img2ImgHiresMetadata.key -> Img2ImgHiresMetadata.encode(h)))
 
     val keywordReplay = p0.extra.contains("Model keyword settings") ||
@@ -340,6 +340,22 @@ final class Generator(
       else recorded.loras ++ ex.loras ++ hrEx.loras.filterNot(l => ex.loras.exists(x => x.name == l.name && x.dyn == l.dyn))
     val separateHiresLoras = HiresPreparation.active(recorded).isDefined && !composable
     val warnings = Seq.newBuilder[String]
+    // A user explicitly selected this local embedding for the job. Remember its
+    // parent locally for future name/hash replay, never in the PNG itself.
+    recorded.hooks.get("aesthetic_gradients").collect { case o: ujson.Obj => o }
+      .flatMap(_.value.get("embedding")).collect { case ujson.Str(value) => value.trim }.filter(_.nonEmpty).foreach { value =>
+        val network = value.startsWith("\\\\") || value.startsWith("//") || value.startsWith("\\/") || value.startsWith("/\\") ||
+          value.toLowerCase(java.util.Locale.ROOT).startsWith("file:") || value.toLowerCase(java.util.Locale.ROOT).startsWith("smb:")
+        if !network then scala.util.Try(Paths.get(value)).toOption.filter(_.isAbsolute).filter(Files.isRegularFile(_)).foreach { file =>
+          scala.util.Try(file.toRealPath()).toOption.foreach { real =>
+            val parent = real.getParent
+            if parent != null && !parent.toString.startsWith("\\\\") && !parent.toString.startsWith("//") then
+              sdfx.core.aesthetic.AestheticEmbeddingDirectories.register(
+                home.configDir.resolve("aesthetic-embedding-directories.json"), parent, p => p == parent)
+                .left.foreach(warning => warnings += s"Aesthetic replay directory was not registered: $warning")
+          }
+        }
+      }
     val refinementLoras = refinement.map(_ => recorded.loras ++ refineEx.loras)
     val keywordActive = recorded.hooks.get("model_keyword").exists(_.isInstanceOf[ujson.Obj])
     val keywordSelected = recorded.hooks.get("model_keyword").collect { case o: ujson.Obj => o }

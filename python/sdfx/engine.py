@@ -1585,6 +1585,7 @@ class Engine(BaseEngine):
         self._cd_tuner_job = None
         self._incantations_job = None
         self._vae_recovery = []
+        self._aesthetic_digests = set()
         try:
             fields = params.get('params', {}) if isinstance(params, dict) else {}
             if not isinstance(fields, dict):
@@ -1596,6 +1597,9 @@ class Engine(BaseEngine):
                     result = self._generate_recorded(prepared, ctx, mode)
             if self._vae_recovery:
                 result['vae_recovery'] = self._vae_recovery
+            if self._aesthetic_digests:
+                aesthetic_gradients.add_provenance(result, self._aesthetic_digests, ctx.warn)
+                result['warnings'] = list(ctx.warnings)
             if self._composable_job is not None:
                 self._composable_job.finish(result, params.get("output_dir", ""))
             if params.get('system_info_fields'):
@@ -1619,6 +1623,7 @@ class Engine(BaseEngine):
                 self._embedding_merge_ctx = None
                 self._cd_tuner_job = None
                 self._incantations_job = None
+                self._aesthetic_digests = None
 
     def _generate_recorded(self, params: dict, ctx: JobContext, mode: str) -> dict:
         if getattr(self, "_embedding_reload_error", None):

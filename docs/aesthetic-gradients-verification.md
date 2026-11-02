@@ -1,5 +1,21 @@
 # Aesthetic Gradients verification (#2)
 
+> 2026-11-03 作業中: 以下は以前の検証記録。GUI と MCP での embedding 作成は追加作業中で、下の「GUI/MCP では作成できない」という記述は現行の作業ツリーには当てはまらない。新しい操作方法は [日本語ガイド](aesthetic-embeddings.md) を参照。SD1.5 と SDXL の実モデルを公式 MCP SDK から使い、作成・一覧・適用・既定フォルダからの PNG 再生成を確認した。GUI の実モデル確認、別フォルダと同名ファイルの再現、配布版の検証は未完了。Issue #2 は未完了のまま。
+
+> 追加の作業ツリー検証: embedding の内容を SHA-256 で識別する復元、登録フォルダの別プロセス間ロック、出力先変更後の MCP 検査、未発見・曖昧な場合の拒否は、CPU テストと fake worker を使う実画面テストで確認した。Python 25 件、Scala core 4 件・plugin 6 件・engine 40 件・MCP 75 件が成功（`outputs/codex-aesthetic-provenance-final3.log`、`outputs/codex-aesthetic-replay-review-fixes.log`）。これらの変更後の実モデルと配布版は未検証。旧 PNG は hash がないため、名前が一意でも元ファイルの内容は保証できない。
+
+> 同日の追試: hash 対応後の JAR SHA-256 `0ebd75e16d0335ba93aef48ed89637aa34e88379c2b64385ab955d66f31d4946` を使い、公式 MCP SDK の stdio 経由で実 SD1.5・SDXL の embedding 作成、生成、PNG 内の hash とファイル内容の照合、PNG からの再生成を確認した。両モデルとも画像を目視し、再生成の RGB は一致した（`outputs/aesthetic-hash-sd15/receipt.json`、`outputs/aesthetic-hash-sdxl/receipt.json`）。これはソース作業ツリーの JAR による確認で、Windows ZIP 展開版や GUI の実モデル確認ではない。
+
+> 配布候補 ZIP の追試: SHA-256 `65129737d33a63f117d431f14240eae701aee7013bcfceaa2044bc812eae6fbb` の ZIP を展開し、同梱 JAR が上記と一致し、配布物 338 ファイルの照合で欠落・差分がないことを確認した。展開した `SDNUI.exe` と同梱 JVM を公式 MCP SDK から使い、SD1.5・SDXL で作成・生成・hash 照合・RGB 一致の再生成を確認、画像を目視した（`outputs/aesthetic-package-sd15/receipt.json`、`outputs/aesthetic-package-sdxl/receipt.json`）。エンジンの Python は既存の smoke venv を使った。GUI からの実モデル操作は未検証。
+
+> GUI 追試: 実 MainWindow から SD1.5・SDXL の参照画像による作成・適用・生成を実行し、PNG の hash と embedding の一致、適用前後の画像の変化を確認した（`outputs/aesthetic-real-gui-sd15/receipt.json`、`outputs/aesthetic-real-gui-sdxl/receipt.json`）。両モデルの画像を目視した。参照画像は実画面のリストへ投入し、OS のファイル選択ダイアログは手操作していない。sbt から起動した MainWindow の検証であり、配布 EXE の GUI 経路は未検証。
+
+> 全体回帰: JDK 21 の `sbt test` は exit 0（集計は 183、38、335、42、250 件、うち1件 skip；`outputs/aesthetic-full-scala.log`）。Torch 環境の Python 全体は CPU 指定で 2,962 pass・2 skip、exit 0（`outputs/aesthetic-full-python-cpu-correct.log`）。初回の 33 件失敗は、Windows で空の `CUDA_VISIBLE_DEVICES` が GPU を隠さず tiny CPU モデルと不一致になった31件と、子プロセスに worktree の `PYTHONPATH` がなかった2件。`CUDA_VISIBLE_DEVICES=-1` とこの worktree の `python` を `PYTHONPATH` に設定して対象4ファイル133件も再実行し、すべて成功した。
+
+## 以前の実装と検証の記録
+
+以下は上記の追加実装より前の記録です。当時の未対応事項や未検証事項を現在の状態と混同しないでください。
+
 Source: AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients `2624e5dd4902cb731287b426ad483e741ece85bb` (ledger index 8, target `aesthetic_gradients`). The repository has no licence file (GitHub reports none), so it is recorded in `PINNED_UNLICENSED` (`scripts/third_party.py`) with no file under `licenses/`. Only its README was read; that README is a stub that points to the original method, "Personalizing Text-to-Image Generation via Aesthetic Gradients" (Gallego, 2022). The feature is re-implemented from that documented method (`python/sdfx/aesthetic_gradients.py`, `plugins/src/main/scala/sdfx/plugins/AestheticGradientsPlugin.scala`); no upstream code was read or copied.
 
 ## Behaviour

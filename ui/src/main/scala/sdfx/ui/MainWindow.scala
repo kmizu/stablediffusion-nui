@@ -185,6 +185,15 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   val tokenizer = new TokenizerTab(ctx, () => vms(activeMode).prompt.get)
   val embeddingInspector = new EmbeddingInspectorTab(ctx)
   val embeddingEditor = new EmbeddingEditorTab(ctx, draft => generate(false, Some(draft.render())))
+  val aestheticEmbedding = new AestheticEmbeddingTab(ctx, selected =>
+    plugins(lastMode).form("aesthetic_gradients") match
+      case Some(form) =>
+        (form.prop("embedding"), form.prop("enabled")) match
+          case (Some(embedding), Some(enabled)) =>
+            embedding.set(selected); form.prop("embedding_sha256").foreach(_.set("")); enabled.set("true"); select(lastMode); Right(())
+          case _ => Left("Aesthetic Gradients controls are unavailable in this mode.")
+      case None => Left("Aesthetic Gradients is disabled or unavailable in this mode.")
+  )
   val temporalLab = new TemporalLabTab(ctx)
   val systemInfo = new SystemInfoTab(ctx)
   val vramEstimator = new VramEstimatorTab(ctx)
@@ -242,6 +251,8 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   embeddingInspectorTab.setId("embedding-inspector-tab")
   private val embeddingEditorTab = new Tab("Embedding Editor", embeddingEditor.node)
   embeddingEditorTab.setId("embedding-editor-tab")
+  private val aestheticEmbeddingTab = new Tab("Aesthetic Embeddings", aestheticEmbedding.node)
+  aestheticEmbeddingTab.setId("aesthetic-embedding-tab")
   private val tokenizerTab = new Tab("Tokenizer", tokenizer.node)
   tokenizerTab.setId("tokenizer-tab")
   private val systemInfoTab = new Tab("System Info", systemInfo.node)
@@ -289,7 +300,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   scramblePages.setId("scramble-pages")
   private val scrambleTab = new Tab("Image Scrambling", scramblePages)
   scrambleTab.setId("image-scrambling-tab")
-  tabs.getTabs.addAll(pngTab, extrasTab, tokenizerTab, embeddingInspectorTab, embeddingEditorTab, temporalLabTab, systemInfoTab, stylesTab, keywordTab, comparisonTab, vaeToolsTab, metadataUtilsTab, clipInterrogatorTab, embeddingMergeTab, modelPresetsTab, controlNetFastloadTab, controlNetFastloadGalleryTab, scrambleTab)
+  tabs.getTabs.addAll(pngTab, extrasTab, tokenizerTab, embeddingInspectorTab, embeddingEditorTab, aestheticEmbeddingTab, temporalLabTab, systemInfoTab, stylesTab, keywordTab, comparisonTab, vaeToolsTab, metadataUtilsTab, clipInterrogatorTab, embeddingMergeTab, modelPresetsTab, controlNetFastloadTab, controlNetFastloadGalleryTab, scrambleTab)
   tabs.getTabs.add(new Tab("VRAM Estimator", vramEstimator.node))
   private val imageBrowserTab = new Tab("Image Browser", imageBrowser.node)
   imageBrowserTab.setId("image-browser-tab")
@@ -808,8 +819,12 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       }
     }(_ => ()) // Provenance lookup failure must not interfere with ordinary parameter restoration.
 
+  private val aestheticRestoreEpoch = scala.collection.mutable.Map.empty[Mode, Long].withDefaultValue(0L)
+
   private def restorePlugins(mode: Mode, infotext: String, params: sdfx.core.model.GenerationParams): Unit =
+    aestheticRestoreEpoch(mode) += 1
     plugins(mode).restoreInfotext(infotext)
+    restoreAestheticEmbedding(mode, sdfx.core.infotext.Infotext.parse(infotext).fields)
     plugins(mode).restoreHiresParams(params)
     if mode != Mode.Txt2Img then
       plugins(mode).restoreLatentUpscale(sdfx.core.infotext.Infotext.parse(infotext).fields)
@@ -817,6 +832,57 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     plugins(mode).restoreAnimateDiff(sdfx.core.infotext.Infotext.parse(infotext).fields)
     plugins(mode).restoreCnAnimation(sdfx.core.infotext.Infotext.parse(infotext).fields)
     restoreComposable(mode, params)
+
+  /** A PNG contains a name, never an executable local path. Resolve it only in explicitly configured directories. */
+  private def restoreAestheticEmbedding(mode: Mode, fields: Map[String, String]): Unit =
+    if fields.contains(sdfx.plugins.AestheticGradientsPlugin.EmbeddingKey) &&
+        sdfx.plugins.AestheticGradientsPlugin.replay(fields).isEmpty then
+      plugins(mode).form("aesthetic_gradients").flatMap(_.prop("enabled")).foreach(_.set("false"))
+      ctx.error("Aesthetic embedding not restored: invalid or ambiguous recorded settings.")
+    fields.get(sdfx.plugins.AestheticGradientsPlugin.EmbeddingKey).map(_.trim).filter(_.nonEmpty)
+      .filter(_ => sdfx.plugins.AestheticGradientsPlugin.replay(fields).exists(_.bool("enabled"))).foreach { name =>
+      plugins(mode).form("aesthetic_gradients").foreach { form =>
+        for embedding <- form.prop("embedding"); enabled <- form.prop("enabled") do
+          enabled.set("false")
+          val fingerprint = fields.get("Aesthetic embedding SHA256").map(_.trim).filter(_.nonEmpty)
+          val revision = aestheticRestoreEpoch(mode)
+          val edited = new javafx.beans.value.ChangeListener[String]:
+            def changed(observable: javafx.beans.value.ObservableValue[? <: String], oldValue: String, newValue: String): Unit =
+              aestheticRestoreEpoch(mode) += 1
+          form.props.values.foreach(_.addListener(edited))
+          def release(): Unit = form.props.values.foreach(_.removeListener(edited))
+          Fx.async {
+            def local(raw: String): Option[Path] =
+              if sdfx.mcp.PathPolicy.isNetworkPath(raw) then None
+              else scala.util.Try(Path.of(raw).toAbsolutePath.normalize()).toOption
+            val envDirs = Seq("SDFX_AESTHETIC_EMBEDDINGS", "SDFX_MCP_ALLOWED_DIRS").flatMap(k =>
+              Option(System.getenv(k)).toSeq.flatMap(_.split(java.io.File.pathSeparator)).flatMap(local))
+            val cache = Option(System.getenv("SDFX_AESTHETIC_GRADIENTS_CACHE")).flatMap(local)
+              .getOrElse(Path.of(System.getProperty("user.home"), ".cache", "stablediffusion-nui", "aesthetic_gradients"))
+            val index = services.home.configDir.resolve("aesthetic-embedding-directories.json")
+            def localOnly(path: Path): Boolean = !sdfx.mcp.PathPolicy.isNetworkPath(path.toString)
+            sdfx.core.aesthetic.AestheticEmbeddingDirectories.read(index, localOnly).flatMap { registered =>
+              val configured = (Seq(services.generator.outputsDir, cache.resolve("embeddings")) ++ envDirs ++ registered)
+                .map(_.toAbsolutePath.normalize())
+              val roots = (configured ++ configured.flatMap(p => scala.util.Try(p.toRealPath()).toOption)).distinct
+              def permitted(path: Path): Boolean = localOnly(path) && roots.exists(path.startsWith)
+              val dirs = Vector(services.generator.outputsDir.resolve("aesthetic_embeddings"), cache.resolve("embeddings")) ++ envDirs ++ registered
+              sdfx.core.aesthetic.AestheticEmbeddingLocator.resolve(name, fingerprint, dirs, permitted)
+            }
+          } { resolved =>
+            release()
+            if !disposed && aestheticRestoreEpoch(mode) == revision && embedding.get == name && enabled.get == "false" then
+              resolved match
+                case Right(path) =>
+                  embedding.set(path.toString); enabled.set("true")
+                  if fingerprint.isEmpty then ctx.info("Aesthetic embedding restored by its unique name; older metadata has no content fingerprint.")
+                case Left(error) => ctx.error(s"Aesthetic embedding not restored: $error")
+          } { error =>
+            release()
+            if !disposed && aestheticRestoreEpoch(mode) == revision then ctx.error(s"Aesthetic embedding not restored: ${Fx.message(error)}")
+          }
+      }
+    }
 
   /** Restore this tool's complete PNG settings into its native form as well as the request. */
   private def restoreComposable(mode: Mode, params: sdfx.core.model.GenerationParams): Unit =
@@ -1146,6 +1212,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       "VRAM estimator" -> (() => vramEstimator.dispose()),
       "VRAM estimates" -> (() => vramEstimates.values.foreach(_.dispose())),
       "embedding merge" -> (() => embeddingMerge.dispose()),
+      "aesthetic embedding" -> (() => aestheticEmbedding.dispose()),
       "temporal lab" -> (() => temporalLab.dispose()),
       "styles editor" -> (() => stylesEditor.dispose()),
       "metadata utils" -> (() => metadataUtils.dispose()),

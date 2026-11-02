@@ -13,6 +13,33 @@ import scala.jdk.CollectionConverters.*
 class GeneratorSuite extends munit.FunSuite:
   import FakeEngine.*
 
+  test("a stale aesthetic fingerprint in imported extras is never recorded as a current resource") {
+    val localHome = tempHome()
+    val local = new AppServices(localHome, Settings(), dryRun = true, builtins = Nil,
+      launchOverride = Some(() => launch()), persistSettings = false, installShutdownHook = false)
+    try
+      val prep = local.generator.prepare(GenerationParams(extra = Map("Aesthetic embedding SHA256" -> ("a" * 64))))
+      assert(!prep.recorded.extra.contains("Aesthetic embedding SHA256"))
+    finally
+      local.shutdown()
+      deleteTree(localHome.root)
+  }
+
+  test("an explicitly used aesthetic file registers its directory for later replay") {
+    val localHome = tempHome()
+    val local = new AppServices(localHome, Settings(), dryRun = true, builtins = Nil,
+      launchOverride = Some(() => launch()), persistSettings = false, installShutdownHook = false)
+    try
+      val custom = Files.createDirectories(localHome.root.resolve("chosen-styles"))
+      val file = Files.writeString(custom.resolve("style.pt"), "fixture")
+      local.generator.prepare(GenerationParams(hooks = Map("aesthetic_gradients" -> ujson.Obj("embedding" -> file.toString))))
+      val index = localHome.configDir.resolve("aesthetic-embedding-directories.json")
+      assertEquals(sdfx.core.aesthetic.AestheticEmbeddingDirectories.read(index, _ => true), Right(Vector(custom.toRealPath())))
+    finally
+      local.shutdown()
+      deleteTree(localHome.root)
+  }
+
   test("job-scoped Fastload saves each output without leaking payload to metadata") {
     val plugin = new sdfx.core.plugins.api.Plugin:
       def id = "controlnet_fastload"

@@ -489,15 +489,19 @@ class BaseEngine:
             images = [images]
         if not images:
             raise EngineError(INVALID_PARAMS, "Aesthetic Gradients: images (files or a folder) are required")
+        overwrite = params.get("overwrite", False)
+        if not isinstance(overwrite, bool):
+            raise EngineError(INVALID_PARAMS, "Aesthetic Gradients: overwrite must be a boolean")
         from pathlib import Path
         folder = Path(params.get("output_dir") or ag.embedding_dirs()[0])
         output = folder / (name if name.lower().endswith(".pt") else name + ".pt")
-        if output.exists() and not params.get("overwrite"):
+        if output.exists() and not overwrite:
             raise EngineError(INVALID_PARAMS, f"Aesthetic Gradients: {output} exists (pass overwrite to replace it)")
         ctx.check_interrupt()
         dev = "cuda" if getattr(self, "cuda", False) else "cpu"
         try:
-            return ag.create_embedding(images, output, device=dev, check_interrupt=ctx.check_interrupt)
+            return ag.create_embedding(images, output, device=dev, check_interrupt=ctx.check_interrupt,
+                                       overwrite=overwrite, publish=ctx.publish)
         except ImportError as e:
             raise EngineError(UNSUPPORTED, f"Aesthetic Gradients needs torch and transformers: {e}")
         except (OSError, ValueError) as e:
