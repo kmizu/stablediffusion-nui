@@ -1,6 +1,8 @@
 # Aesthetic Gradients verification (#2)
 
-> 2026-11-03 作業中: 以下は以前の検証記録。GUI と MCP での embedding 作成は追加作業中で、下の「GUI/MCP では作成できない」という記述は現行の作業ツリーには当てはまらない。新しい操作方法は [日本語ガイド](aesthetic-embeddings.md) を参照。SD1.5 と SDXL の実モデルを公式 MCP SDK から使い、作成・一覧・適用・既定フォルダからの PNG 再生成を確認した。GUI の実モデル確認、別フォルダと同名ファイルの再現、配布版の検証は未完了。Issue #2 は未完了のまま。
+> 現在の状態: GUI・MCP で作成でき、実 GUI・配布版 MCP の SD1.5／SDXL、配布版 dry-run の Windows chooser を検証済み。chooser と実モデル生成を配布版 GUI で一続きには試していない。元拡張の PNG／embedding との互換性などは未検証で、issue #2 は open。操作方法は [日本語ガイド](aesthetic-embeddings.md) を参照。以下の追試は時系列の記録で、各段階での未検証事項は後の追試で解消したものを含む。
+
+> 2026-11-03 の初期状態: SD1.5 と SDXL の実モデルを公式 MCP SDK から使い、作成・一覧・適用・既定フォルダからの PNG 再生成を確認。当時、GUI の実モデル、別フォルダ・同名ファイル、配布版の検証は未完了だった。
 
 > 追加の作業ツリー検証: embedding の内容を SHA-256 で識別する復元、登録フォルダの別プロセス間ロック、出力先変更後の MCP 検査、未発見・曖昧な場合の拒否は、CPU テストと fake worker を使う実画面テストで確認した。Python 25 件、Scala core 4 件・plugin 6 件・engine 40 件・MCP 75 件が成功（`outputs/codex-aesthetic-provenance-final3.log`、`outputs/codex-aesthetic-replay-review-fixes.log`）。これらの変更後の実モデルと配布版は未検証。旧 PNG は hash がないため、名前が一意でも元ファイルの内容は保証できない。
 

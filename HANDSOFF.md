@@ -5,11 +5,11 @@
 - ユーザーの方針: issue を速く解決し、10件ごとにリリース。MCP から AI が使えることを重視。日本語マニュアルで十分、必要な画面はキャプチャする。次のリリース番号は未決定なので推測しない。
 - main `0f9ff4a9c54204040f5b203b81836f9ed71d6516` は push 済み（作業時に remote と一致を確認）。`.claude/` は未追跡の既存 worktrees なので消さない。
 - ネガティブ候補 `c484556`: 画質・人体・文字のセットと個別調整、日本語説明。実 GUI と SD1.5/SDXL、展開版 MCP を確認。詳細は `docs/negative-suggestions-verification.md`。抽出版 GUI 自体の実生成は未確認。
-- #2 Aesthetic Gradients `c4abab3`: GUI/MCP の embedding 作成、PNG 復元の SHA 照合、日本語マニュアル。実 GUI と展開版 MCP で SD1.5/SDXL を確認。Scala 全体と Python CPU 全体も通過。`674cb79` で SDXL の強い重みについて日英の案内を追加、明示値は変えない。元拡張との互換性、OS chooser の手操作、配布 EXE の GUI など未確認があるため issue は open、台帳は todo のまま。詳細は `docs/aesthetic-gradients-verification.md` と `docs/aesthetic-embeddings.md`。新しい main と合わせた後の配布物そのものはまだ実モデルで検証していない。
+- #2 Aesthetic Gradients `c4abab3`: GUI/MCP の embedding 作成、PNG 復元の SHA 照合、日本語マニュアル。実 GUI と展開版 MCP で SD1.5/SDXL を確認。Scala 全体と Python CPU 全体も通過。`674cb79` で SDXL の強い重みについて日英の案内を追加、明示値は変えない。配布版 dry-run の Windows chooser では個別追加・複数追加・キャンセルを確認。元拡張との互換性と配布 EXE の GUI で実モデルを使う一連の操作などが未確認のため issue は open、台帳は todo のまま。詳細は `docs/aesthetic-gradients-verification.md` と `docs/aesthetic-embeddings.md`。
 - #26 CreaPrompt: main `2284f49` に統合・push し、GitHub issue closed を確認。実 GUI と配布版 MCP で SD1.5・SDXL を検証し画像を目視。main の `sbt test ui/assembly` は exit 0、テストの一部はキャッシュでスキップされた。生成した JAR は配布版実測時の JAR と SHA-256 が一致。抽出版 GUI 自体の実生成などの限界は `docs/creaprompt-verification.md` に記載。新リリースへの issue 件数は 1/10。
 - #24 タグ補完: main `9876bda` に wildcard の部分 Tab 補完と行選択、`ffcf80e` にカテゴリ番号と色マーカー、`56a9411` にデータ元別のカスタム配色、`87aea1f` に Tab 補完の範囲設定、`1c84470` に補完待ち時間を部分統合。保存失敗・不正なパスの復旧、実 GUI と SD1.5・SDXL を確認したが、上流の未実装機能や配布 GUI の検証が残り issue は open。`docs/tag-autocomplete-acceptance-24.md` と各検証文書を参照。
 - #143 VRAM/最適化: main `341dc29` に部分統合、`ffdb2e6` で fp8-auto 拒否後の GUI 表示・生成、`d2aa609` で単一 MainWindow の checkpoint／Style／VAE 操作順序と生成時の待機状態を修正。実 SD1.5・SDXL と展開版 MCP の検証、Python 全体、Scala の回帰を実施。fp32 fallback の NaN と VRAM 制限は試験で再現したもの。物理低 VRAM 端末、物理マウス操作、SDXL ControlNet、MCP／restart／plugin と UI 操作の全体順序は未検証・保証外のため issue は open。`docs/optimization-handoff.md` と `docs/optimization-verification.md` を参照。
-- #18 ControlNet 前処理: main `0f9ff4a` に選択ファイル一括処理を部分統合。保護セッション切替時の公開を staging とロックで守り、fake worker の暗号化入出力、実 engine の複数選択・失敗・cancel を確認した。detector の許諾と実機、OS chooser 手操作、実 engine の保護入力などが残るため issue は open。`docs/controlnet-selected-batch-verification.md` を参照。
+- #18 ControlNet 前処理: main `0f9ff4a` に選択ファイル一括処理を部分統合。保護セッション切替時の公開を staging とロックで守り、実 engine の複数選択・失敗・cancel と保護 PNG 入出力も確認した。detector の許諾と実機、OS chooser 手操作などが残るため issue は open。`docs/controlnet-selected-batch-verification.md` を参照。
 - 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
 - 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 
