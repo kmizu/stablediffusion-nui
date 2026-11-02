@@ -55,11 +55,14 @@ simple selector on type, id and style class).
 
 ## How much is translated
 
-The built-in Japanese pack translates about 80 % of the distinct texts of the window, including almost all labels,
-buttons and short tool tips; the long tool tips of extension controls are mostly still English. The packs of the
-A1111 community use A1111's wording and cover 2 % to 18 % of this app's texts (the best are the zh_Hant, zh_Hans, Chinese and
-Italian packs; see the verification document). Texts inside lists and tables, progress lines with
-timings and error messages stay English unless a pack has a rule for the whole message.
+In a real-window check on November 2, 2026, with every tab and all three generation modes visited, the built-in Japanese
+pack translated 1,442 of 1,947 distinct English texts (74.1 %). Counting each displayed occurrence, it translated
+3,947 of 4,902 text slots containing letters (80.5 %). Of 110 texts longer than 100 characters, 21 were translated;
+most long tool tips for extension controls remain in English.
+
+The A1111 community packs use A1111's wording and covered 2 % to 18 % of this app's texts in an earlier measurement
+(see the verification document). Texts inside lists and tables, progress lines with timings and error messages stay
+English unless a pack has a rule for the whole message.
 
 ![Bilingual layout, original first](shots/localization-bilingual.png)
 

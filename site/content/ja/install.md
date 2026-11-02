@@ -19,7 +19,7 @@ GPU がなくても、dry-run モードで画面の操作は試せます（[dry-
 
 ## ダウンロードと展開
 
-1. [GitHub Releases](https://github.com/kmizu/stablediffusion-nui/releases/latest) から最新版の `SDNUI-v0.06-windows-x64.zip` をダウンロードします。
+1. [GitHub Releases](https://github.com/kmizu/stablediffusion-nui/releases/latest) から最新版の `SDNUI-v0.1-windows-x64.zip` をダウンロードします。
 2. ZIP を書き込みできるフォルダ（たとえばユーザープロファイルの下）に展開します。
 3. 展開した `SDNUI` フォルダの中の `SDNUI.exe` を起動します。
 
@@ -64,6 +64,12 @@ python -m venv .venv
 画面上部のバーの右側に、エンジンの状態が表示されます。**● Starting…** から **● Ready** に変われば準備完了です。**● Ready** の後ろには使っているデバイスが表示されます。読み込み中は **● Loading** と表示されます。
 
 エンジンが起動しないときは、[トラブルシュート](troubleshooting.html)を参照してください。
+
+## 画面を日本語にする
+
+画面の表示は初期設定では英語です。日本語に切り替えるには、画面右上の **⚙ Settings** を押し、**Language** タブの **Language** で **日本語 (ja_JP, built in)** を選んで **OK** を押します。再起動せずに画面が切り替わります。
+
+英語に戻す場合は、同じ欄で **None (English)** を選びます。日本語と英語を併記する方法や、翻訳されない箇所については[表示言語](localization.html)を参照してください。
 
 ## モデルを置く
 

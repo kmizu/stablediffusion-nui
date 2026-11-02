@@ -19,7 +19,7 @@ Without a GPU you can still try the interface in dry-run mode (see [Dry-run mode
 
 ## Download and extract
 
-1. Download the latest `SDNUI-v0.06-windows-x64.zip` from [GitHub Releases](https://github.com/kmizu/stablediffusion-nui/releases/latest).
+1. Download the latest `SDNUI-v0.1-windows-x64.zip` from [GitHub Releases](https://github.com/kmizu/stablediffusion-nui/releases/latest).
 2. Extract the ZIP to a folder you can write to, for example under your user profile.
 3. Run `SDNUI.exe` inside the extracted `SDNUI` folder.
 

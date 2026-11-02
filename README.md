@@ -26,7 +26,7 @@ User manual: <https://kmizu.github.io/stablediffusion-nui/en/>. Requirements: JD
 - UI: Scala 3 + JavaFX 21(`ui` モジュール)
 - MCP サーバー: AI エージェントから画像生成を呼べる(`mcp` モジュール)
 - 推論エンジン: Python + diffusers(`python/sdfx`)。UI/MCP から子プロセスとして起動され、stdin/stdout の JSON Lines で通信します
-- ビルド: sbt 1.10.11 + sbt-assembly(fat jar 1 本 `target/stablediffusion-nui.jar`)
+- ビルド: sbt 2.0.12 + sbt-assembly(fat jar 1 本 `target/stablediffusion-nui.jar`)
 
 このフォルダだけで完結します。親ディレクトリの reForge には依存しません。
 
@@ -80,10 +80,10 @@ reForge の標準スクリプトと内蔵拡張をすべて書き直して同梱
 - ビルドする場合は sbt(jar が既にあれば不要)
 - Windows / Linux / macOS(JavaFX は OS ごとの jar をビルド時に取り込みます。別 OS 用の jar はその OS でビルドしてください)
 
-## Windows 配布版 v0.03
+## Windows 配布版 v0.1
 
-Windows x64 の `SDNUI-v0.03-windows-x64.zip` を入手したら、書き込み可能なフォルダに展開し、`SDNUI\SDNUI.exe` を起動します。
-Java ランタイムは同梱されています。Python 3.10〜3.12 は別途必要で、初回の通常起動時に専用環境と依存パッケージをセットアップできます。モデルは同梱されません。Settings → Model folders → **Add A1111/reForge install...** から既存のモデルフォルダを利用できます。詳しい手順は [Windows 配布版](docs/WINDOWS_RELEASE.md) を参照してください。
+Windows x64 の `SDNUI-v0.1-windows-x64.zip` を入手したら、書き込み可能なフォルダに展開し、`SDNUI\SDNUI.exe` を起動します。
+Java ランタイムは同梱されています。Python 3.10〜3.12 は別途必要で、初回の通常起動時に専用環境と依存パッケージをセットアップできます。画像生成用のチェックポイントは同梱されません。NudeNet NSFW Censor 用の検出モデルは同梱されています。Settings → Model folders → **Add A1111/reForge install...** から既存のモデルフォルダを利用できます。詳しい手順は [Windows 配布版](docs/WINDOWS_RELEASE.md) を参照してください。
 
 旧版 v0.01 / v0.02 の配布物は旧名 SDFX のままです。互換性のため、Python モジュール `sdfx`、`SDFX_HOME` / `SDFX_MCP_*`、`-Dsdfx.home` と既存の設定ファイル名は変更していません。
 

@@ -214,8 +214,17 @@ object RealLocalizationCheck:
       val tipJa = tooltips.count(isJapanese)
       checked(s"tool tips on controls: $tipJa of ${tooltips.size} show Japanese")
       require(tipJa > 50, "expected many translated tool tips")
-      val schedule = fx(window.scene.getRoot.lookupAll(".combo-box").asScala.collect { case c: ComboBox[?] => c.asInstanceOf[ComboBox[String]] }
-        .find(c => c.getItems.contains("Karras") && c.getItems.contains("Automatic")).orNull)
+      // Scope to txt2img's Sampling card: several other panels and Hires have
+      // scheduler lists too, and lookupAll returns them in no defined order.
+      val schedule = fx {
+        val cards = window.panels(Mode.Txt2Img).content.getChildren.asScala.collect { case v: javafx.scene.layout.VBox => v }
+        val sampling = cards.find(v => Option(v.lookup(".card-title")).exists {
+          case label: Label => label.getText == "サンプリング"
+          case _ => false
+        }).getOrElse(throw new IllegalStateException("txt2img sampling card not found"))
+        sampling.lookupAll(".combo-box").asScala.collect { case c: ComboBox[?] => c.asInstanceOf[ComboBox[String]] }
+          .find(c => c.getItems.contains("Karras") && c.getItems.contains("Automatic")).orNull
+      }
       require(schedule != null, "schedule combo not found")
       val shown = fx(schedule.getButtonCell.getText)
       require(shown == "自動" && fx(schedule.getItems.contains("Automatic")) && fx(schedule.getValue) == "Automatic", s"drop-down shows '$shown'")

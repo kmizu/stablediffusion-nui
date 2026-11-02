@@ -6,6 +6,14 @@ description: What each release of Stable Diffusion NUI (formerly SDFX) added or 
 
 Each release can be downloaded from its GitHub release page. Every release bundles a Java runtime; Python and model files must be supplied separately.
 
+## v0.1
+
+Published 2026-11-02. [GitHub release page](https://github.com/kmizu/stablediffusion-nui/releases/tag/v0.1)
+
+The built-in Japanese language pack and [language guide](localization.html) are included. Translation is partial: 74.1% of distinct strings observed in the current UI. Panorama, compile, Prompt Tools, State Manager, tag completion and Corridor Crawler are partial implementations.
+
+Extract **SDNUI-v0.1-windows-x64.zip** and run **SDNUI/SDNUI.exe**. SHA-256: `3ea05b8e5b0fec575cc4282459d03f3766766617f681a2927e081e1c79ef91b3`
+
 ## v0.06
 
 Published 2026-11-02. [GitHub release page](https://github.com/kmizu/stablediffusion-nui/releases/tag/v0.06)

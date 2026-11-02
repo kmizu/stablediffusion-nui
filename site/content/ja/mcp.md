@@ -231,7 +231,7 @@ AlwaysOn 拡張のジョブ単位の設定で、プラグイン ID をキーに�
 { "name": "list_models", "arguments": {} }
 ```
 
-一覧から SD1.5 のチェックポイントを読み込みます。
+一覧から SD1.5 のチェックポイントを読み込みます。`animekawa_v10` は例です。`list_models` の結果に表示された、手元のチェックポイント名に置き換えてください。
 
 ```json
 { "name": "set_model", "arguments": { "name": "animekawa_v10" } }
