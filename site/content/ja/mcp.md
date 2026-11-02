@@ -163,6 +163,10 @@ claude mcp add --transport http stablediffusion-nui-gui http://127.0.0.1:7861/mc
 | `controlnet_preprocess` | 画像生成なしで、画像またはフォルダに ControlNet プリプロセッサを実行します（拡張機能 ControlNet Preprocessor の Extras 相当）。`preprocessor` は `operation=list` で確認できるモジュール（canny、invert、recolor_*、tile_*、blur_gaussian、depth、Marigold、検出系）、`processor_res`（64〜2048）または `pixel_perfect` は canny と検出系に効き、`args` でモジュールのスライダーを指定します。結果は `<名前>-<preprocessor>.png` として、パラメータに `ControlNet Preprocessor: "{...}"` を付けて保存され、上書きされません。 |
 | `vae_tools` | 読み込み中の VAE で、ローカルファイル（`input_paths`、最大 64 個）をエンコード、デコード、または往復変換します。TAESD や Approx NN の重みは `allow_download: true` のときだけダウンロードします。 |
 
+### 生成履歴
+
+`generation_history` はデスクトップの履歴やお気に入りを読み取ります。`action: "list"`、`mode: "txt2img"`（または `img2img`、`inpaint`）、`collection: "history"`（または `favourites`）で名前と ID を一覧し、`action: "get"` と選んだ `id` で保存済み項目を取得できます。整数と小数の値は精度を保つため文字列として返り、各項目に型が付きます。履歴の名前や項目には個人情報が含まれ得ます。取り込んだ元データや画像は返さず、設定の復元・生成・履歴変更も行いません。
+
 ## 生成の引数
 
 `txt2img` には `prompt` が、`img2img` にはさらに `init_image` が必要です。ほかの引数は省略できます。

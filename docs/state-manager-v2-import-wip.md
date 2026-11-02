@@ -27,6 +27,10 @@ import record の「全復元」も実際には対応済み項目だけの復元
 
 独立レビューで、取込み履歴を末尾に追加すると、上限時に既存の新しい履歴が先に削除され得ることを確認。固定 revision の上流 `saveState` は `Date.now()` のミリ秒を作成キーに使うが、native 履歴は比較に使える正確な共通 timestamp を保持しない。新規取込み分は既存履歴の前に置いて古い扱いとし、表示・削除順と原本の metadata 複製、対応項目は entry ごとに異なる点を確認画面と日本語文書に明示した。修正前の回帰テストは期待どおり失敗し、修正後は decoder 3/3、履歴 13/13 と offline の実 MainWindow test が成功。`outputs/state-v2-order-gui/state-manager-import-preview.png` を目視した。異なる取込み間の正確な時系列は保証しない。
 
+MCP `generation_history` に read-only の一覧と指定 ID の項目取得を追加。プロンプトは詳細でのみ、名前は一覧でも返されるため、名前・項目に個人情報がある場合はクライアントに渡る。画像や取込み原本は返さず、整数と小数は文字列で精度を保つ。`McpToolsSuite` 全 40 件が pass、追加境界を含む focused 1 件も pass。source-built jar と公式 MCP SDK による stdio と HTTP の試験では、合成 import 履歴の名前・詳細を確認し、画像と originalFields の sentinel が返らず、保存元の bytes が不変だった（`outputs/state-history-mcp-stdio-final/receipt.json`、`outputs/state-history-mcp-http-final2/receipt.json`）。HTTP 初回の成功表示が STDIO と誤表示され、修正後に再実行した。stdio 初回は home/python の欠如で engine 起動に失敗、再実行でも読み取り後の終了が非同期 engine 起動を中断した。履歴読み取りは成功したが engine 起動・生成や配布版の検証ではない。
+
+main 統合後も `McpToolsSuite` 40件と `ui/assembly` は exit 0。JAR SHA-256 は `7402592bcc1375b71f72ce61fff774d17482b4422ba68600f64299462768253b`。上記の transport 実測は分離 worktree の source-built jar に対するもので、この JAR 自体ではない。
+
 ## 保存・安全性の境界
 
 - 選択ファイルは読み取りのみで、最終パスに対する symlink を追わず、圧縮後と展開後をそれぞれ最大 4,194,304 bytes に制限する。JSON の重複キー・不正 UTF-8・過大な深さ／ノード数や、展開設定の総数超過は拒否する。モデルのダウンロードや読み込み、生成は import 自体では行わない。

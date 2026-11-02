@@ -54,6 +54,32 @@ class McpToolsSuite extends munit.FunSuite:
     assert(!r("isError").bool, s"$tool failed: ${textOf(r)}")
     r
 
+  test("generation history MCP lists entries and reads exact typed fields without source metadata") {
+    import sdfx.core.presets.*
+    val store = new PresetStore(home.configDir.resolve("generation-history"), PresetLimits(maxCollections = 6))
+    val id = java.util.UUID.randomUUID()
+    val fields = Map(FieldKey(Vector("generation", "seed")) -> PresetAtom.Integer(9007199254740993L),
+      FieldKey(Vector("generation", "prompt")) -> PresetAtom.Text("private prompt"))
+    val record = PresetRecord(id, "test history", fields, None, Set.empty, Vector.empty, Vector.empty)
+    val library = PresetLibrary(1, Vector(PresetCollection("history-txt2img", fields.keySet, Vector.empty, Vector(record), Vector.empty)), Vector.empty)
+    val before = store.load().toOption.get
+    assert(store.save(before.revision, library).isRight)
+    val listed = ok("generation_history", ujson.Obj("action" -> "list", "mode" -> "txt2img"))("structuredContent")
+    assertEquals(listed("entries").arr.head("id").str, id.toString)
+    assert(!listed.render().contains("private prompt"))
+    val read = ok("generation_history", ujson.Obj("action" -> "get", "mode" -> "txt2img", "id" -> id.toString))("structuredContent")
+    assertEquals(read("fields")("generation.seed")("value").str, "9007199254740993")
+    assertEquals(read("fields")("generation.prompt")("value").str, "private prompt")
+    assert(!read.obj.contains("source"))
+    assertEquals(ok("generation_history", ujson.Obj("action" -> "list", "mode" -> "img2img"))("structuredContent")("entries").arr.size, 0)
+    assertEquals(ok("generation_history", ujson.Obj("action" -> "list", "mode" -> "txt2img", "collection" -> "favourites"))("structuredContent")("entries").arr.size, 0)
+    assert(call("generation_history", ujson.Obj("action" -> "get", "mode" -> "img2img", "id" -> id.toString))("isError").bool)
+    assert(call("generation_history", ujson.Obj("action" -> "list", "mode" -> "../txt2img"))("isError").bool)
+    assert(call("generation_history", ujson.Obj("action" -> "get", "mode" -> "txt2img"))("isError").bool)
+    assert(call("generation_history", ujson.Obj("action" -> "delete", "mode" -> "txt2img"))("isError").bool)
+    assertEquals(store.load().toOption.get.library, library)
+  }
+
   test("Aesthetic embedding creation is discoverable and refuses paths outside the permitted roots") {
     val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
     val tool = ts.find(_("name").str == "aesthetic_embedding").getOrElse(fail("aesthetic embedding tool missing"))

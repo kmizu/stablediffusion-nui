@@ -772,6 +772,7 @@ final class McpTools(
     o
 
   val all: Seq[McpTool] = Seq(
+    new GenerationHistoryTool(services),
     new AestheticEmbeddingTool(services, pathPolicy, () => outputsDir, tempFile, ctx => ready(ctx)),
     new ControlNetFastloadTool(services, pathPolicy, outputsDir, ctx => ready(ctx)),
     new InspectGenerationMetadataTool(pathPolicy, () => outputsDir, Some(services.home.configDir.resolve("aesthetic-embedding-directories.json"))),

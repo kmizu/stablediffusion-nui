@@ -20,6 +20,7 @@
 - #6 MediaPipe 顔検出は main に部分統合。モデル公開競合・差替え対策を含む最新版について、分離 worktree の SD1.5/SDXL 実 MCP、SD1.5 実 GUI と replay／cancel 復旧を確認。main でも Python 関連41件成功。SDXL GUI、配布版や #6 の別 checkpoint／フォルダ入力は未了。`docs/batch-face-mediapipe-wip.md` 参照。#6 は open、リリース件数には数えない。
 - #23 お気に入りは main に部分統合。複数登録・解除、履歴消去時の保護、保存とサムネイルの競合対策、共通 PresetStore の保存成功後の誤報修正を実装。SD1.5/SDXL 実 GUI と、main の保存・履歴テスト計36件、実 GUI、assembly を確認。非協調プロセスや配布版 GUI などの限界は `docs/state-manager-verification.md`。上流 storage import 等が残り #23 は open、リリース件数には数えない。
 - #23 State Manager V2 gzip の部分 import も main に統合。合成 fixture の preview・未知項目保持・履歴とお気に入りへの保存、SD1.5/SDXL 実 GUI 生成、main の parser 3件・履歴13件・実 GUI・assembly を確認。上流実物ファイル、直接 IndexedDB、配布 GUI と全設定互換は未確認。`docs/state-manager-v2-import-wip.md` を参照。#23 は引き続き open。
+- #23 履歴・お気に入りの MCP read-only 一覧と ID 指定詳細も main に部分統合。公式 SDK で stdio／HTTP の読み取りと原本非返却・保存 bytes 不変を検証し、main の `McpToolsSuite` 40件と assembly を再実行。詳細は同文書。配布版 transport と生成連携はこの試験では未検証。
 - 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
 - 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 
