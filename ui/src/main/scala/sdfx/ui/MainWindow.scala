@@ -41,6 +41,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   // overlapping model / VAE loads: the chip shows the latest one until all are done
   private var loads = Vector.empty[(Long, String)]
   private var loadSeq = 0L
+  private val checkpointLoadRecovery = new CheckpointLoadRecovery
   private val cardWindowsPaths = LocalPreviewFiles.systemPlatform.windows
   private def validateCardModel(id: CardId): scala.concurrent.Future[Either[String, Unit]] =
     scala.concurrent.Future {
@@ -526,8 +527,10 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       val id = beginLoad(s"Style ${style.name}")
       val currentCheckpoint = model.checkpoint.get
       val currentVae = model.vae.get
+      val changesCheckpoint = checkpointLoadRecovery.beginStyleCheckpoint(currentCheckpoint, style.checkpoint)
+      val styleCheckpointEpoch = checkpointLoadRecovery.currentEpoch
       Fx.async {
-        if style.checkpoint.nonEmpty && currentCheckpoint != style.checkpoint then services.loadCheckpoint(style.checkpoint)
+        if changesCheckpoint then services.loadCheckpoint(style.checkpoint)
         if ExtendedStyle.normalizeVae(currentVae) != targetVae || currentCheckpoint != style.checkpoint then services.setVae(Some(targetVae))
       } { _ =>
         try
@@ -537,7 +540,8 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
           vm.negativePrompt.set(style.negativePrompt)
           vm.width.set(style.width)
           vm.height.set(style.height)
-          if style.checkpoint.nonEmpty then model.checkpoint.set(style.checkpoint)
+          if style.checkpoint.nonEmpty && checkpointLoadRecovery.canApplyStyle(styleCheckpointEpoch, currentCheckpoint, model.checkpoint.get) then
+            model.checkpoint.set(style.checkpoint)
           model.vae.set(targetVae)
           select(mode)
           ctx.success(s"Applied extended style '${style.name}'")
@@ -545,7 +549,8 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       } { e =>
         try
           endLoad(id)
-          services.supervisor.loadedModel.foreach(m => model.checkpoint.set(m.name))
+          if checkpointLoadRecovery.canRestoreStyle(styleCheckpointEpoch, currentCheckpoint, model.checkpoint.get) then
+            services.supervisor.loadedModel.foreach(m => model.checkpoint.set(m.name))
           ctx.error(s"Cannot apply extended style: ${Fx.message(e)}")
         finally ctx.extendedStyleApplying.set(false)
       }
@@ -936,6 +941,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     ()
 
   private def startCheckpointLoad(name: String): Long =
+    val attempt = checkpointLoadRecovery.beginCheckpoint()
     model.checkpoint.set(name)
     val id = beginLoad(name)
     Fx.async(services.loadCheckpoint(name)) { m =>
@@ -943,6 +949,13 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       ctx.success(f"Loaded ${m.name}%s (${m.kind}%s) in ${m.loadedMs / 1000.0}%.1f s")
     } { e =>
       endLoad(id)
+      // This specific worker rejection happens before it frees the prior model.
+      // Keep the selection aligned with that model, but never overwrite a newer
+      // user selection when an older asynchronous request finishes late.
+      if checkpointLoadRecovery.shouldRestore(attempt, name, model.checkpoint.get, e) then
+        services.supervisor.loadedModel.foreach { current =>
+          model.checkpoint.set(services.catalog.findCheckpoint(current.path).map(_.name).getOrElse(current.name))
+        }
       ctx.error(s"Cannot load checkpoint: ${friendly(Fx.message(e))}")
     }
     id

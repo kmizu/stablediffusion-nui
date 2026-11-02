@@ -77,3 +77,6 @@ Real JavaFX SettingsDialog/MainWindow harness now passed SD1.5 and SDXL real-mod
 
 
 SD1.5 real MainWindow plus AppServices now also passed the auto+fp8 load-refusal and existing-model recovery scenario with a deliberately tiny planner budget; baseline and recovery were RGB-identical and the image was viewed. This is a planner simulation, not physical low-VRAM hardware, and control activation was programmatic. See the final verification section.
+
+
+A real JavaFX SD1.5 test reproduced rejected auto+fp8 checkpoint switches leaving a wrong GUI selection and breaking the next generation. A narrow confirmed pre-free refusal recovery now restores the retained checkpoint, with checkpoint/style selection epoch guards; normal and VAE-interleaved rejection both passed actual GPU generation with a planner-only simulated cap. The worker request dispatch order is not serialized by the UI guard, and style success can still overwrite a newer VAE selection; these are existing unverified concurrency risks. See the final section of `optimization-verification.md`.

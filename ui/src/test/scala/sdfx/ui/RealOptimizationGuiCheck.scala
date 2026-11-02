@@ -28,8 +28,10 @@ object RealOptimizationGuiCheck:
     task.get(60, TimeUnit.SECONDS)
 
   def main(args: Array[String]): Unit =
-    require(args.length == 5 || (args.length == 6 && Set("--settings-only", "--reject-check").contains(args(5))), "python checkpoint output width height [--settings-only|--reject-check]")
-    val rejectCheck = args.length == 6 && args(5) == "--reject-check"
+    require(args.length == 5 || (args.length == 6 && Set("--settings-only", "--reject-check", "--switch-check", "--switch-vae-check").contains(args(5))), "python checkpoint output width height [--settings-only|--reject-check|--switch-check|--switch-vae-check]")
+    val rejectCheck = args.length == 6 && Set("--reject-check", "--switch-check", "--switch-vae-check").contains(args(5))
+    val switchCheck = args.length == 6 && Set("--switch-check", "--switch-vae-check").contains(args(5))
+    val switchVaeCheck = args.length == 6 && args(5) == "--switch-vae-check"
     val python = Paths.get(args(0)).toAbsolutePath.normalize()
     val checkpoint = Paths.get(args(1)).toAbsolutePath.normalize()
     val output = Paths.get(args(2)).toAbsolutePath.normalize()
@@ -129,7 +131,35 @@ object RealOptimizationGuiCheck:
       val aa = a.getRGB(0, 0, a.getWidth, a.getHeight, null, 0, a.getWidth)
       val bb = b.getRGB(0, 0, b.getWidth, b.getHeight, null, 0, b.getWidth)
       require(java.util.Arrays.equals(aa, bb), "baseline not restored after disabling DeepCache")
-      if rejectCheck then
+      if switchCheck then
+        val second = checkpoint.getParent.resolve("aiomonstergirls_v4.safetensors")
+        require(Files.isRegularFile(second), "second checkpoint missing")
+        val current = services.supervisor.loadedModel.getOrElse(throw new IllegalStateException("loaded model missing"))
+        services.updateSettings(_.copy(vramMode = "auto"))
+        fx {
+          window.loadCheckpoint(second.toString)
+          if switchVaeCheck then window.setVae("Automatic")
+        }
+        val deadline = System.nanoTime() + 90.seconds.toNanos
+        def errorShown: Boolean = fx {
+          window.ctx.toaster.layer.lookupAll(".label").asScala.collect { case l: javafx.scene.control.Label => l.getText }
+            .exists(_.contains("Cannot load checkpoint"))
+        }
+        while !errorShown && System.nanoTime() < deadline do Thread.sleep(50)
+        require(errorShown, "expected checkpoint refusal was not shown")
+        val visible = fx(window.model.checkpoint.get)
+        val kept = services.supervisor.loadedModel.exists(m => m.path == current.path && m.modelToken == current.modelToken)
+        println(s"GUI_OPT_SWITCH_OBSERVED visible=$visible old=${current.name} retained=$kept")
+        val follow = generate()
+        val image = ImageIO.read(follow.path.toFile)
+        val pixels = image.getRGB(0, 0, image.getWidth, image.getHeight, null, 0, image.getWidth)
+        val same = java.util.Arrays.equals(aa, pixels)
+        println(s"GUI_OPT_SWITCH_FOLLOW same=$same path=${follow.path}")
+        require(kept, "supervisor lost original model after refusal")
+        require(visible == current.name, s"GUI selection stayed on rejected model: $visible, expected ${current.name}")
+        require(same, "generation changed after rejected checkpoint switch")
+        println("GUI_OPT_SWITCH_SUCCESS")
+      else if rejectCheck then
         val current = services.supervisor.loadedModel.getOrElse(throw new IllegalStateException("loaded model missing"))
         services.updateSettings(_.copy(vramMode = "auto"))
         val error = try
