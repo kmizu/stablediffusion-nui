@@ -320,3 +320,22 @@ It did not hit the configured CUDA allocation limit or exceed about 1 GiB VRAM,
 so the measured problem was throughput rather than VRAM capacity. Normal-size
 quality, a practical high-resolution offload path, and performance with weights
 resident on a 6 GiB GPU remain open.
+
+## Full-size NUI masked SD1.5 execution (2026-11-03)
+
+`NativeRealInpaintSuite` takes the known 512x512 native SD1.5 red-apple output
+as input and sends masked img2img through NUI `AppServices` and `Generator`.
+It uses `DPM++ 2M`, `Karras`, 20 scheduled steps, strength 0.5 (10 active steps),
+CFG7.5, saved CUDA U-Net/VAE placement and weight offload. With
+`SDFX_SCALATORCH_MAX_ATTENTION_SCORE_ELEMENTS=134217728`, it passed on the local
+GTX 1650 SUPER (4 GiB) in 685.5s. The worker reported `cuda:0`; the test verified
+exact source pixels across the black half, changed pixels across the white half,
+PNG prompt/seed/strength metadata, and no Python directory. The output and its
+source are saved in `.superpowers/native-sd15-nui-inpaint/` for review.
+
+The result is visually coherent but remained a red apple despite a green-apple
+prompt. This proves the full-size NUI request, CUDA worker, mask ownership and
+PNG path; semantic color editing at this strength is not accepted. It also
+shows that 512px masked generation on this 4 GiB setup is slow with FP32 weight
+offload. These measurements do not establish speed on a 6 GiB GPU without
+offload.
