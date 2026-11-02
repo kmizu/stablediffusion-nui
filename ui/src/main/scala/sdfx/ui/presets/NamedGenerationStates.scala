@@ -37,7 +37,9 @@ object NamedGenerationStates:
     library.copy(collections = library.collections.filterNot(_.id == old.id) :+
       old.copy(tracked = remaining.flatMap(_.fields.keys).toSet, presets = remaining))
 
-  def preflight(record: PresetRecord, fields: NativePresetFields): Either[PresetError, PresetApplyPlan] =
+  /** `only` limits the check (and a later apply) to a category subset; resources of excluded fields are not required. */
+  def preflight(full: PresetRecord, fields: NativePresetFields, only: Option[Set[FieldKey]] = None): Either[PresetError, PresetApplyPlan] =
+    val record = only.fold(full)(keys => full.copy(fields = full.fields.filter((k, _) => keys(k))))
     val schema = fields.schema
     val before = fields.capture()
     PresetApply.plan(record, record.fields.keySet, schema, before, ApplyBase.Current).flatMap { plan =>

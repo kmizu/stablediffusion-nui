@@ -217,6 +217,10 @@ Hires. fix セクションには **Hires Fix Tweaks** の設定も含まれま�
 
 復元の前に、モデルや参照ファイルが揃っているかが確認されます。足りないものがあると復元全体が止まり、何が足りないかが表示されます。設定が黙って抜け落ちることはありません。
 
+**History** タブは、Generate / Queue を押すたびにフォームを自動で記録します(モードごとに最新 50 件。最初の画像の 100 px サムネイル付き)。**Record every generation automatically** で記録を止められ、エントリの削除、**Clear history**、**Keep as named state**(名前付き生成設定へコピー)も使えます。保存先は `<アプリのフォルダ>/config/generation-history` です。
+
+タブの下のチェックボックス(Prompts / Sampling, size, seed, hires / Checkpoint・VAE・clip skip / ControlNet / Script and extension controls / WD batch and layout)で、**Restore state** が戻す範囲をカテゴリ単位に絞れます。名前付き設定にも履歴にも使えます。すべてチェックなら全部を戻します。
+
 保存先は `<アプリのフォルダ>/config/generation-states` です。**Reload** は外部での変更を読み直し、**Restore backup** はライブラリ全体を 1 つ前に保存した状態に戻します(選んだ項目やモードだけではありません)。
 
 ## PNG からパラメーターを復元する

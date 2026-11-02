@@ -263,6 +263,14 @@ and models are not copied into the state.
 Before restoring, SDNUI checks that the models and referenced files are available. If anything is missing, the whole
 restore stops and the missing items are listed. Settings are never dropped silently.
 
+The **History** tab records the form at every Generate or Queue click (newest 50 per mode, with a 100 px thumbnail of
+the first image). Turn recording off with **Record every generation automatically**, delete entries, **Clear history**,
+or **Keep as named state**. History is stored in `<app home>/config/generation-history`.
+
+The check boxes under the tabs (Prompts; Sampling, size, seed, hires; Checkpoint / VAE / clip skip; ControlNet;
+Script and extension controls; WD batch and layout) limit **Restore state** to those categories, for named states and
+history entries alike. All checked restores everything.
+
 States are stored in `<app home>/config/generation-states`. **Reload** reads changes made outside the app.
 **Restore backup** returns the whole library, not only the selected entry or mode, to its previous saved version.
 

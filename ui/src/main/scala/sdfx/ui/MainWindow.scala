@@ -17,7 +17,7 @@ import sdfx.core.infotext.HardwareInfo
 import sdfx.core.plugins.api.Plugin
 import sdfx.engine.{AppServices, EditorPreviewPayload, EngineState, JobEvent, WdBatchSpec}
 import sdfx.core.presets.{LoadedPresets, PresetError}
-import sdfx.ui.presets.{NativePresetFields, NativePresetFileDialogs, NativePresetsController, NativePresetsSession}
+import sdfx.ui.presets.{GenerationHistory, GenerationHistoryStore, NativePresetFields, NativePresetFileDialogs, NativePresetsController, NativePresetsSession}
 import sdfx.ui.view.*
 import sdfx.ui.vm.*
 
@@ -367,20 +367,50 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
 
   def namedStatesStage: Option[Stage] = Option(generationStatesStage)
 
+  private lazy val stateFields: Map[Mode, NativePresetFields] = Mode.values.map { m =>
+    val panel = panels(m)
+    m -> new NativePresetFields(vms(m), plugins(m), catalogVM,
+      panel.sections(s"${m.key}.variation").expandedProperty, namedState = true,
+      batchFields = Option.when(m == Mode.Img2Img)((panel.wdBatchEnabled, panel.wdBatchInput, panel.wdBatchOutputName)))
+  }.toMap
+
+  /** Automatic per-mode history of the form at each submitted generation, with a 100px thumbnail of its first image. */
+  private var generationHistoryStarted = false
+  private lazy val generationHistory =
+    generationHistoryStarted = true
+    new GenerationHistoryStore(
+      services.home.configDir.resolve("generation-history"), GenerationHistory.DefaultLimit, thunk => Fx.run(thunk()))
+  private val historyEntryByJob = scala.collection.mutable.Map.empty[String, java.util.UUID]
+  private val historyImageByJob = scala.collection.mutable.Map.empty[String, Path]
+
+  private def recordHistory(mode: Mode, jobId: String): Unit =
+    if !disposed && generationHistory.autosave then
+      try
+        val values = stateFields(mode).capture().values
+        generationHistory.record(mode, values, {
+          case Right(Some(record)) =>
+            historyImageByJob.remove(jobId) match
+              case Some(image) => generationHistory.writeThumbnail(record.id, image)
+              case None => historyEntryByJob(jobId) = record.id
+          case Right(None) => ()
+          case Left(error) => ctx.error("Generation history was not recorded: " + error.issues.headOption.map(_.message).getOrElse("storage error"))
+        })
+      catch case NonFatal(e) => ctx.error("Generation history was not recorded: " + Fx.message(e))
+
+  private def historyThumbnail(jobId: String, image: Path): Unit =
+    historyEntryByJob.remove(jobId) match
+      case Some(id) => generationHistory.writeThumbnail(id, image)
+      case None => if historyImageByJob.size < 64 then historyImageByJob.getOrElseUpdate(jobId, image)
+
   def openGenerationStates(mode: Mode): Unit =
     if !disposed then
       if generationStatesPane == null then
-        val fields = Mode.values.map { m =>
-          val panel = panels(m)
-          m -> new NativePresetFields(vms(m), plugins(m), catalogVM,
-            panel.sections(s"${m.key}.variation").expandedProperty, namedState = true,
-            batchFields = Option.when(m == Mode.Img2Img)((panel.wdBatchEnabled, panel.wdBatchInput, panel.wdBatchOutputName)))
-        }.toMap
+        val fields = stateFields
         val controllers = fields.map((m, f) => m -> new NativePresetsController(f, () => exportGate.isBusy))
         generationStatesSession = new NativePresetsSession(services.home.configDir.resolve("generation-states"), controllers,
           result => if generationStatesPane != null then generationStatesPane.acceptResult(result),
           thunk => Fx.run(thunk()), true)
-        generationStatesPane = new NamedGenerationStatesPane(ctx, generationStatesSession, fields, controllers)
+        generationStatesPane = new NamedGenerationStatesPane(ctx, generationStatesSession, fields, controllers, generationHistory)
         generationStatesStage = new Stage()
         generationStatesStage.initOwner(stage)
         generationStatesStage.setTitle("Named generation states")
@@ -572,6 +602,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     val img = e.image
     lastSeed = img.seed
     if !e.grid then
+      historyThumbnail(e.jobId, img.path)
       ctx.hiresSeedHistory.record(img.infotext)
       val mode = if !img.params.isImg2Img then Mode.Txt2Img else if img.params.isInpaint then Mode.Inpaint else Mode.Img2Img
       comparisonHistory.recordResult(e.jobId, img.path, mode)
@@ -688,6 +719,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
           ctx.temps.releaseJob(job.id)
           ctx.error(s"Cannot queue generation: ${Fx.message(e)}")
           return
+      recordHistory(mode, job.id)
       if queueOnly && progress.get.running then ctx.info(s"Queued (${progress.get.pendingCount + 1} waiting)")
     if difference.nonEmpty then
       submit(Nil)
@@ -1104,6 +1136,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       "payload pane" -> (() => if payloadPane != null then payloadPane.dispose()),
       "payload stage" -> (() => if payloadStage != null then payloadStage.close()),
       "generation states pane" -> (() => if generationStatesPane != null then generationStatesPane.dispose()),
+      "generation history" -> (() => if generationHistoryStarted then generationHistory.close()),
       "generation states session" -> (() => if generationStatesSession != null then generationStatesSession.close()),
       "generation states stage" -> (() => if generationStatesStage != null then generationStatesStage.close()),
       "preset pane" -> (() => if presetPane != null then presetPane.dispose()),

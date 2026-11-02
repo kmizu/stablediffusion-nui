@@ -1,4 +1,4 @@
-# Named generation states
+# Named generation states and generation history
 
 Use **Named generation states…** in a generation tab to keep a complete supported
 settings snapshot for that mode. This is separate from **Settings presets**, whose
@@ -22,6 +22,30 @@ preset collections. Reopening the application reads that library. **Reload** rea
 external changes or retries after a storage error. **Restore backup** replaces the
 whole named-state library with its preceding saved version, after confirmation;
 it is not limited to the selected entry or mode.
+
+## Automatic history
+
+The **History** tab keeps an automatic record of each mode's form at every Generate or Queue click, like the upstream
+State Manager's auto-save. Entries are named by time, hold the same complete snapshot as a named state, and show a
+100 px thumbnail of the first image the job produced plus the start of the prompt (the thumbnail is missing while the job
+runs, or if it failed). Only the newest 50 entries per mode are kept; older ones and their thumbnails are removed.
+A state identical to the newest entry is not recorded twice.
+
+- **Record every generation automatically** turns recording on or off (stored as `autosave.off` in the history folder;
+  existing entries stay).
+- **Delete selected** (multi-select), **Clear history** (this mode only) remove entries after confirmation.
+- **Keep as named state** copies the selected entry into the named states under the name typed above the tabs.
+- History lives in `<app home>/config/generation-history/` (`library-v1.json`, `thumbs/`), separate from named
+  states. A recording failure is reported but never blocks generation.
+
+## Restoring only some categories
+
+Under the tabs, six check boxes (Prompts; Sampling, size, seed, hires; Checkpoint / VAE / clip skip; ControlNet; Script
+and extension controls; WD batch and layout) pick which part of a named state or history entry **Restore state** applies.
+All checked is a full restore. With fewer checked, only the fields of those categories change and only their resources
+are checked, so a missing checkpoint does not block restoring just the prompts. If a full restore is blocked because
+a saved choice is missing from the current catalog (for example the default Hires Fix upscaler not being installed),
+restore a category subset instead, or install the item.
 
 ## What is saved
 
@@ -58,8 +82,8 @@ that a different image is suitable for the saved inpaint settings.
 
 This feature independently implements manual named generation settings from the
 [State Manager reference](https://github.com/SenshiSentou/sd-webui-state-manager/tree/2af62ecd5287438bbc309f7e840d34aa5c8e3cb6).
-It does not import upstream IndexedDB/text history, provide automatic generation
-history or thumbnails, or claim upstream storage-format compatibility. The MIT
+It does not import upstream IndexedDB/text history or claim upstream storage-format compatibility, has no HTTP API,
+and applies by category rather than by single setting. Automatic history with thumbnails is provided as described above. The MIT
 notice is archived; see [the source/license audit](v003-source-license-audit.md).
 
 The actual native Save, Restore, missing-checkpoint refusal, fresh-window reload

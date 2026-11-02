@@ -91,8 +91,9 @@ BASE = [
     ("openhardwaremonitor/openhardwaremonitor", "dependency", "Optional external running Windows GPU temperature monitor through WMI; not installed or bundled; schema reference 09c16898a4a84c36644e7c07baebf1efd299691e"),
     ("ROCm/rocm_smi_lib", "dependency", "Optional external rocm-smi temperature query on Linux; not installed or bundled"),
     ("SenshiSentou/sd-webui-state-manager", "reimplemented", "Manual named generation settings, per-mode list/inspect/restore/delete, "
-     "including shared model settings and inactive script/extension controls -> `core:state-manager`; independent Scala/JavaFX "
-     "implementation, no upstream code/assets copied; no history/autosave/thumbnail or upstream storage-format parity; "
+     "including shared model settings and inactive script/extension controls, plus automatic capped history with thumbnails and "
+     "category-selective restore -> `core:state-manager`; independent Scala/JavaFX "
+     "implementation, no upstream code/assets copied; no upstream storage-format parity, HTTP API or side-drawer browser; "
      "[source 2af62ec](https://github.com/SenshiSentou/sd-webui-state-manager/tree/2af62ecd5287438bbc309f7e840d34aa5c8e3cb6)"),
     ("DominikDoom/a1111-sd-webui-tagcomplete", "reimplemented", "Local CSV tag/alias completion with keyboard selection "
      "in native prompt editors -> `core:tag-autocomplete`; independent Scala/JavaFX implementation, no upstream code or tag "
