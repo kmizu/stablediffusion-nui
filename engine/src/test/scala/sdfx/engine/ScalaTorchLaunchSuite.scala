@@ -7,6 +7,10 @@ class ScalaTorchLaunchSuite extends munit.FunSuite:
     val home=sdfx.core.config.AppHome(Files.createTempDirectory("engine backend"))
     try
       val settings=sdfx.core.config.Settings()
+      assert(!EngineSelection.usesNativeBackend(settings,Map.empty))
+      assert(EngineSelection.usesNativeBackend(settings,Map("SDFX_ENGINE_BACKEND"->" scala-torch ")))
+      assert(EngineSelection.usesNativeBackend(settings,Map("SDFX_SCALATORCH_MODEL"->"")))
+      assert(EngineSelection.usesNativeBackend(settings.copy(engineBackend="scala-torch"),Map.empty))
       assertEquals(EngineBackend.select(home,settings,false,Map.empty).name,"python")
       assertEquals(EngineBackend.select(home,settings,false,Map("SDFX_ENGINE_BACKEND"->" PYTHON ")).name,"python")
       intercept[IllegalArgumentException](EngineBackend.launch(home,settings,false,Map("SDFX_ENGINE_BACKEND"->"mystery")))

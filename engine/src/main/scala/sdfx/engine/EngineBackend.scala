@@ -29,6 +29,11 @@ private[engine] object EngineBackend:
       case Some(other) => throw new IllegalArgumentException(s"unsupported engine backend: $other")
       case None => if ScalaTorchLaunch.requested(environment) then ScalaTorch else Python
 
+  /** Whether startup should skip Python setup for the selected non-Python backend. */
+  def usesNativeBackend(settings: Settings,environment: Map[String,String]): Boolean =
+    settings.engineBackend=="scala-torch" || ScalaTorchLaunch.requested(environment) ||
+      environment.get("SDFX_ENGINE_BACKEND").exists(_.trim.equalsIgnoreCase("scala-torch"))
+
   def launch(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]=sys.env): EngineLaunch =
     val configured0=if environment.contains("SDFX_ENGINE_BACKEND") || settings.engineBackend=="auto" then environment
       else environment.updated("SDFX_ENGINE_BACKEND",settings.engineBackend)
@@ -45,3 +50,8 @@ private[engine] object EngineBackend:
       if env.contains(key) then env else value.map(v => env.updated(key,v)).getOrElse(env)
     }
     select(home,settings,dryRun,configured).launch(home,settings,dryRun,configured)
+
+/** Startup capability exposed to the UI without exposing backend implementations. */
+object EngineSelection:
+  def usesNativeBackend(settings: Settings,environment: Map[String,String]=sys.env): Boolean =
+    EngineBackend.usesNativeBackend(settings,environment)

@@ -4,7 +4,9 @@ import sdfx.core.config.{AppHome,ModelDirs,Settings}
 import sdfx.core.infotext.Infotext
 import sdfx.core.model.{GenerationParams,Img2ImgParams}
 import sdfx.core.png.PngMetadata
+import java.awt.image.BufferedImage
 import java.nio.file.{Files,Path}
+import javax.imageio.ImageIO
 import scala.concurrent.duration.*
 
 /** Real Generator saving/replay using a Java worker and an isolated app home. */
@@ -65,7 +67,7 @@ class NativeGeneratorSuite extends munit.FunSuite:
         if failure!=null then failure.addSuppressed(cleanup) else throw cleanup
   }
 
-  test("Generator routes SDXL through the selected backend and replays size/crop metadata") {
+    test("Generator routes masked SDXL through the selected backend and replays metadata") {
     val cpFile=sys.env.get("SCALATORCH_WORKER_CLASSPATH_FILE")
     val model=sys.env.get("SCALATORCH_TINY_SDXL_MODEL")
     assume(cpFile.nonEmpty && model.nonEmpty,"native worker classpath and tiny SDXL model required")
@@ -91,14 +93,22 @@ class NativeGeneratorSuite extends munit.FunSuite:
       val text=services.generator.generate(params).head
       val textPixels=PngMetadata.readImage(text.path)
       assertEquals(textPixels.getWidth,64);assertEquals(textPixels.getHeight,64)
+      val maskPath=home.root.resolve("mask.png")
+      val mask=new BufferedImage(64,64,BufferedImage.TYPE_BYTE_GRAY)
+      for y <- 0 until 64; x <- 0 until 64 do mask.setRGB(x,y,if x<32 then 0xff000000 else 0xffffffff)
+      ImageIO.write(mask,"png",maskPath.toFile)
       val edit=services.generator.generate(params.copy(steps=4,
-        img2img=Some(Img2ImgParams(text.path.toString,denoisingStrength=0.5,resizeMode=2)))).head
+        img2img=Some(Img2ImgParams(text.path.toString,mask=Some(maskPath.toString),
+          denoisingStrength=0.5,resizeMode=0,maskBlur=0)))).head
       val recorded=PngMetadata.readParameters(edit.path).getOrElse(fail("missing SDXL PNG infotext"))
       val parsed=Infotext.parse(recorded)
       assertEquals(parsed.prompt,params.prompt)
       assertEquals(parsed.negativePrompt,params.negativePrompt)
       assertEquals(parsed.get("Seed"),Some("42"))
-      assertEquals(PngMetadata.readImage(edit.path).getWidth,64)
+      val editedPixels=PngMetadata.readImage(edit.path)
+      assertEquals(editedPixels.getWidth,64)
+      for y <- 0 until 64; x <- 0 until 32 do assertEquals(editedPixels.getRGB(x,y),textPixels.getRGB(x,y))
+      assert((32 until 64).exists(x => (0 until 64).exists(y => editedPixels.getRGB(x,y)!=textPixels.getRGB(x,y))))
       assertEquals(!Files.exists(home.pythonDir),true)
       assert(services.supervisor.isRunning)
     catch case error: Throwable =>

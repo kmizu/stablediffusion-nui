@@ -170,7 +170,7 @@ and output after the assertion checks.
 
 This is integration infrastructure, not a completed engine replacement. The
 application still defaults to Python. General catalog operations, production packaging and
-normal SD checkpoints, GPU CLIP/scheduler execution, FP16/offload, SDXL, batching, LoRA, img2img,
+normal SD checkpoints, GPU CLIP/scheduler execution, FP16/offload, SDXL, batching, LoRA, remaining img2img modes,
 Hires and the existing extension feature set still need native implementation
 and verification. Unsupported active generation settings currently return errors.
 Keep changes on `feat/scala-torch-native-engine` until integration is ready for review.
@@ -270,3 +270,34 @@ the worker reported `cuda:0` and completed tiny-SDXL txt2img, img2img and PNG
 metadata replay; the test passed in4.2s and confirmed no Python directory was
 created. This verifies the settings-to-backend-to-Generator route on this GPU.
 It does not establish full-size SDXL quality or fit/performance on 4GB hardware.
+
+## Dependency boundary and native basic inpainting (2026-11-03)
+
+The inference implementation boundary lives in the NUI `engine` module. The UI
+uses `EngineSelection` for startup policy and the shared `EngineClient` protocol
+for generation; it does not inspect `ScalaTorchLaunch` or link scala-torch model
+classes. `EngineBackend` owns Python and scala-torch launch selection, while
+`ScalaTorchLaunch` starts the worker as a separate Java process. The PyTorch
+runtime itself remains in the Python environment (`python/requirements-torch.txt`)
+and is not a JVM or SBT dependency. Replacing either inference implementation
+therefore does not require changes to Generator, plugins, MCP, or the common
+request/response protocol. Backend-specific settings remain serialized in core
+configuration, but no inference library types cross that boundary.
+
+The opt-in `NativeGeneratorSuite` SDXL Generator test now sends a local mask
+through the real `AppServices` and `Generator` path, with U-Net/VAE CUDA placement
+and weight offload loaded from saved settings. On the local GTX 1650 (4 GiB), it
+passed in 4.251s: pixels in the black half of the mask exactly match the source,
+pixels in the white half include repaint changes, the output is64x64, PNG prompt
+metadata remains readable, and the temporary home contains no Python directory.
+This is the Python-free NUI integration path, without JavaFX interaction.
+
+Native masked img2img currently covers four-channel Diffusers U-Nets. White mask
+pixels mean repaint; black pixels preserve the resized source exactly. Euler and
+DPM++ use latent preservation at each scheduler step and final pixel compositing.
+Mask inversion and bounded blur are supported; the worker uses three separable
+box-blur passes to approximate Gaussian blur, so edge values are not promised to
+match Pillow byte-for-byte. Nine-channel inpaint U-Nets, full-resolution crop,
+fill modes other than original pixels, and plugin inpaint integrations remain
+unsupported and fail explicitly. Normal-size model quality and the rest of NUI's
+Python feature set are still migration work.
