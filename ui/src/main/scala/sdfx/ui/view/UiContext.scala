@@ -1,7 +1,7 @@
 package sdfx.ui.view
 
 import javafx.collections.{FXCollections, ObservableList}
-import javafx.stage.Stage
+import javafx.stage.{FileChooser, Stage}
 import sdfx.core.config.AtomicFiles
 import sdfx.core.model.{ExtendedStyle, GenerationParams, PromptStyle, StyleLibrary, Styles}
 import sdfx.engine.AppServices
@@ -12,6 +12,10 @@ import scala.util.control.NonFatal
 
 /** Shared services and callbacks for the views. */
 final class UiContext(val services: AppServices, val catalog: CatalogVM, val stage: Stage):
+  var chooseStateManagerImport: () => Option[Path] = () =>
+    val chooser = new FileChooser()
+    chooser.setTitle("Import State Manager V2 history")
+    Option(chooser.showOpenDialog(stage)).map(_.toPath)
   val toaster = new Toaster
   lazy val imageCopyReads = new sdfx.ui.vm.ImageReadGate[ImageFiles.DisplayImage](services.imageScrambleSession,
     run => sdfx.ui.Fx.run(run()), (path, secret) => ImageFiles.readForDisplay(path, secret))(using sdfx.ui.Fx.bg)

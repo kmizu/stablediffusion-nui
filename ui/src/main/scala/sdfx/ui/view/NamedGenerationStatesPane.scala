@@ -5,7 +5,9 @@ import javafx.scene.control.*
 import javafx.scene.image.{Image, ImageView}
 import javafx.scene.layout.{FlowPane, HBox, Priority, Region, VBox}
 import java.nio.file.Files
+import java.nio.file.{LinkOption, StandardOpenOption}
 import sdfx.core.presets.*
+import sdfx.ui.Fx
 import sdfx.ui.presets.{GenerationHistoryStore, NamedGenerationStates, NativePresetFields, NativePresetsController, NativePresetsSession, StateCategory}
 import sdfx.ui.vm.Mode
 
@@ -106,6 +108,21 @@ final class NamedGenerationStatesPane(
     alert.setHeaderText(title)
     alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK
 
+  private def confirmImport(message: String): Boolean =
+    val alert = new Alert(Alert.AlertType.CONFIRMATION, "", ButtonType.OK, ButtonType.CANCEL)
+    alert.initOwner(ctx.stage)
+    alert.setTitle("Import State Manager history?")
+    alert.setHeaderText("Review supported and unsupported settings")
+    val summary = new TextArea(message)
+    summary.setId("state-manager-import-summary")
+    summary.setEditable(false)
+    summary.setWrapText(true)
+    summary.setPrefColumnCount(75)
+    summary.setPrefRowCount(16)
+    alert.getDialogPane.setContent(summary)
+    alert.setResizable(true)
+    alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK
+
   private def failure(error: PresetError): Unit = status.setText(NamedGenerationStates.describe(error))
   private def refreshButtons(): Unit =
     save.setDisable(pending || readOnly || loaded.isEmpty)
@@ -118,6 +135,7 @@ final class NamedGenerationStatesPane(
     historyFavourite.setDisable(historyPending || historySelected.isEmpty)
     favouritesToggle.setDisable(historyPending || historySelected.isEmpty)
     historyClear.setDisable(historyPending || historyEntries.isEmpty)
+    historyImport.setDisable(historyPending)
     reload.setDisable(pending)
     backup.setDisable(pending)
 
@@ -163,10 +181,13 @@ final class NamedGenerationStatesPane(
       case Right(_) => NamedGenerationStates.preflight(record, fields(targetMode), only) match
         case Left(error) => failure(error)
         case Right(_) =>
-          val partial = only.nonEmpty
+          // Imported State Manager records contain only mapped fields, never a complete native form.
+          val imported = record.source.exists(_.format == "state-manager-v2")
+          val partial = only.nonEmpty || imported
           val sharedNote = if keys.exists(_.segments.headOption.contains("model")) then
             "Shared checkpoint/VAE/clip skip also change.\n" else ""
-          if confirm("Restore state?", s"Replace current ${targetMode.key} settings with '${record.name}'?\n$scopeNote${sharedNote}Current init image and painted mask stay in place.") then
+          val importNote = if imported then "Only mapped imported settings change; unsupported settings stay as they are.\n" else ""
+          if confirm("Restore state?", s"Replace current ${targetMode.key} settings with '${record.name}'?\n$scopeNote${sharedNote}${importNote}Current init image and painted mask stay in place.") then
             // Confirmations run a nested event loop: repeat admission and preflight afterward.
             val result = for
               _ <- Either.cond(mode == targetMode && selected.contains(record) &&
@@ -302,6 +323,54 @@ final class NamedGenerationStatesPane(
   }
   historyClear.setId("generation-history-clear")
 
+  private val historyImport = W.button("Import State Manager V2…", "Preview a gzip history.txt before importing supported settings") {
+    ctx.chooseStateManagerImport().foreach { path =>
+      historyPending = true
+      refreshButtons()
+      Fx.async {
+        val limits = PresetLimits()
+        val input = Files.newInputStream(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)
+        val bytes = try input.readNBytes(limits.maxBytes + 1) finally input.close()
+        StateManagerV2.decode(bytes, limits)
+      } { decoded =>
+        historyPending = false
+        if !closed then decoded match
+          case Left(error) => failure(error); refreshButtons()
+          case Right(entries) if entries.isEmpty => status.setText("The source contains no entries."); refreshButtons()
+          case Right(entries) =>
+            val missing = entries.flatMap(_.unmapped).distinct.sorted
+            val shown = missing.take(40)
+            val more = if missing.size > shown.size then s"\n… and ${missing.size - shown.size} more" else ""
+            val warning = if missing.isEmpty then "None" else shown.mkString("\n") + more
+            val mapped = entries.flatMap(_.mapped.keys.map(_.render)).distinct.sorted
+            val supported = if mapped.isEmpty then "None" else mapped.mkString(", ")
+            val message = s"Import ${entries.size} entries from ${path.getFileName}?\n" +
+              "Only supported fields are restored; the supported fields differ by entry. " +
+              "Original entries and defaults, including any private settings or preview images, are copied into local history metadata. " +
+              "Imported history is treated as older than existing history and may be evicted first. " +
+              "If history capacity or storage limits would be exceeded, nothing is imported.\n\n" +
+              s"Supported fields across all entries: $supported\n\n" +
+              s"Unsupported or invalid settings (${missing.size}; preserved but not restored):\n$warning"
+            if confirmImport(message) && !closed then
+              historyPending = true
+              refreshButtons()
+              history.importV2(entries) { result =>
+                historyPending = false
+                if !closed then
+                  result match
+                    case Left(error) => failure(error)
+                    case Right(_) => status.setText(s"Imported ${entries.size} source entries; existing matching entries were kept.")
+                  refreshButtons()
+              }
+            else refreshButtons()
+      } { error =>
+        historyPending = false
+        if !closed then { status.setText("Could not read State Manager history: " + Fx.message(error)); refreshButtons() }
+      }
+    }
+  }
+  historyImport.setId("generation-history-import")
+
   autosave.selectedProperty.addListener((_, _, on) =>
     history.setAutosave(on) match
       case Left(error) =>
@@ -347,7 +416,7 @@ final class NamedGenerationStatesPane(
   namedTab.setId("generation-states-tab-named")
   namedTab.setClosable(false)
   private val historyTab = new Tab("History", new VBox(8, autosave, historyList,
-    new HBox(8, keep, historyFavourite, historyDelete, historyClear)))
+    new HBox(8, keep, historyFavourite, historyDelete, historyClear, historyImport)))
   historyTab.setId("generation-states-tab-history")
   historyTab.setClosable(false)
   private val favouritesTab = new Tab("Favourites", new VBox(8, favouritesList, new HBox(8, favouritesToggle, favouritesDelete)))

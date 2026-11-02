@@ -368,6 +368,59 @@ object RealNamedGenerationStatesCheck:
         node[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty
       }}
       checked("multi-remove, clear and explicit delete respect favourite membership")
+      val upstream = output.resolve("synthetic-state-manager-history.txt")
+      val upstreamJson = """{"defaults":{"d":{"img2img/Prompt":"original default","img2img/Unrecognized setting":"keep"}},"entries":{"1700000000123":{"saveVersion":"2.0","type":"img2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"img2img/Prompt":"imported prompt"}}}}"""
+      val gzip = new java.util.zip.GZIPOutputStream(Files.newOutputStream(upstream))
+      gzip.write(upstreamJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)); gzip.close()
+      def previewImport(answer: ButtonType): Unit =
+        fx {
+          window.ctx.chooseStateManagerImport = () => Some(upstream)
+          node[TabPane]("generation-states-tabs").getSelectionModel.select(1)
+          node[Button]("generation-history-import").fire()
+        }
+        eventually("import preview") { fx {
+          Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane])
+        }}
+        fx {
+          val pane = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene)).map(_.getRoot)
+            .collectFirst { case p: DialogPane => p }.get
+          require(pane.lookup("#state-manager-import-summary").asInstanceOf[TextArea].getText.contains("img2img/Unrecognized setting"), "preview did not warn about the unknown setting")
+          require(ImageIO.write(SwingFXUtils.fromFXImage(pane.getScene.snapshot(null), null), "png", output.resolve("state-manager-import-preview.png").toFile))
+          pane.lookupButton(answer).asInstanceOf[Button].fire()
+        }
+      previewImport(ButtonType.CANCEL)
+      fx { require(node[ListView[PresetRecord]]("generation-history-list").getItems.isEmpty, "cancel imported history") }
+      previewImport(ButtonType.OK)
+      eventually("imported history") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 1) }
+      fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        val list = node[ListView[PresetRecord]]("generation-favourites-list")
+        require(list.getItems.size == 1)
+        require(list.getItems.get(0).source.get.originalFields.text.contains("Unrecognized setting"))
+        list.getSelectionModel.clearAndSelect(0)
+        node[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmButton("generation-states-restore-field")
+      fx { require(window.vms(mode).prompt.get == "imported prompt") }
+      fx {
+        window.vms(mode).prompt.set("changed before imported restore")
+        window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.setText("unrelated bad draft")
+      }
+      confirmButton("generation-states-restore")
+      fx {
+        require(window.vms(mode).prompt.get == "imported prompt")
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "unrelated bad draft")
+      }
+      previewImport(ButtonType.OK)
+      eventually("second import completed") { fx {
+        !node[Button]("generation-history-import").isDisabled && node[TextArea]("generation-states-status").getText.contains("Imported")
+      }}
+      fx {
+        require(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 1, "repeat import duplicated history")
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        require(node[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 1, "repeat import duplicated favourites")
+      }
+      checked("State Manager gzip import previews unknown settings, preserves provenance and restores a favourite")
       Files.writeString(output.resolve("named-states-native-report.json"), ujson.write(ujson.Obj(
         "status" -> "passed", "home" -> home.root.toString, "library" -> library.toString,
         "checks" -> ujson.Arr.from(checks), "screenshots" -> ujson.Arr.from(screenshots)), indent = 2))

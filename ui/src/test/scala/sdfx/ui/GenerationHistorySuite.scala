@@ -27,6 +27,69 @@ class GenerationHistorySuite extends munit.FunSuite:
   private def values(n: Int): Map[FieldKey, PresetAtom] =
     Map(FieldKey(Vector("generation", "steps")) -> PresetAtom.Integer(n))
 
+  test("imported history precedes existing history and is evicted first") {
+    val json = """{"defaults":{"d":{"txt2img/Prompt":"imported"}},"entries":{"1700000000000":{"saveVersion":"2.0","type":"txt2img","defaults":"d","groups":["history"],"quickSettings":{},"componentSettings":{}}}}"""
+    val out = new java.io.ByteArrayOutputStream()
+    val gz = new java.util.zip.GZIPOutputStream(out)
+    gz.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8)); gz.close()
+    val source = StateManagerV2.decode(out.toByteArray).toOption.get
+    val (existing, first, _) = GenerationHistory.append(empty, Mode.Txt2Img, values(1), at, 2)
+    val imported = GenerationHistory.importV2(existing, source, 2).toOption.get
+    val history = GenerationHistory.entries(imported, Mode.Txt2Img)
+    assertEquals(history.last.id, first.get.id)
+    assertEquals(GenerationHistory.importV2(imported, source, 2).toOption.get, imported)
+    val (next, _, _) = GenerationHistory.append(imported, Mode.Txt2Img, values(2), at, 2)
+    assert(GenerationHistory.entries(next, Mode.Txt2Img).exists(_.id == first.get.id))
+    assert(!GenerationHistory.entries(next, Mode.Txt2Img).exists(_.id == history.head.id))
+  }
+
+  test("State Manager import keeps history/favourite groups, provenance and is idempotent") {
+    val json = """{"defaults":{"d":{"txt2img/Prompt":"before","txt2img/Unknown":"retained","img2img/Prompt":"other"}},"entries":{"1700000000000":{"saveVersion":"2.0","name":"Scene A","type":"txt2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"txt2img/Prompt":"after"}},"1700000000001":{"saveVersion":"2.0","type":"img2img","defaults":"d","groups":["history"],"quickSettings":{},"componentSettings":{}}}}"""
+    val buffer = new java.io.ByteArrayOutputStream()
+    val gz = new java.util.zip.GZIPOutputStream(buffer)
+    gz.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8)); gz.close()
+    val entries = StateManagerV2.decode(buffer.toByteArray).toOption.get
+    val imported = GenerationHistory.importV2(empty, entries, 50).toOption.get
+    val txt = GenerationHistory.entries(imported, Mode.Txt2Img)
+    assertEquals(txt.size, 1)
+    assert(txt.head.name.startsWith("Scene A ["))
+    assertEquals(GenerationHistory.favourites(imported, Mode.Txt2Img).map(_.id), Vector(txt.head.id))
+    assertEquals(txt.head.fields(FieldKey(Vector("generation", "prompt"))), PresetAtom.Text("after"))
+    assert(txt.head.source.get.originalFields.text.contains("retained"))
+    assertEquals(GenerationHistory.entries(imported, Mode.Img2Img).size, 1)
+    assertEquals(GenerationHistory.importV2(imported, entries, 50).toOption.get, imported)
+    assert(GenerationHistory.importV2(empty, entries, 0).isLeft)
+    assert(GenerationHistory.importV2(empty, Vector(entries.head.copy(groups = Set("other"))), 50).isLeft)
+
+    val dir = Files.createTempDirectory("sdfx-history-import-")
+    val store = new GenerationHistoryStore(dir, 50, thunk => thunk())
+    val done = new CountDownLatch(1)
+    var result: Either[PresetError, Unit] = null
+    store.importV2(entries) { r => result = r; done.countDown() }
+    assert(done.await(20, TimeUnit.SECONDS) && result.isRight, result.toString)
+    store.close()
+    val reopened = new GenerationHistoryStore(dir, 50, thunk => thunk())
+    val loaded = new CountDownLatch(1)
+    var favourite: Either[PresetError, Vector[PresetRecord]] = null
+    reopened.listFavourites(Mode.Txt2Img) { r => favourite = r; loaded.countDown() }
+    assert(loaded.await(20, TimeUnit.SECONDS) && favourite.isRight)
+    assertEquals(favourite.toOption.get.map(_.fields), txt.map(_.fields))
+    assert(favourite.toOption.get.head.source.get.originalFields.text.contains("retained"))
+    reopened.close()
+    val constrainedDir = Files.createTempDirectory("sdfx-history-import-full-")
+    val constrained = new GenerationHistoryStore(constrainedDir, 1, thunk => thunk())
+    val initial = new CountDownLatch(1)
+    constrained.record(Mode.Txt2Img, values(100), _ => initial.countDown())
+    assert(initial.await(20, TimeUnit.SECONDS))
+    val before = Files.readAllBytes(constrainedDir.resolve("library-v1.json")).toVector
+    val attempted = new CountDownLatch(1)
+    var rejected: Either[PresetError, Unit] = null
+    constrained.importV2(entries) { r => rejected = r; attempted.countDown() }
+    assert(attempted.await(20, TimeUnit.SECONDS) && rejected.isLeft)
+    assertEquals(Files.readAllBytes(constrainedDir.resolve("library-v1.json")).toVector, before)
+    constrained.close()
+  }
+
   test("favourites survive history eviction and clear; mixed selection favours all then toggles off") {
     val (a, first, _) = GenerationHistory.append(empty, Mode.Txt2Img, values(1), at, 2)
     val (b, second, _) = GenerationHistory.append(a, Mode.Txt2Img, values(2), at, 2)

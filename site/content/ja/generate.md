@@ -227,6 +227,10 @@ Hires. fix セクションには **Hires Fix Tweaks** の設定も含まれま�
 
 ![お気に入りに追加した生成履歴と復元する設定の選択画面](shots/state-favourites.png)
 
+**Import State Manager V2…** では、A1111 の State Manager 2.0 がファイル保存した gzip 形式の `history.txt` を選べます。確認画面で取り込み可能な設定と、保存されても復元されない未対応設定を確認してから実行してください。対応項目の一覧は全エントリーの合計で、各エントリーが持つ項目は異なります。元データと参照する defaults は履歴の metadata に複製され、個人情報や画像プレビューが含まれる場合もそのまま保存されます。取り込んだ履歴は既存履歴より古いものとして扱い、後の生成で上限に達すると先に削除されます。履歴が50件の上限を超える場合や保存領域の上限を超える場合は、既存の履歴を消さずに取り込みを中止します。V1 や IndexedDB からの直接読込み、すべての拡張設定・画像プレビューの復元には対応していません。現在は合成データで検証しており、実際に上流アプリが保存したファイルとの互換性はまだ確認できていません。
+
+![State Manager の取り込み前に対応項目と未対応項目を確認する画面](shots/state-manager-v2-import.png)
+
 タブの下のチェックボックス(Prompts / Sampling, size, seed, hires / Checkpoint・VAE・clip skip / ControlNet / Script and extension controls / WD batch and layout)で、**Restore state** が戻す範囲をカテゴリ単位に絞れます。名前付き設定にも履歴にも使えます。すべてチェックなら全部を戻します。
 
 一項目だけ戻したいときは、一覧から設定を選び **Restore selected setting** を押します。確認画面に戻す項目が表示されます。選んだ項目に必要なモデルやファイルだけを確認するので、ほかの項目の不足によって復元が止まることはありません。

@@ -3,6 +3,9 @@ package sdfx.ui.presets
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, LinkOption, Path, StandardCopyOption, StandardOpenOption}
 import java.nio.file.attribute.BasicFileAttributes
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets.UTF_8
+import java.security.MessageDigest
 import java.time.{LocalDateTime, ZoneId}
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -97,6 +100,58 @@ object GenerationHistory:
     val previous = entries(library, mode)
     val next = store(library, mode, previous.filter(r => fav(r.id)))
     (next, unreferenced(next, previous.map(_.id)))
+
+  /** Merge source entries atomically; no existing history is evicted to make room. */
+  def importV2(library: PresetLibrary, incoming: Vector[StateManagerV2Entry], limit: Int): Either[PresetError, PresetLibrary] =
+    def problem(message: String) = PresetError(Vector(PresetIssue("state-manager-import", "import", message)))
+    incoming.foldLeft[Either[PresetError, PresetLibrary]](Right(library)) { (result, entry) =>
+      result.flatMap { current =>
+        if entry.groups.isEmpty || !entry.groups.subsetOf(Set("history", "favourites")) then
+          Left(problem(s"Entry ${entry.sourceId} has unsupported or empty groups"))
+        else
+          val mode = entry.mode match
+            case PresetMode.Txt2Img => Mode.Txt2Img
+            case PresetMode.Img2Img => Mode.Img2Img
+            case PresetMode.Inpaint => Mode.Inpaint
+          val digest = MessageDigest.getInstance("SHA-256").digest(
+            (entry.mode.toString + "\u0000" + entry.sourceId + "\u0000" + entry.originalEntry.text + "\u0000" + entry.originalDefaults.text).getBytes(UTF_8))
+          val buffer = ByteBuffer.wrap(digest)
+          val id = new UUID(buffer.getLong(), buffer.getLong())
+          val shortHash = digest.take(10).map(b => f"${b & 255}%02x").mkString
+          val originalTitle = entry.sourceName.map(_.trim).filter(_.nonEmpty).getOrElse(s"State Manager ${entry.sourceId}")
+          val cleanTitle = originalTitle.codePoints().toArray.filterNot(cp => Character.isISOControl(cp)).take(180)
+          val readableTitle = if cleanTitle.isEmpty then "State Manager" else new String(cleanTitle, 0, cleanTitle.length)
+          val title = s"$readableTitle [$shortHash]"
+          val raw = s"{\"entry\":${entry.originalEntry.text},\"defaults\":${entry.originalDefaults.text}}".getBytes(UTF_8)
+          PresetJson.readSource(raw, PresetLimits()).flatMap { provenance =>
+            val record = PresetRecord(id, title, entry.mapped, Some(PresetSource("state-manager-v2", title, Some(entry.mode), provenance)),
+              Set.empty, Vector.empty, Vector.empty)
+            val history = entries(current, mode)
+            val favourite = favourites(current, mode)
+            val existing = (history ++ favourite).find(_.id == id)
+            if existing.exists(_.source != record.source) then Left(problem(s"Entry ID collision: ${entry.sourceId}"))
+            else
+              val chosen = existing.getOrElse(record)
+              val addHistory = entry.groups("history") && !history.exists(_.id == id)
+              val addFavourite = entry.groups("favourites") && !favourite.exists(_.id == id)
+              if addHistory && history.size >= limit then Left(problem(s"${mode.key} history is full; no entries were imported"))
+              else
+                val withHistory = if addHistory then store(current, mode, history :+ chosen) else current
+                val withFavourite = if addFavourite then storeFavourites(withHistory, mode, favourite :+ chosen) else withHistory
+                Right(withFavourite)
+          }
+      }
+    }.map { merged =>
+      // Native entries have no reliable timestamp to compare with source timestamps.
+      // Treat newly imported history as older, preserving all existing order and entries.
+      Vector(Mode.Txt2Img, Mode.Img2Img).foldLeft(merged) { (current, mode) =>
+        val existingIds = entries(library, mode).map(_.id).toSet
+        val all = entries(current, mode)
+        if all.exists(r => !existingIds(r.id)) then
+          store(current, mode, all.filterNot(r => existingIds(r.id)) ++ all.filter(r => existingIds(r.id)))
+        else current
+      }
+    }
 
   def unreferencedAfterRemoval(library: PresetLibrary, ids: Iterable[UUID]): Vector[UUID] = unreferenced(library, ids)
 
@@ -236,6 +291,13 @@ final class GenerationHistoryStore(directory: Path, limit: Int, dispatch: (() =>
         if ids.nonEmpty && ids.subsetOf(available) then Right(())
         else Left(PresetError(Vector(PresetIssue("stale-selection", mode.key, "Selected history entries are no longer available"))))
       }).map(_ => ())
+      dispatch(() => { done(result); if result.isRight then listener() })
+    }
+
+  def importV2(incoming: Vector[StateManagerV2Entry])(done: Either[PresetError, Unit] => Unit): Unit =
+    run {
+      val result = mutate(lib => (GenerationHistory.importV2(lib, incoming, limit).toOption.get, None, Vector.empty),
+        lib => GenerationHistory.importV2(lib, incoming, limit).map(_ => ())).map(_ => ())
       dispatch(() => { done(result); if result.isRight then listener() })
     }
 
