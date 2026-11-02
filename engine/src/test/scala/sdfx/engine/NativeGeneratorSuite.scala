@@ -73,13 +73,11 @@ class NativeGeneratorSuite extends munit.FunSuite:
     val home=AppHome(Files.createTempDirectory("native-generator-sdxl"))
     val scheduler=home.root.resolve("scheduler.json")
     Files.writeString(scheduler,"""{"num_train_timesteps":1000,"beta_start":0.00085,"beta_end":0.012,"beta_schedule":"scaled_linear"}""")
-    val backendEnv=sys.env++Map("SDFX_ENGINE_BACKEND"->"scala-torch",
-      "SDFX_SCALATORCH_CLASSPATH_FILE"->cpFile.get,"SDFX_SCALATORCH_MODEL"->root.toString,
-      "SDFX_SCALATORCH_SCHEDULER"->scheduler.toString)
-    val settings=Settings(dtype="fp32",vramMode="cpu",lastModel=None,lastVae=None,
+    val settings=Settings(dtype="fp32",vramMode="cpu",engineBackend="scala-torch",
+      scalaTorchClasspath=Some(cpFile.get),scalaTorchModel=Some(root.toString),
+      scalaTorchScheduler=Some(scheduler.toString),lastModel=None,lastVae=None,
       modelDirs=ModelDirs(checkpoints=Seq(root.getParent.toString)))
     val services=new AppServices(home,settings,dryRun=false,builtins=Nil,
-      launchOverride=Some(() => EngineBackend.launch(home,settings,false,backendEnv)),
       persistSettings=false,installShutdownHook=false)
     var failure: Throwable=null
     try

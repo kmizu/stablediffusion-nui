@@ -257,3 +257,14 @@ custom original size/crop in `GenerationParams.extra`. The end-to-end test passe
 in30.826s on CPU. This verifies the common desktop generation/save path for tiny
 SDXL, while actual JavaFX UI interaction and normal SDXL output quality remain
 separate acceptance work.
+
+## SDXL through saved backend settings on CUDA (2026-11-03)
+
+`NativeGeneratorSuite` now builds `AppServices` with the persisted `engineBackend`
+and scala-torch paths, without a launch override. The opt-in test ran the real
+Java worker with U-Net/VAE CUDA placement and weight offload enabled, selected
+through the process environment. On the local GeForce GTX 1650 (4GB VRAM),
+the worker reported `cuda:0` and completed tiny-SDXL txt2img, img2img and PNG
+metadata replay; the test passed in4.2s and confirmed no Python directory was
+created. This verifies the settings-to-backend-to-Generator route on this GPU.
+It does not establish full-size SDXL quality or fit/performance on 4GB hardware.
