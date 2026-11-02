@@ -1,3 +1,13 @@
+## CUDA img2img encoder integration (2026-11-03)
+
+scala-torch now runs VAE encoding as well as decoding on the configured VAE
+device. NativeScalaEngineSuite passed using CUDA for U-Net/VAE, both weight
+offload flags true and16MiB per session. The64x64 tiny-model txt2img→img2img
+test completed in6.354s and checked typed output/seed/progress/keyword prompt.
+No Python process is launched. CLIP, posterior sampling and schedulers stay CPU.
+The original SD1.5 job was running concurrently, so this is functional evidence,
+not a throughput benchmark. Full SD1.5/SDXL and desktop replay gates remain open.
+
 ## Native img2img request integration (2026-11-03)
 
 NativeScalaEngineSuite now submits GenerationMode.Img2Img with the actual
@@ -9,7 +19,7 @@ This uses the same EngineClient/Supervisor and does not launch Python.
 The full test passed in29.912s. No production NUI routing change was needed.
 
 scala-torch's worker now implements file decoding, EXIF/RGB conversion,
-NUI resize modes0/1/2 and CPU VAE encoding for img2img. Mask/inpainting options
+NUI resize modes0/1/2 and selectable CPU/CUDA VAE encoding for img2img. Mask/inpainting options
 remain unsupported and reject when active. This test establishes request and
 result transport, not full desktop PNG metadata/replay, SD1.5/SDXL quality,
 GPU img2img throughput or support for every extension. Those gates remain open.
