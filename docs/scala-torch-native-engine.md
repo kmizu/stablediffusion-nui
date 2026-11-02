@@ -1,3 +1,16 @@
+## Generator PNG metadata and replay (2026-11-03)
+
+NativeGeneratorSuite exercises AppServices/Generator beyond EngineClient, using
+an isolated home with no python directory and the actual native Java worker.
+It discovers/loads the configured tiny checkpoint, saves txt2img then img2img,
+reads the PNG parameters, and verifies prompt,negative prompt,seed,steps,
+denoising strength and resize mode. Replaying parsed parameters with the same
+explicit source image produces identical pixels. It passed in8.373s with CUDA
+U-Net/VAE offload and16MiB budgets. This establishes the common Generator PNG
+save/replay path; it does not imply source pixels are embedded in infotext,
+nor verify GUI actions, every plugin, or SD1.5/SDXL quality. Source image must
+still be available and supplied when reconstructing img2img from infotext.
+
 ## CUDA img2img encoder integration (2026-11-03)
 
 scala-torch now runs VAE encoding as well as decoding on the configured VAE
