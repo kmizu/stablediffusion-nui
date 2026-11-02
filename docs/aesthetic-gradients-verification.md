@@ -1,6 +1,6 @@
 # Aesthetic Gradients verification (#2)
 
-> 現在の状態: GUI・MCP で作成でき、実 GUI・配布版 MCP の SD1.5／SDXL、配布版 dry-run の Windows chooser を検証済み。chooser と実モデル生成を配布版 GUI で一続きには試していない。元拡張の PNG／embedding との互換性などは未検証で、issue #2 は open。操作方法は [日本語ガイド](aesthetic-embeddings.md) を参照。以下の追試は時系列の記録で、各段階での未検証事項は後の追試で解消したものを含む。
+> 現在の状態: GUI・MCP で作成でき、実 GUI・配布版 MCP の SD1.5／SDXL、配布版 dry-run の Windows chooser を検証済み。配布版 GUI でも chooser から両モデル生成まで一続きで確認した。元拡張の PNG／embedding との互換性などは未検証で、issue #2 は open。操作方法は [日本語ガイド](aesthetic-embeddings.md) を参照。以下の追試は時系列の記録で、各段階での未検証事項は後の追試で解消したものを含む。
 
 > 2026-11-03 の初期状態: SD1.5 と SDXL の実モデルを公式 MCP SDK から使い、作成・一覧・適用・既定フォルダからの PNG 再生成を確認。当時、GUI の実モデル、別フォルダ・同名ファイル、配布版の検証は未完了だった。
 
@@ -99,3 +99,11 @@ Success (the GPU was shared with a 18 GB job of another user, so `model_offload`
 A local test ZIP was built from main product jar SHA-256 `36dcbd696365bcbf7bd9d56359948f78bd236d824a1d382c0844632e46cc6271` (main `0f9ff4a`; `7cc6322` changes handoff only). ZIP SHA-256: `c65d1f924ec7b54f57037e31c7868bcfd3672c45d63980051dd5e1fa69cc8241`. The extracted `SDNUI.exe` was launched with an isolated home in dry-run mode.
 
 Using computer-use clicks and text input in the actual Windows file chooser, two synthetic PNGs were added in separate operations; cancelling a subsequent chooser preserved both. In a later single chooser operation, two additional PNG filenames were entered together in quotes and opened; the GUI accessibility tree showed all four paths. This checks chooser-to-list wiring, including multiple files in one operation and cancellation. It does not check physical Ctrl-click, real embedding creation, a model, or GPU generation through this packaged GUI. The earlier historical unverified notes above refer to their own original test run. Original extension `.pt` and PNG compatibility remains unverified without an authorized authentic fixture.
+
+## Packaged GUI chooser to real generation (2026-11-03)
+
+The same extracted test ZIP and product jar identified in the preceding section were launched with an isolated home, external smoke Python, and the extracted package's Python source on `PYTHONPATH`; RTX 3090, torch 2.7.1+cu128, diffusers 0.33.1, fp16 and model offload. Using computer-use simulated pointer clicks, text entry and Return, the Windows chooser selected the synthetic red-circle PNG `reference-one.png`; the GUI Create action produced `package-chooser-style.pt` from one image, and Use in generation was clicked. Its SHA-256 was `f2fe030a612acc989f5a267b8c708fee6f4c2abf71d914328395d2906e7c0a86`. These are automated desktop interactions, not physical mouse/keyboard input.
+
+With prompt `a blue ceramic teapot on a wooden table, soft daylight`, seed 173, 12 DPM++ 2M Karras steps, CFG 7, default aesthetic weight 0.9, aesthetic steps 20 and LR 0.0001, both generations completed. `animekawa_v10` (SD1.5, 512x512) PNG SHA-256: `a03e1ae604804217219232939f5c0a7b7ab7d039ee5ce0204dbfd9cfc7f299e2`; `waiIllustriousSDXL_v170` (768x768) PNG SHA-256: `706a9a8284dc90d0c35d10812d512b0da1c7098ac867e37c5f320c882431caee`. Both PNG metadata records contain the actual embedding SHA above. Images were visually inspected: SD1.5 showed an industrial interior rather than the requested teapot; SDXL showed teapots on a vivid red table, with strong colour shifts. No baseline image was generated, so this is an end-to-end wiring smoke, not a controlled effect or quality comparison.
+
+The initial setup omitted the isolated home's `python` working directory, causing engine startup to fail; creating that directory allowed the engine to start. The checkpoint list remained empty after refresh in that initial session and appeared after restarting the app. The cause of that empty list was not established. The shared GPU lock was held for the test and released after app shutdown. Original extension file compatibility remains unverified.
