@@ -3,6 +3,7 @@
 ## 2026-11-03 作業中の追記
 
 - ユーザーの方針: issue を速く解決し、10件ごとにリリース。MCP から AI が使えることを重視。日本語マニュアルで十分、必要な画面はキャプチャする。次のリリース番号は未決定なので推測しない。
+- 2026-11-03 追加指示: **次のリリースを公開し、配布物の確認が終わったら作業を停止する。** 次のバッチを始めない。
 - main `1d97f13b72a17f1ea93fdc90130e14b46f80867e` は push 済み（作業時に remote と一致を確認）。この追記以降のコミットは `git log` と remote で確認する。`.claude/` は未追跡の既存 worktrees なので消さない。
 - ネガティブ候補 `c484556`: 画質・人体・文字のセットと個別調整、日本語説明。実 GUI と SD1.5/SDXL、展開版 MCP を確認。詳細は `docs/negative-suggestions-verification.md`。抽出版 GUI 自体の実生成は未確認。公開済み v0.1 より後の実装で、次のリリースに含める。
 - #2 Aesthetic Gradients `c4abab3`: GUI/MCP の embedding 作成、PNG 復元の SHA 照合、日本語マニュアル。実 GUI と展開版 MCP で SD1.5/SDXL を確認。Scala 全体と Python CPU 全体も通過。`674cb79` で SDXL の強い重みについて日英の案内を追加、明示値は変えない。配布 EXE GUI でも Windows chooser から実 embedding 作成・適用・両モデルで生成する一連を確認。元拡張との実物互換性などが未確認のため issue は open、台帳は todo のまま。詳細は `docs/aesthetic-gradients-verification.md` と `docs/aesthetic-embeddings.md`。
