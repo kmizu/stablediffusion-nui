@@ -492,6 +492,25 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("aesthetic_score"))
   }
 
+  test("SD-CN-Animation infotext becomes a typed script candidate and its key is consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("cn.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val value = "\"{'video': 'clip.mp4', 'processing_strength': 0.6, 'fix_frame_strength': 0, 'step_1_processing_mode': 'Inpaint occlusions', " +
+      "'occlusion_mask_trailing': False, 'format': ['GIF']}\""
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path,
+      Seq("parameters" -> s"cat\nSteps: 20, Seed: 4, Size: 512x512, SD-CN-Animation: $value"))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("scripts")("cn_animation")
+    assertEquals(candidate("video").str, "clip.mp4")
+    assertEquals(candidate("processing_strength").num, 0.6)
+    assertEquals(candidate("step_1_processing_mode").str, "Inpaint occlusions")
+    assertEquals(candidate("occlusion_mask_trailing").bool, false)
+    assertEquals(candidate("format_gif").bool, true)
+    assertEquals(candidate("format_mp4").bool, false)
+    assert(!result("unapplied_fields").obj.contains("SD-CN-Animation"), result("unapplied_fields").render())
+  }
+
   test("AnimateDiff infotext becomes a typed script candidate and its key is consumed") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("video.png")

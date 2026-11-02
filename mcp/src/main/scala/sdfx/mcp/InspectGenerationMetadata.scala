@@ -5,7 +5,7 @@ import java.util.Base64
 import sdfx.core.infotext.Infotext
 import sdfx.core.plugins.api.{Control, Plugin, Values}
 import sdfx.core.png.PngMetadata
-import sdfx.plugins.{ClipIoPlugin, AnimateDiffPlugin, BatchFaceSwapPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
+import sdfx.plugins.{ClipIoPlugin, CnAnimationPlugin, AnimateDiffPlugin, BatchFaceSwapPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
 import scala.util.control.NonFatal
 
 /** Inspect only: no model load, plugin execution, script execution or generation. */
@@ -220,7 +220,8 @@ object InspectGenerationMetadata:
     // Script candidates: only reported, run_script is called by the agent with these values and generation_args.
     val scriptCandidates: Seq[(String, Values, Seq[String])] =
       OldSdFirstpasserPlugin.replay(f).map(v => (OldSdFirstpasserPlugin.Id, v, OldSdFirstpasserPlugin.InfotextKeys)).toSeq ++
-        AnimateDiffPlugin.replay(f).map(v => (AnimateDiffPlugin.Id, v, AnimateDiffPlugin.InfotextKeys)).toSeq
+        AnimateDiffPlugin.replay(f).map(v => (AnimateDiffPlugin.Id, v, AnimateDiffPlugin.InfotextKeys)).toSeq ++
+        CnAnimationPlugin.replay(f).map(v => (CnAnimationPlugin.Id, v, CnAnimationPlugin.InfotextKeys)).toSeq
     val scripts = ujson.Obj.from(scriptCandidates.flatMap { case (id, v, _) =>
       StandardPlugins.scripts(() => Nil).find(_.id == id).map(pl => id -> typed(pl, v)) })
     val scriptKeys = scriptCandidates.filter { case (id, _, _) => scripts.value.contains(id) }.flatMap(_._3).toSet

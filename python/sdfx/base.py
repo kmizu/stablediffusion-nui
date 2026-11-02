@@ -336,6 +336,11 @@ class BaseEngine:
             raise EngineError(UNSUPPORTED, "CLIP Interrogator needs the real engine; dry-run has no CLIP or caption model")
         return clip_interrogator.run(self, params, ctx)
 
+    def cn_animation(self, params: dict, ctx: JobContext) -> dict:
+        """SD-CN-Animation video-to-video helpers: decode, RAFT flow + occlusion, histogram match, encode."""
+        from . import cn_animation
+        return cn_animation.run(self, params, ctx)
+
     def metadata_utils(self, params: dict, ctx: JobContext) -> dict:
         from .metadata_utils import run
         return run(params, ctx)

@@ -81,6 +81,14 @@ final class PluginsVM(val mode: Mode, scripts: Seq[Plugin], alwaysOnPlugins: Seq
       }
       case None => if selectedScript.get == "animatediff" then selectedScript.set("")
 
+  def restoreCnAnimation(fields: Map[String, String]): Unit =
+    sdfx.plugins.CnAnimationPlugin.replay(fields) match
+      case Some(values) => form("cn_animation").foreach { f =>
+        f.load(values)
+        selectedScript.set("cn_animation")
+      }
+      case None => if selectedScript.get == "cn_animation" then selectedScript.set("")
+
   def scriptJob: Option[(Plugin, Values)] =
     scriptForms.find(_.plugin.id == selectedScript.get).map(f => f.plugin -> f.values)
 

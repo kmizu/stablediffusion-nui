@@ -113,6 +113,9 @@ class FakeContext(val interruptAfter: Int = Int.MaxValue, val echoInit: Boolean 
 
   /** Recorded non-generation engine calls (kind, params) and fake but well-formed replies. */
   val engineCalls = ArrayBuffer[(String, ujson.Obj)]()
+  /** The fake `cn_animation` request: number of decoded frames and the largest occlusion value reported by `flow`. */
+  var cnFrames = 4
+  var cnMaskMax = 0.5
 
   override def engineCall(kind: String, params: ujson.Obj): ujson.Value =
     if interrupted then interruptNow()
@@ -135,6 +138,44 @@ class FakeContext(val interruptAfter: Int = Int.MaxValue, val echoInit: Boolean 
           out(f) = file.toString
         }
         ujson.Obj("outputs" -> out, "frames" -> params("images").arr.size)
+      case "cn_animation" =>
+        def out(name: String) = Path.of(params("output_dir").str).resolve(name)
+        params("operation").str match
+          case "prepare" =>
+            val frames = (0 until cnFrames).map { i =>
+              val f = out(f"source-$i%05d.png")
+              Files.createDirectories(f.getParent)
+              ImageIO.write(solid(params("width").num.toInt, params("height").num.toInt, 0x101010 * (i + 1)), "png", f.toFile)
+              ujson.Str(f.toString)
+            }
+            ujson.Obj("frames" -> ujson.Arr.from(frames), "fps" -> 8.0, "source_fps" -> 8.0, "source_frames" -> cnFrames)
+          case "flow" =>
+            val stem = params("name").str
+            val cur = ImageIO.read(new java.io.File(params("cur_frame").str))
+            val files = Seq("init", "mask", "warped").map { k =>
+              val f = out(s"$stem-$k.png")
+              ImageIO.write(cur, "png", f.toFile)
+              k -> ujson.Str(f.toString)
+            }
+            val alpha = out(s"$stem-alpha.npy")
+            Files.writeString(alpha, "npy")
+            ujson.Obj.from(files ++ Seq("alpha" -> ujson.Str(alpha.toString), "mask_mean" -> ujson.Num(0.1), "mask_max" -> ujson.Num(cnMaskMax)))
+          case "finish" =>
+            val target = Path.of(params("output").str)
+            Files.createDirectories(target.getParent)
+            Files.copy(Path.of(params("image").str), target, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            ujson.Obj("path" -> target.toString)
+          case "encode" =>
+            val outs = ujson.Obj()
+            params("formats").arr.map(_.str).foreach { f =>
+              val file = out(s"video-${params("name").str}.${f.toLowerCase}")
+              Files.createDirectories(file.getParent)
+              Files.writeString(file, s"$f frames=${params("images").arr.size} fps=${params("fps").num.toInt}")
+              outs(f) = file.toString
+            }
+            ujson.Obj("outputs" -> outs, "frames" -> params("images").arr.size)
+          case "release" => ujson.Obj("released" -> true)
+          case other => throw new UnsupportedOperationException(other)
       case other => throw new UnsupportedOperationException(other)
 
   val loadedCheckpoints = ArrayBuffer[(String, Option[String])]()

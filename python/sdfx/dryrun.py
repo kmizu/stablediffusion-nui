@@ -89,6 +89,7 @@ class FakeEngine(BaseEngine):
                 "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint", "photomaker", "img2imgalt",
                 "face_restore", "caption", "img2vid", "novel_view", "ldsr", "marigold", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "clip_io", "system_info", "prevent_interrupt"] + list(SAMPLING_HOOKS) + (
                     ["temporal_lab"] if HAVE_NUMPY and HAVE_PIL else []) + (
+                    ["cn_animation"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + (
                     ["custom_code"] if os.environ.get("SDFX_ALLOW_CODE") == "1" else [])
 
     def temporal_lab(self, params: dict, ctx: JobContext) -> dict:

@@ -769,6 +769,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       plugins(mode).restoreLatentUpscale(sdfx.core.infotext.Infotext.parse(infotext).fields)
     plugins(mode).restoreOldSdFirstpasser(sdfx.core.infotext.Infotext.parse(infotext).fields)
     plugins(mode).restoreAnimateDiff(sdfx.core.infotext.Infotext.parse(infotext).fields)
+    plugins(mode).restoreCnAnimation(sdfx.core.infotext.Infotext.parse(infotext).fields)
     restoreComposable(mode, params)
 
   /** Restore this tool's complete PNG settings into its native form as well as the request. */

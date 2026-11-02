@@ -59,6 +59,7 @@ object StandardPlugins:
     new LoopbackScalerPlugin,
     new OldSdFirstpasserPlugin,
     new AnimateDiffPlugin,
+    new CnAnimationPlugin,
     // checkpoint tools (extension index)
     new ModelMergePlugin, new ModelConverterPlugin,
     // mask-driven img2img (extension index)

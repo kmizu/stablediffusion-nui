@@ -216,6 +216,8 @@ class Engine(BaseEngine):
             f.append("controlnet_aux")
         if cn_mod._has("cv2"):
             f.append("temporal_lab")
+            if cn_mod._has("torchvision"):
+                f.append("cn_animation")
         if upscalers.has_spandrel():
             f.append("spandrel")
         if hasattr(diffusers, "AutoencoderTiny"):
