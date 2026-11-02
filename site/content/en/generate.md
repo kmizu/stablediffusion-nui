@@ -44,6 +44,8 @@ work as in A1111.
   word under the caret is changed.
 - **Tags…** sets up suggestions from local files: a tag CSV (with aliases), a translation CSV (search tags in your own language), an extra tag CSV, a chants JSON file. Press Enter or Tab to complete what you are typing. Type `__` to complete wildcard files, `<` for LoRA, embeddings and chants (`<l:` / `<lora:` / `<lyco:` for LoRA, `<e:` for embeddings, `<c:` for chants). A LoRA row shows its preview picture and adds the trigger words from its `.json` file. The dialog also sets the number of rows, underscore and parenthesis handling, a trailing comma and alias display.
 
+  When several wildcard paths match, Tab extends their common prefix. After choosing a file, select a line to insert it directly, or press Escape to keep the `__name__` reference. Use Previous/Next or PageUp/PageDown to browse more lines.
+
 For **✚ LoRA** and **Networks…** in the toolbar, see [LoRA and embeddings](lora-embeddings.html).
 
 ## Styles

@@ -11,6 +11,7 @@ enum SuggestionKind(val title: String):
   case Tag extends SuggestionKind("tag")
   case Extra extends SuggestionKind("extra")
   case Wildcard extends SuggestionKind("wildcard")
+  case WildcardValue extends SuggestionKind("wildcard value")
   case Lora extends SuggestionKind("LoRA")
   case Embedding extends SuggestionKind("embedding")
   case Chant extends SuggestionKind("chant")
@@ -20,7 +21,7 @@ final case class Suggestion(kind: SuggestionKind, label: String, detail: String,
                             preview: () => Option[Path] = () => None)
 
 /** The popup rows for the text range [start, end). */
-final case class CompletionResult(start: Int, end: Int, items: Vector[Suggestion])
+final case class CompletionResult(start: Int, end: Int, items: Vector[Suggestion], wildcardPrefix: Option[String] = None)
 
 /** A model file offered by `<` completion (name is the file stem, path the real file). */
 final case class NetFile(name: String, path: Path)
@@ -120,7 +121,13 @@ object CompletionEngine:
   def complete(data: CompletionData, cfg: TagCompleteSettings, text: String, caret: Int, selStart: Int, selEnd: Int): Option[CompletionResult] =
     trigger(text, caret, selStart, selEnd) match
       case Some(w: WildcardTrigger) =>
-        if !cfg.wildcards then None else nonEmpty(w.start, w.end, wildcardItems(data, cfg, text, w))
+        if !cfg.wildcards then None
+        else
+          val matches = ranked(data.wildcards, w.query)(identity)()
+          val prefix = if matches.size < 2 then None else Some(matches.tail.foldLeft(matches.head) { (a, b) =>
+            a.zip(b).takeWhile((x, y) => Character.toLowerCase(x) == Character.toLowerCase(y)).map(_._1).mkString
+          })
+          nonEmpty(w.start, w.end, wildcardItems(matches, cfg, text, w)).map(_.copy(wildcardPrefix = prefix))
       case Some(n: NetworkTrigger) =>
         if !cfg.extraNetworks && !(cfg.chants && n.kinds == Set(SuggestionKind.Chant)) then None
         else nonEmpty(n.start, n.end, networkItems(data, cfg, n))
@@ -181,8 +188,8 @@ object CompletionEngine:
     }.toVector
     scored.sortBy(_._1).map(_._2)  // stable: keeps the listed order inside a rank
 
-  private def wildcardItems(data: CompletionData, cfg: TagCompleteSettings, text: String, w: WildcardTrigger): Vector[Suggestion] =
-    ranked(data.wildcards, w.query)(identity)().take(cfg.maxResults.max(1)).map { name =>
+  private def wildcardItems(matches: Vector[String], cfg: TagCompleteSettings, text: String, w: WildcardTrigger): Vector[Suggestion] =
+    matches.take(cfg.maxResults.max(1)).map { name =>
       Suggestion(SuggestionKind.Wildcard, name, "wildcard", () => s"__${name}__" + comma(cfg, text, w.end))
     }
 

@@ -29,6 +29,12 @@ text around it stay.
 Wildcard folders: `wildcards/` and `models/wildcards/` of the app home, plus the Dynamic Prompts plugin's
 "Extra wildcard folders". LoRA and embedding names come from the model lists.
 
+With several wildcard paths, Tab extends the common prefix; use Up/Down then Enter or Tab to choose a file.
+After a file is chosen, its lines appear as a second list. Choose a line to insert its text, or press Escape
+to keep the `__name__` reference. When there are more lines than the configured maximum, use PageUp/PageDown
+or the Previous/Next buttons to change pages. Files are limited to 1 MiB and the first 5,000 non-comment,
+non-empty lines; the popup warns when later lines are omitted.
+
 ## Files
 
 - **Tag CSV**: `name,type,count,"alias1,alias2"`, optional count/aliases, UTF-8, quoted fields, or a header row
@@ -57,7 +63,7 @@ extra networks, chants, trigger words and previews.
 
 Provided: everything above plus the v0.03 behaviour (positive and negative prompt, keyboard and mouse insertion,
 IME composition guards). Not provided: hypernetworks (`<h:` offers nothing, the app has no hypernetwork loader),
-embedding v1/v2 filter, the model-keyword trigger lists, choosing a line inside a wildcard file and Tab partial path
-completion, Umi AI wildcards, live translation preview, wiki links, completion delay, remappable hotkeys,
+embedding v1/v2 filter, the model-keyword trigger lists, the upstream next-folder and always-full Tab modes,
+Umi AI wildcards, live translation preview, wiki links, completion delay, remappable hotkeys,
 category colours, per-model black/whitelist, built-in danbooru/e621 lists. A physical Japanese IME was not
 exercised (synthetic composition events only). See [tag-autocomplete-verification.md](tag-autocomplete-verification.md).

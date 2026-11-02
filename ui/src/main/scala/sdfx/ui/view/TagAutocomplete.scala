@@ -2,7 +2,7 @@ package sdfx.ui.view
 
 import javafx.application.Platform
 import javafx.geometry.Insets
-import javafx.scene.control.{ButtonType, CheckBox, Dialog, Label, ListCell, ListView, Spinner, TextArea, TextField}
+import javafx.scene.control.{Button, ButtonType, CheckBox, Dialog, Label, ListCell, ListView, Spinner, TextArea, TextField}
 import javafx.scene.image.{Image, ImageView}
 import javafx.scene.input.{InputMethodEvent, KeyCode, KeyEvent}
 import javafx.scene.layout.{GridPane, HBox, StackPane, VBox}
@@ -50,6 +50,12 @@ final class TagDictionary(ctx: UiContext):
 
   def complete(text: String, caret: Int, selStart: Int, selEnd: Int): Option[CompletionResult] =
     CompletionEngine.complete(data, config, text, caret, selStart, selEnd)
+
+  def wildcardLines(name: String)(done: Either[Throwable, Vector[String]] => Unit): Unit =
+    val roots = wildcardDirs
+    sdfx.ui.Fx.async(sdfx.ui.vm.WildcardLines.read(roots, name))(v => done(Right(v)))(e => done(Left(e)))
+  def wildcardContext: Any = (wildcardDirs.map(_.toString), config)
+  def wildcardError(e: Throwable): Unit = ctx.error(s"Cannot read wildcard: ${e.getMessage}")
 
   private def scanWildcards(): Unit =
     if !scanning then
@@ -177,6 +183,10 @@ trait CompletionSource:
   def ensureLoaded(): Unit
   def complete(text: String, caret: Int, selStart: Int, selEnd: Int): Option[CompletionResult]
   def previews: Boolean
+  def wildcardLines(name: String)(done: Either[Throwable, Vector[String]] => Unit): Unit = done(Right(Vector.empty))
+  def wildcardContext: Any = ()
+  def wildcardError(error: Throwable): Unit = ()
+  def maxResults: Int = 12
 
 /** Popup does not take focus, so native text editing and IME stay in the TextArea. */
 final class TagAutocomplete(area: TextArea, source: CompletionSource):
@@ -190,9 +200,20 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
     this(area, new CompletionSource:
       def ensureLoaded(): Unit = dictionary.ensureLoaded()
       def complete(text: String, caret: Int, selStart: Int, selEnd: Int): Option[CompletionResult] = dictionary.complete(text, caret, selStart, selEnd)
-      def previews: Boolean = dictionary.config.extraNetworkPreview)
+      def previews: Boolean = dictionary.config.extraNetworkPreview
+      override def wildcardLines(name: String)(done: Either[Throwable, Vector[String]] => Unit): Unit = dictionary.wildcardLines(name)(done)
+      override def wildcardContext: Any = dictionary.wildcardContext
+      override def wildcardError(error: Throwable): Unit = dictionary.wildcardError(error)
+      override def maxResults: Int = dictionary.config.maxResults)
   private val popup = new Popup()
   private val list = new ListView[Suggestion]()
+  private val linePrevious = new Button("Previous")
+  private val lineNext = new Button("Next")
+  private val lineStatus = new Label()
+  private val lineNavigation = new HBox(6, linePrevious, lineStatus, lineNext)
+  linePrevious.setId("tac-lines-previous"); lineNext.setId("tac-lines-next"); lineStatus.setId("tac-lines-status")
+  linePrevious.setFocusTraversable(false); lineNext.setFocusTraversable(false)
+  lineNavigation.setVisible(false); lineNavigation.setManaged(false)
   private val previewPopup = new Popup()
   private val previewView = new ImageView()
   popup.setAutoHide(true)
@@ -212,7 +233,7 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
         val kind = if item.kind == sdfx.ui.vm.SuggestionKind.Tag then "" else s"[${item.kind.title}] "
         s"$kind${item.label}    ${item.detail}")
   )
-  popup.getContent.add(list)
+  popup.getContent.add(new VBox(list, lineNavigation))
   previewView.setFitWidth(160); previewView.setFitHeight(160); previewView.setPreserveRatio(true)
   previewView.setId("tag-autocomplete-preview")
   previewPopup.getContent.add(new StackPane(previewView))
@@ -220,6 +241,11 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
   private var imeCommitGuard = false
   private var accepting = false
   private var suppressed = false
+  private var selectedByKeyboard = false
+  private var revision = 0L
+  private var lineItems = Vector.empty[Suggestion]
+  private var linePage = 0
+  private var lineTruncated = false
   private var current: Option[(String, CompletionResult)] = None
   def isComposing: Boolean = composing || imeCommitGuard
   def isShowing: Boolean = popup.isShowing
@@ -228,7 +254,25 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
   def previewImage: Option[Image] = Option(previewView.getImage)
   def suggestions: Vector[Suggestion] = current.map(_._2.items).getOrElse(Vector.empty)
   def hide(): Unit =
-    popup.hide(); previewPopup.hide(); current = None
+    revision += 1
+    popup.hide(); previewPopup.hide(); current = None; lineItems = Vector.empty
+    lineNavigation.setVisible(false); lineNavigation.setManaged(false)
+
+  private def showLinePage(): Unit =
+    val pageSize = source.maxResults.max(1)
+    val pages = (lineItems.size + pageSize - 1) / pageSize
+    val page = lineItems.slice(linePage * pageSize, (linePage + 1) * pageSize)
+    current = current.map { (text, result) => text -> result.copy(items = page) }
+    list.getItems.setAll(page*)
+    list.getSelectionModel.select(0)
+    list.setPrefHeight(math.min(8, page.size) * 26 + 4)
+    lineStatus.setText(s"${linePage + 1}/$pages · PageUp/PageDown" + (if lineTruncated then " · first 5,000 lines only" else ""))
+    linePrevious.setDisable(linePage == 0)
+    lineNext.setDisable(linePage + 1 >= pages)
+    lineNavigation.setVisible(true); lineNavigation.setManaged(true)
+
+  linePrevious.setOnAction(_ => if linePage > 0 then { linePage -= 1; showLinePage() })
+  lineNext.setOnAction(_ => if (linePage + 1) * source.maxResults.max(1) < lineItems.size then { linePage += 1; showLinePage() })
 
   private def showPreview(): Unit =
     val item = Option(list.getSelectionModel.getSelectedItem)
@@ -253,6 +297,7 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
           current = Some(text -> r)
           list.getItems.setAll(r.items*)
           list.getSelectionModel.select(0)
+          selectedByKeyboard = false
           list.setPrefHeight(math.min(8, r.items.size) * 26 + 4)
           val bounds = area.localToScreen(area.getBoundsInLocal)
           if bounds != null then
@@ -262,23 +307,74 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
 
   private def accept(): Unit =
     val selected = Option(list.getSelectionModel.getSelectedItem)
+    var selectedWildcard: Option[(String, Int, Int)] = None
     for item <- selected; (text, r) <- current if text == area.getText do
       accepting = true
       try
         val insertion = item.insert()
         area.replaceText(r.start, r.end, insertion)
         area.positionCaret(r.start + insertion.length)
+        if item.kind == sdfx.ui.vm.SuggestionKind.Wildcard then
+          selectedWildcard = Some((item.label, r.start, r.start + item.label.length + 4))
       finally accepting = false
     suppressed = true
     hide()
+    selectedWildcard.foreach { (name, start, end) =>
+      val expected = area.getText
+      val caret = area.getCaretPosition
+      val ticket = revision
+      val context = source.wildcardContext
+      source.wildcardLines(name) { response =>
+        if ticket == revision && context == source.wildcardContext && area.isFocused && area.getText == expected && area.getCaretPosition == caret then
+          response match
+            case Left(error) => source.wildcardError(error)
+            case Right(lines) if lines.nonEmpty =>
+              lineTruncated = lines.size > 5000
+              lineItems = lines.take(5000).map(line => Suggestion(sdfx.ui.vm.SuggestionKind.WildcardValue, line, name, () => line))
+              linePage = 0
+              current = Some(expected -> CompletionResult(start, end, Vector.empty))
+              showLinePage()
+              selectedByKeyboard = false
+              val bounds = area.localToScreen(area.getBoundsInLocal)
+              if bounds != null then
+                list.getStylesheets.setAll(area.getScene.getStylesheets)
+                popup.show(area, bounds.getMinX, bounds.getMaxY)
+            case _ => ()
+      }
+    }
+
+  /** Tab may extend an ambiguous wildcard path without choosing the first file. */
+  private def partialWildcard(): Boolean =
+    current.exists { (text, result) =>
+      val items = result.items
+      val caret = area.getCaretPosition
+      if selectedByKeyboard || result.wildcardPrefix.isEmpty || !items.forall(_.kind == sdfx.ui.vm.SuggestionKind.Wildcard) ||
+          caret < result.start + 2 || caret > result.end || text != area.getText then false
+      else
+        val typed = text.substring(result.start + 2, caret)
+        val common = result.wildcardPrefix.get
+        if caret < result.end || common.length <= typed.length || !common.regionMatches(true, 0, typed, 0, typed.length) then true
+        else
+          accepting = true
+          try
+            val extension = common.substring(typed.length)
+            area.insertText(caret, extension)
+            area.positionCaret(caret + extension.length)
+          finally accepting = false
+          suppressed = false
+          update()
+          true
+    }
 
   area.textProperty.addListener((_, _, _) =>
+    revision += 1
     if !accepting then
       if !isComposing then suppressed = false
-      Platform.runLater(() => update())
+      val ticket = revision
+      Platform.runLater(() => if ticket == revision then update())
   )
-  area.caretPositionProperty.addListener((_, _, _) => update())
-  area.selectionProperty.addListener((_, _, _) => update())
+  area.caretPositionProperty.addListener((_, _, _) => { revision += 1; update() })
+  area.selectionProperty.addListener((_, _, _) => { revision += 1; update() })
   area.focusedProperty.addListener((_, _, focused) =>
     if focused then source.ensureLoaded()
     else
@@ -296,11 +392,19 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
   )
   area.addEventFilter(KeyEvent.KEY_RELEASED, (_: KeyEvent) => if !composing then imeCommitGuard = false)
   area.addEventFilter(KeyEvent.KEY_PRESSED, (e: KeyEvent) =>
+    if e.getCode == KeyCode.ESCAPE && !popup.isShowing then revision += 1
     if !isComposing && popup.isShowing && !e.isControlDown && !e.isMetaDown && !e.isAltDown && !e.isShiftDown then
       e.getCode match
-        case KeyCode.DOWN => list.getSelectionModel.select((list.getSelectionModel.getSelectedIndex + 1).min(list.getItems.size - 1)); e.consume()
-        case KeyCode.UP => list.getSelectionModel.select((list.getSelectionModel.getSelectedIndex - 1).max(0)); e.consume()
-        case KeyCode.ENTER | KeyCode.TAB => accept(); e.consume()
+        case KeyCode.DOWN => selectedByKeyboard = true; list.getSelectionModel.select((list.getSelectionModel.getSelectedIndex + 1).min(list.getItems.size - 1)); e.consume()
+        case KeyCode.UP => selectedByKeyboard = true; list.getSelectionModel.select((list.getSelectionModel.getSelectedIndex - 1).max(0)); e.consume()
+        case KeyCode.ENTER => accept(); e.consume()
+        case KeyCode.TAB => if !partialWildcard() then accept(); e.consume()
+        case KeyCode.PAGE_DOWN if lineItems.nonEmpty =>
+          if (linePage + 1) * source.maxResults.max(1) < lineItems.size then { linePage += 1; showLinePage() }
+          e.consume()
+        case KeyCode.PAGE_UP if lineItems.nonEmpty =>
+          if linePage > 0 then { linePage -= 1; showLinePage() }
+          e.consume()
         case KeyCode.ESCAPE => suppressed = true; hide(); e.consume()
         case _ => ()
   )

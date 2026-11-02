@@ -54,7 +54,8 @@ object RealTagAutocompleteExtrasCheck:
     Files.writeString(wildcardDir.resolve("animals.txt"), "a red fox\n")
     Files.writeString(wildcardDir.resolve("hair.txt"), "short hair\n")
     Files.createDirectories(wildcardDir.resolve("colors"))
-    Files.writeString(wildcardDir.resolve("colors/warm.txt"), "orange\n")
+    Files.writeString(wildcardDir.resolve("colors/warm.txt"), (Vector("orange") ++ (2 to 15).map(n => s"item $n")).mkString("\n"))
+    Files.writeString(wildcardDir.resolve("colors/cold.txt"), "blue\n")
     val files = Files.createDirectories(run.resolve("data"))
     val tagCsv = files.resolve("tags.csv")
     Files.writeString(tagCsv, "blue_hair,0,20,azure_hair\nblue_eyes,0,10,\nred_(dress),0,5,\n")
@@ -128,11 +129,57 @@ object RealTagAutocompleteExtrasCheck:
         root.getButtonTypes.asScala.find(_.getText == "Save").map(root.lookupButton).get.asInstanceOf[Button].fire()
       }
       eventually("data loaded") { fx { window.ctx.tagDictionary.data.translations.size == 2 && window.ctx.tagDictionary.data.chants.size == 1 &&
-        window.ctx.tagDictionary.data.extra.size == 1 && window.ctx.tagDictionary.tags.size == 3 && window.ctx.tagDictionary.data.wildcards.size == 3 } }
+        window.ctx.tagDictionary.data.extra.size == 1 && window.ctx.tagDictionary.tags.size == 3 && window.ctx.tagDictionary.data.wildcards.size == 4 } }
       check("dialog Save persisted paths in settings")(services.settings.tagComplete.translationCsv.contains(translationCsv.toString) &&
         services.settings.tagAutocompleteCsv.contains(tagCsv.toString) && services.settings.tagComplete.chantsJson.contains(chantsJson.toString))
       fx { area.requestFocus() }
       eventually("prompt focus") { fx { area.isFocused } }
+
+      // The real dictionary scans the real wildcard roots and reads the chosen file asynchronously.
+      fx {
+        area.setText("__col"); area.positionCaret(area.getLength)
+        key(area, KeyCode.TAB)
+        check("partial wildcard path")(area.getText == "__colors/")
+        area.insertText(area.getCaretPosition, "w")
+        key(area, KeyCode.ENTER)
+        check("wildcard reference inserted")(area.getText == "__colors/warm__")
+      }
+      eventually("wildcard file lines") { fx { editor.completionItems.exists(_.label == "orange") } }
+      def clickPopup(selector: String): Unit = fx {
+        val node = Window.getWindows.asScala.collect { case p: PopupWindow if p.isShowing => p }.iterator
+          .flatMap(w => Option(w.getScene).flatMap(s => Option(s.lookup(selector)))).next()
+        val bounds = node.localToScreen(node.getBoundsInLocal)
+        val robot = new javafx.scene.robot.Robot()
+        robot.mouseMove((bounds.getMinX + bounds.getMaxX) / 2, (bounds.getMinY + bounds.getMaxY) / 2)
+        robot.mouseClick(javafx.scene.input.MouseButton.PRIMARY)
+      }
+      clickPopup("#tac-lines-next")
+      eventually("mouse next page") { fx { editor.completionItems.headOption.exists(_.label == "item 13") } }
+      fx {
+        check("mouse navigation keeps prompt focus")(area.isFocused)
+        popupShot("pop-wildcard-lines")
+        key(area, KeyCode.ENTER)
+        check("Enter inserts line after real mouse navigation")(area.getText == "item 13")
+        area.setText("__col"); area.positionCaret(area.getLength)
+        key(area, KeyCode.TAB)
+        area.insertText(area.getCaretPosition, "w")
+        key(area, KeyCode.ENTER)
+      }
+      eventually("wildcard lines reopen") { fx { editor.completionItems.headOption.exists(_.label == "orange") } }
+      fx {
+        val cell = Window.getWindows.asScala.collect { case p: PopupWindow if p.isShowing => p }.iterator
+          .flatMap(p => p.getScene.getRoot.lookupAll(".list-cell").asScala)
+          .collectFirst { case c: javafx.scene.control.ListCell[?] if Option(c.getText).exists(_.contains("orange")) => c }.get
+        val bounds = cell.localToScreen(cell.getBoundsInLocal)
+        val robot = new javafx.scene.robot.Robot()
+        robot.mouseMove((bounds.getMinX + bounds.getMaxX) / 2, (bounds.getMinY + bounds.getMaxY) / 2)
+        robot.mouseClick(javafx.scene.input.MouseButton.PRIMARY)
+      }
+      eventually("mouse line inserted") { fx { area.getText == "orange" } }
+      fx {
+        check("mouse click inserts a line through the real dictionary")(area.getText == "orange")
+        area.setText("")
+      }
 
       // 2. Build the prompt with the real editor.
       def complete(a: TextArea, typed: String, label: String, down: Int = 0, expectPreview: Boolean = false): Unit =

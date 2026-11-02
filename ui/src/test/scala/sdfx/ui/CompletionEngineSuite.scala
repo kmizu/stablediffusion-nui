@@ -42,6 +42,12 @@ class CompletionEngineSuite extends FunSuite:
     assertEquals(run(data, "__warm|").get.items.map(_.label), Vector("colors/warm"))
     assertEquals(run(data, "__col|", cfg.copy(wildcards = false)), None)
   }
+  test("wildcard common prefix includes matches beyond the displayed result limit") {
+    val many = data.copy(wildcards = Vector("colors/warm", "colors/water", "colors/cold"))
+    val result = run(many, "__col|", cfg.copy(maxResults = 2)).get
+    assertEquals(result.items.map(_.label), Vector("colors/warm", "colors/water"))
+    assertEquals(result.wildcardPrefix, Some("colors/"))
+  }
   test("extra network: mixed list, filters, long forms") {
     assertEquals(run(data, "<|").get.items.map(_.kind.title).distinct, Vector("LoRA", "embedding", "chant"))
     assertEquals(run(data, "<e:|").get.items.map(_.label), Vector("bad_hands"))
