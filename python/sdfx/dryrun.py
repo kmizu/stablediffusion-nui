@@ -82,6 +82,8 @@ class FakeEngine(BaseEngine):
             nsfw = ["nsfw_checker"] if nsfw_available() else []
             from .aesthetic_score import available as aesthetic_available
             nsfw += ["aesthetic_score"] if aesthetic_available() else []
+            from .chara_searcher import available as chara_available
+            nsfw += ["chara_searcher"] if chara_available() else []
         return (["inpaint_difference"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + nsfw + ["controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "pag", "controlnet", "apg", "mahiro", "rescale_cfg", "semantic_guidance", "agent_attention", "cd_tuner", "incantations", "sonar", "llul", "aesthetic_gradients", "characteristic_guidance",
                 "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier", "soft_inpainting", "sag", "neveroom",
                 "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint", "photomaker", "img2imgalt",

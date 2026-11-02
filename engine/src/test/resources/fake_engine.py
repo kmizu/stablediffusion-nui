@@ -267,6 +267,14 @@ def handle_work(rid, typ, params):
             readable = {k: os.path.isfile(params[k]) for k in ("image_path", "mask_path") if params.get(k)}
             state["last_extra"] = {"type": typ, "params": params, "readable": readable}
             result(rid, {"path": out, "outputs": {}, "info": {}})
+        elif typ == "chara_searcher":
+            state["last_extra"] = {"type": typ, "params": params}
+            if params.get("action") == "embed":
+                result(rid, {"embedding": [0.0, 1.0, 0.5]})
+            else:
+                event(rid, "progress", step=1, total=2, **{"pass": "chara_searcher"}, eta_s=0.0, image=0, images=1, batch_size=1)
+                result(rid, {"dataset": params["dataset_dir"], "sources": len(params["paths"]), "created": ["a_0.png"],
+                             "new": 1, "errors": [], "total": 1})
         elif typ == "caption":
             state["last_extra"] = {"type": typ, "params": params}
             result(rid, {"caption": "fake caption"})

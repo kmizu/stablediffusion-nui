@@ -46,7 +46,7 @@ final class EngineSupervisor(
   /** Requests that make the engine "busy" (everything that may take long). */
   val heavyTypes: Set[String] = Set(Protocol.Types.Txt2Img, Protocol.Types.Img2Img, Protocol.Types.Upscale,
     Protocol.Types.Preprocess, Protocol.Types.LoadModel, Protocol.Types.SetVae, Protocol.Types.SystemBenchmark, Protocol.Types.VramEstimator, Protocol.Types.VaeTools,
-    Protocol.Types.TemporalLab)
+    Protocol.Types.TemporalLab, Protocol.Types.CharaSearcher)
   private val readerTypes: Set[String] = Set(Protocol.Types.Ping, Protocol.Types.Interrupt,
     Protocol.Types.InterruptionProtection, Protocol.Types.RestartAuthorization, Protocol.Types.SystemStatus, Protocol.Types.Shutdown)
   private val loadTypes: Set[String] = Set(Protocol.Types.LoadModel, Protocol.Types.SetVae)

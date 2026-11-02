@@ -1989,7 +1989,7 @@
 "index": 331,
 "name": "chara-searcher",
 "url": "https://github.com/NON906/chara-searcher.git",
-"status": "todo:chara_searcher"
+"status": "done:core:chara_searcher"
 },
 {
 "index": 332,

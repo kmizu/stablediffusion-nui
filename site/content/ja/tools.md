@@ -9,7 +9,7 @@ description: PNG Info、Extras、Comparison、Styles、Tokenizer、VAE Tools な
 画像を受け付ける欄は、どのタブでも同じように使えます。ファイルやギャラリーのサムネイルをドラッグ＆ドロップするか、**Ctrl+V** でクリップボードから貼り付けるか、欄をクリックしてファイルを選びます。**✕** で画像を外せます。
 
 !!! note "ほかのページで説明しているタブ"
-    **Embedding Inspector**、**Embedding Editor**、**Embedding Merge** は [LoRA と埋め込み](lora-embeddings.html)、**ControlNet Fastload** と **ControlNet Fastload Filter** は [ControlNet](controlnet.html) のページで説明しています。**Image Browser** は[画像ブラウザ](image-browser.html)のページで説明しています。
+    **Embedding Inspector**、**Embedding Editor**、**Embedding Merge** は [LoRA と埋め込み](lora-embeddings.html)、**ControlNet Fastload** と **ControlNet Fastload Filter** は [ControlNet](controlnet.html) のページで説明しています。**Image Browser** は[画像ブラウザ](image-browser.html)、**Character Searcher** は[キャラクター検索](character-searcher.html)のページで説明しています。
 
 ## PNG Info
 

@@ -28,6 +28,11 @@ BASE = [
     ("RED1cat/Gelbooru-Prompt-Randomizer", "reimplemented", "Unlicensed behavior reference 032805388740dad2bcd06493f0286c8792e71230; only its README was used (random Gelbooru post with required and excluded tags), re-implemented in the `booru_prompt` script; no upstream code was read or copied"),
     ("Kahsolt/stable-diffusion-webui-sonar", "reimplemented", "Pinned MIT source 15f92859f70f624513796dde91396109134da47b; independent momentum Euler / Euler a / Naive scheduler steps, reference-image guidance and upscale from the source behaviour; no upstream code copied"),
     ("Elldreth/loopback_scaler", "reimplemented", "Pinned MIT source 184a53e6d22579c578c6ee1bf55d821479213c49; independent native img2img loop schedule and final filters; no upstream code copied"),
+    ("NON906/chara-searcher", "reimplemented", "Pinned MIT source dee047567fd2a4c9adc8deca81cb6a4510002c57 (the LICENSE excludes its submodules CartoonSegmentation and wd14-tagger-standalone, which are not used); only its README and the structure of its scripts were read, independently re-implemented as the native Character Searcher tab; no upstream code copied. Dataset files use the upstream layout (cut-out PNGs, tag .txt, embedding.npz / embedding.json)"),
+    ("deepghs/anime_person_detection", "model dependency", "MIT anime person detector person_detect_v1.1_m/model.onnx (103,459,671 bytes, SHA-256 c80365a98ca8388fd2f01fd5abea0439e92265bceceb048bef38b0849303467c) of Hugging Face revision e39c744c22432ad01f91dd254fe2b02c8d878b8c; finds the characters of the Character Searcher; downloaded on first use and size/SHA-256 checked; not bundled"),
+    ("skytnt/anime-seg", "model dependency", "Apache-2.0 ISNet anime segmentation isnetis.onnx (176,069,933 bytes, SHA-256 f15622d853e8260172812b657053460e20806f04b9e05147d49af7bed31a6e99) of Hugging Face revision 493cb60893f47441b26ec4fb9a306bce9e342982; cuts out the characters of the Character Searcher; downloaded on first use and size/SHA-256 checked; not bundled"),
+    ("SmilingWolf/wd-vit-tagger-v3", "model dependency", "Apache-2.0 WD ViT tagger v3 model.onnx (378,536,310 bytes, SHA-256 35f23693620b668f4d53fd3c62bf65e40af739bc52c7eb0fbc49258b58d065b6) and selected_tags.csv (308,468 bytes, SHA-256 298633d94d0031d2081c0893f29c82eab7f0df00b08483ba8f29d1e979441217) of Hugging Face revision 7f6b584d0bd3f55c4531f14ba3d4761b2bccdc0f; tags the cut-outs of the Character Searcher; downloaded on first use and size/SHA-256 checked; not bundled"),
+    ("openai/clip-vit-base-patch32", "model dependency", "CLIP ViT-B/32 (the model behind sentence-transformers' clip-ViT-B-32) config.json (4,186 bytes) and pytorch_model.bin (605,247,071 bytes, SHA-256 a63082132ba4f97a80bea76823f544493bffa8082296d62d71581a4feff1576f) of Hugging Face revision 3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268 (the openai/CLIP code repository is MIT); image embeddings of the Character Searcher; downloaded on first use and size/SHA-256 checked; not bundled"),
     ("AlUlkesh/stable-diffusion-webui-images-browser", "reimplemented", "Unlicensed behavior reference 12a951318b27abd0d9099451e92cbf1de508ee4f; only its README and the observable list of controls, options and keybindings were used for the native Image Browser tab. No upstream code was copied."),
     ("light-and-ray/sd-webui-old-sd-firstpasser", "reimplemented", "Unlicensed behavior reference 74eb6b965bc5dbb65be99999b4a86bfbb0ee2b13; only its README was used (firstpass with an old SD 1.x / SDXL checkpoint, upscale, main-checkpoint img2img, Hires fix supported), re-implemented as the `old_sd_firstpasser` txt2img script; no upstream code was read or copied (its README screenshot was viewed only to name the controls)"),
     ("AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients", "reimplemented", "Unlicensed behavior reference 2624e5dd4902cb731287b426ad483e741ece85bb; only its README and the method of the paper it cites (Gallego, Personalizing Text-to-Image Generation via Aesthetic Gradients, 2022) were used, re-implemented as the `aesthetic_gradients` AlwaysOn hook; no upstream code was read or copied"),
@@ -227,6 +232,7 @@ PINNED_LICENSES = {
     "crowsonkb/simulacra-aesthetic-models": ("701f7678b305acf8a0634350365a86beb95dd87d", "LICENSE", "d6c412c78ce18a08f053ef91bbf367e1d34320c2dc74961f024d19f9e1a85a19", "MIT"),
     "openai/CLIP": ("d05afc436d78f1c48dc0dbf8e5980a9d471f35f6", "LICENSE", "987e63b32f6c89ff5160e429458a872ff048e6860b590a3912e938f9da8f14db", "MIT"),
     "Elldreth/loopback_scaler": ("184a53e6d22579c578c6ee1bf55d821479213c49", "LICENSE", "d664856e8ec3180ea54d889cd2bbbd5971b7cb14f91b882c4af3b94b3e86747a", "MIT"),
+    "NON906/chara-searcher": ("dee047567fd2a4c9adc8deca81cb6a4510002c57", "LICENSE", "d94e1eee7fc581dd5784e90c53b235b9959664d8827c6491b1923aadc2137757", "MIT"),
     "v0xie/sd-webui-incantations": ("980d63838a2b8c8659a01b242e55551870619d6a", "LICENSE", "230184f60bae2feaf244f10a8bac053c8ff33a183bcc365b4d8b876d2b7f4809", "GPL-3.0"),
     "scraed/CharacteristicGuidanceWebUI": ("e2f9fdca460beed1366647e2eea8276a63f98484", "LICENSE", "8b1ba204bb69a0ade2bfcf65ef294a920f6bb361b317dba43c7ef29d96332b9b", "GPL-3.0"),
     "hako-mikan/sd-webui-cd-tuner": ("aafdbdda88b8d4e717fdb9aa9abe9e6df4943d7a", "LICENSE", "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef", "AGPL-3.0"),
@@ -301,6 +307,14 @@ PINNED_UNLICENSED = {
         "74eb6b965bc5dbb65be99999b4a86bfbb0ee2b13", "no license file published at pinned source"),
     "AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients": (
         "2624e5dd4902cb731287b426ad483e741ece85bb", "no license file published at pinned source"),
+    "deepghs/anime_person_detection": (
+        "e39c744c22432ad01f91dd254fe2b02c8d878b8c", "Hugging Face model card states MIT"),
+    "skytnt/anime-seg": (
+        "493cb60893f47441b26ec4fb9a306bce9e342982", "Hugging Face model card states Apache-2.0"),
+    "SmilingWolf/wd-vit-tagger-v3": (
+        "7f6b584d0bd3f55c4531f14ba3d4761b2bccdc0f", "Hugging Face model card states Apache-2.0"),
+    "openai/clip-vit-base-patch32": (
+        "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268", "Hugging Face model card states no license (the openai/CLIP code repository is MIT)"),
     "openai/clip-vit-large-patch14": (
         "32bd64288804d66eefd0ccbe215aa642df71cc41", "Hugging Face model card states no license (the openai/CLIP code repository is MIT)"),
     "vladmandic/sd-extension-aesthetic-scorer": (

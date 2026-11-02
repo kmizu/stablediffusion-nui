@@ -205,6 +205,9 @@ class Engine(BaseEngine):
         from . import aesthetic_score
         if aesthetic_score.available():
             f.append("aesthetic_score")
+        from . import chara_searcher
+        if chara_searcher.available():
+            f.append("chara_searcher")
         if hasattr(diffusers, "StableDiffusionXLPAGPipeline"):
             f.append("pag")
         if hasattr(diffusers, "ControlNetModel"):

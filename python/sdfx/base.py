@@ -334,6 +334,12 @@ class BaseEngine:
         from .metadata_utils import run
         return run(params, ctx)
 
+    def chara_searcher(self, params: dict, ctx: JobContext) -> dict:
+        """Character Searcher data preparation (cut out, tag, embed) and query embeddings; see sdfx.chara_searcher."""
+        from .chara_searcher import run
+        # Every model runs on the CPU unless the request asks for "cuda": the GPU belongs to the loaded checkpoint.
+        return run(params, ctx)
+
     def controlnet_fastload_data(self, params: dict, ctx: JobContext) -> dict:
         from .controlnet_fastload import run_fastload_service
         try:

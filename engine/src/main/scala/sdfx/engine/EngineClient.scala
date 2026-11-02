@@ -22,6 +22,10 @@ final class TemporalLabHandle(val result: Future[TemporalLabResult], interruptFn
 final class VaeToolsHandle(val result: Future[ujson.Value], interruptFn: () => Future[InterruptionDecision]):
   def interrupt(): Future[InterruptionDecision] = interruptFn()
 
+/** One Character Searcher request (import or query embedding) and its scoped cancellation. */
+final class CharaSearcherHandle(val result: Future[ujson.Value], interruptFn: () => Future[InterruptionDecision]):
+  def interrupt(): Future[InterruptionDecision] = interruptFn()
+
 final class EmbeddingMergeHandle(val result: Future[EmbeddingMergeResult], interruptFn: () => Future[InterruptionDecision]):
   def interrupt(): Future[InterruptionDecision] = interruptFn()
 
@@ -137,6 +141,13 @@ final class EngineClient(val supervisor: EngineSupervisor):
       () => gate.beforeDispatch(), () => gate.dispatched(), imageSecret = imageSecret)
     result.onComplete(_ => gate.completed())(using ExecutionContext.parasitic)
     new VaeToolsHandle(result, () => gate.cancel())
+  def charaSearcherOwned(params: ujson.Obj, listener: EngineEvent => Unit = _ => ()): CharaSearcherHandle =
+    val owner = java.util.UUID.randomUUID().toString
+    val gate = new TemporalLabCancelGate(owner, id => supervisor.captureInterrupt(Some(id), restartOnTimeout = false))
+    val result = supervisor.requestExtras(Protocol.Types.CharaSearcher, params, listener, owner,
+      () => gate.beforeDispatch(), () => gate.dispatched())
+    result.onComplete(_ => gate.completed())(using ExecutionContext.parasitic)
+    new CharaSearcherHandle(result, () => gate.cancel())
   def systemInfo(dirs: ujson.Obj = ujson.Obj(), hashes: Boolean = false): Future[ujson.Value] =
     raw(Protocol.Types.SystemInfo, ujson.Obj("dirs" -> dirs, "hashes" -> hashes))
   def systemBenchmark(params: ujson.Obj, listener: EngineEvent => Unit = _ => ()): Future[ujson.Value] =

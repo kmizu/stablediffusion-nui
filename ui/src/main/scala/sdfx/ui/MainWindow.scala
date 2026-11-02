@@ -198,6 +198,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   })
   val imageBrowser = new ImageBrowserTab(ctx, new sdfx.core.imagebrowser.BrowserEnv(() => services.home.outputs(services.settings), services.home.configDir,
     new sdfx.core.imagebrowser.SystemTrash(new sdfx.core.imagebrowser.FolderTrash(() => services.home.outputs(services.settings).resolve(".trash")))))
+  val charaSearcher = new CharaSearcherTab(ctx, services.home.root.resolve("chara-searcher"))
   val embeddingMerge = new EmbeddingMergeTab(ctx)
   val modelPresets = new ModelPresetsTab(ctx,
     () => services.supervisor.loadedModel.map(m => Path.of(m.path)),
@@ -286,6 +287,9 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   private val imageBrowserTab = new Tab("Image Browser", imageBrowser.node)
   imageBrowserTab.setId("image-browser-tab")
   tabs.getTabs.add(imageBrowserTab)
+  private val charaSearcherTab = new Tab("Character Searcher", charaSearcher.node)
+  charaSearcherTab.setId("chara-searcher-tab")
+  tabs.getTabs.add(charaSearcherTab)
   private var comparisonDivider = initial.dividers.get("main").flatMap(_.headOption).getOrElse(.42)
   Mode.values.foreach { mode =>
     plugins(mode).form("model_keyword").flatMap(_.prop("lora")).foreach { value =>
@@ -300,9 +304,10 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     vramEstimates.foreach((mode, estimate) => estimate.setActive(modeOf(t).contains(mode)))
     systemInfo.setActive(t eq systemInfoTab)
     if t eq imageBrowserTab then imageBrowser.shown()
+    if t eq charaSearcherTab then charaSearcher.shown()
     if (previous eq stylesTab) && (t ne stylesTab) then stylesEditor.leave()
     refreshComparisonOptions()
-    if (t eq comparisonTab) || (t eq imageBrowserTab) then // both need the whole window width
+    if (t eq comparisonTab) || (t eq imageBrowserTab) || (t eq charaSearcherTab) then // both need the whole window width
       if mainSplit.getItems.contains(rightBox) then
         if mainSplit.getWidth > 0 then comparisonDivider = mainSplit.getDividerPositions.headOption.getOrElse(comparisonDivider)
         mainSplit.getItems.remove(rightBox)
@@ -1082,6 +1087,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       "controlnet fastload" -> (() => controlNetFastload.dispose()),
       "controlnet fastload gallery" -> (() => controlNetFastloadGallery.dispose()),
       "image browser" -> (() => imageBrowser.dispose()),
+      "character searcher" -> (() => charaSearcher.dispose()),
       "VRAM timer" -> (() => vramPoll.stop()),
       "MCP controller" -> (() => mcpExec.execute(() => mcp.close())),
       "MCP executor" -> (() => mcpExec.shutdown()),

@@ -9,7 +9,7 @@ After the txt2img, img2img and Inpaint generation tabs, the main window has tool
 Image inputs work the same way in every tab. Drag and drop a file or a gallery thumbnail, paste from the clipboard with **Ctrl+V**, or click the box to choose a file. **✕** removes the image.
 
 !!! note "Tabs covered on other pages"
-    **Embedding Inspector**, **Embedding Editor** and **Embedding Merge** are covered in [LoRA and embeddings](lora-embeddings.html). **ControlNet Fastload** and **ControlNet Fastload Filter** are covered in [ControlNet](controlnet.html). The **Image Browser** tab is covered in [Image Browser](image-browser.html).
+    **Embedding Inspector**, **Embedding Editor** and **Embedding Merge** are covered in [LoRA and embeddings](lora-embeddings.html). **ControlNet Fastload** and **ControlNet Fastload Filter** are covered in [ControlNet](controlnet.html). The **Image Browser** tab is covered in [Image Browser](image-browser.html) and the **Character Searcher** tab in [Character Searcher](character-searcher.html).
 
 ## PNG Info
 

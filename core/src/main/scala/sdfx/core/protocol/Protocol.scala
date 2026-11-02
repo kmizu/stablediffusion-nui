@@ -36,6 +36,7 @@ object Protocol:
     val EmbeddingMerge = "embedding_merge"
     val SystemInfo = "system_info"
     val VaeTools = "vae_tools"
+    val CharaSearcher = "chara_searcher"
     val TemporalLab = "temporal_lab"
     val SystemStatus = "system_status"
     val SystemBenchmark = "system_benchmark"
