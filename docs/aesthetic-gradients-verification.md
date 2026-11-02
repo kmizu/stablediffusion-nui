@@ -1,5 +1,11 @@
 # Aesthetic Gradients verification (#2)
 
+## 元拡張の実物との互換性について
+
+2026-11-03 に GitHub の tree メタデータを確認したところ、対象拡張の固定 revision `2624e5dd4902cb731287b426ad483e741ece85bb` には `.pt` ファイルがなく、PNG は `ss.png` のみだった。公開 release もない。したがって、この調査では拡張が出力した embedding や生成パラメータ入り PNG の正規 fixture を確保できていない。
+
+拡張 README が参照する研究用リポジトリ [vicgalle/stable-diffusion-aesthetic-gradients](https://github.com/vicgalle/stable-diffusion-aesthetic-gradients/tree/30ca347d39eb7c92dd651a513cf4f795ed995708) には `.pt` が8件あり、README は埋め込みの形状を `1×768` と説明している。ただし、これらが対象の A1111 拡張から出力されたファイルだという証拠はなく、個々の埋め込みや元データの利用条件も今回の資料からは確定していない。これらのファイルはダウンロードしておらず、実物互換の検証には使っていない。元拡張のコードは読んでいない。
+
 > 現在の状態: GUI・MCP で作成でき、実 GUI・配布版 MCP の SD1.5／SDXL、配布版 dry-run の Windows chooser を検証済み。配布版 GUI でも chooser から両モデル生成まで一続きで確認した。元拡張の PNG／embedding との互換性などは未検証で、issue #2 は open。操作方法は [日本語ガイド](aesthetic-embeddings.md) を参照。以下の追試は時系列の記録で、各段階での未検証事項は後の追試で解消したものを含む。
 
 > 2026-11-03 の初期状態: SD1.5 と SDXL の実モデルを公式 MCP SDK から使い、作成・一覧・適用・既定フォルダからの PNG 再生成を確認。当時、GUI の実モデル、別フォルダ・同名ファイル、配布版の検証は未完了だった。
