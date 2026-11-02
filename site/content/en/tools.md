@@ -53,6 +53,18 @@ A1111 matches the histogram and luminosity, AdaIN matches the global colour stat
 
 ### ControlNet Preprocessor
 
+To process chosen files, set the output folder, choose images and press **Run on selected images**.
+Remove unwanted entries from the list before running. Files are processed in the order returned by
+the system chooser; failures are reported and the rest continue. Cancel stops after the current
+image. Existing output is never overwritten. Selected files may share their output folder; a folder
+batch still requires different input and output folders.
+
+Changing the image-protection session during processing stops the batch without publishing that
+image. Saving uses a temporary file in the output folder. During an unprotected session it is a
+normal plaintext PNG subject to that folder's access permissions, and another process may read it
+while it is copied. Switching protection waits for a slow copy to finish. Cleanup failures are
+reported in the final status; if several occur, it retains the first path and reason.
+
 The **ControlNet Preprocessor** box runs a ControlNet preprocessor on an image without generating anything, like the "ControlNet Preprocessor in extras tab" extension. The result is a control image you can inspect, keep or hand to a ControlNet unit.
 
 1. Choose a **Module**. The list is the one a ControlNet unit offers, without `none` and `inpaint` (which needs a mask).

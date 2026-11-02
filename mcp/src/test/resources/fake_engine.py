@@ -207,6 +207,15 @@ def handle_work(rid, typ, params):
                 f.write(png_bytes(16, 16, (1, 2, 3)))
             result(rid, {"path": out})
         elif typ == "preprocess":
+            gate = os.environ.get("SDFX_TEST_PREPROCESS_GATE")
+            if gate:
+                with open(gate + ".started", "w", encoding="utf-8") as f:
+                    f.write("started")
+                deadline = time.monotonic() + 30
+                while not os.path.exists(gate + ".continue") and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                if not os.path.exists(gate + ".continue"):
+                    raise RuntimeError("preprocess test gate timed out")
             out = os.path.join(params["output_dir"], "pre-%s.png" % rid)
             os.makedirs(params["output_dir"], exist_ok=True)
             with open(out, "wb") as f:
