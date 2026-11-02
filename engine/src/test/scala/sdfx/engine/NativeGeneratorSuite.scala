@@ -64,3 +64,54 @@ class NativeGeneratorSuite extends munit.FunSuite:
       catch case cleanup: Throwable =>
         if failure!=null then failure.addSuppressed(cleanup) else throw cleanup
   }
+
+  test("Generator routes SDXL through the selected backend and replays size/crop metadata") {
+    val cpFile=sys.env.get("SCALATORCH_WORKER_CLASSPATH_FILE")
+    val model=sys.env.get("SCALATORCH_TINY_SDXL_MODEL")
+    assume(cpFile.nonEmpty && model.nonEmpty,"native worker classpath and tiny SDXL model required")
+    val root=Path.of(model.get).toAbsolutePath
+    val home=AppHome(Files.createTempDirectory("native-generator-sdxl"))
+    val scheduler=home.root.resolve("scheduler.json")
+    Files.writeString(scheduler,"""{"num_train_timesteps":1000,"beta_start":0.00085,"beta_end":0.012,"beta_schedule":"scaled_linear"}""")
+    val backendEnv=sys.env++Map("SDFX_ENGINE_BACKEND"->"scala-torch",
+      "SDFX_SCALATORCH_CLASSPATH_FILE"->cpFile.get,"SDFX_SCALATORCH_MODEL"->root.toString,
+      "SDFX_SCALATORCH_SCHEDULER"->scheduler.toString)
+    val settings=Settings(dtype="fp32",vramMode="cpu",lastModel=None,lastVae=None,
+      modelDirs=ModelDirs(checkpoints=Seq(root.getParent.toString)))
+    val services=new AppServices(home,settings,dryRun=false,builtins=Nil,
+      launchOverride=Some(() => EngineBackend.launch(home,settings,false,backendEnv)),
+      persistSettings=false,installShutdownHook=false)
+    var failure: Throwable=null
+    try
+      assertEquals(services.start().python,"")
+      services.loadCheckpoint(root.toString,remember=false)
+      val params=GenerationParams(prompt="a red apple",negativePrompt="blurry",width=64,height=64,steps=3,seed=42,
+        extra=Map("sdfx_sdxl_original_height"->"80","sdfx_sdxl_original_width"->"96",
+          "sdfx_sdxl_crop_top"->"2","sdfx_sdxl_crop_left"->"4"))
+      val text=services.generator.generate(params).head
+      val textPixels=PngMetadata.readImage(text.path)
+      assertEquals(textPixels.getWidth,64);assertEquals(textPixels.getHeight,64)
+      val edit=services.generator.generate(params.copy(steps=4,
+        img2img=Some(Img2ImgParams(text.path.toString,denoisingStrength=0.5,resizeMode=2)))).head
+      val recorded=PngMetadata.readParameters(edit.path).getOrElse(fail("missing SDXL PNG infotext"))
+      val parsed=Infotext.parse(recorded)
+      assertEquals(parsed.prompt,params.prompt)
+      assertEquals(parsed.negativePrompt,params.negativePrompt)
+      assertEquals(parsed.get("Seed"),Some("42"))
+      assertEquals(PngMetadata.readImage(edit.path).getWidth,64)
+      assertEquals(!Files.exists(home.pythonDir),true)
+      assert(services.supervisor.isRunning)
+    catch case error: Throwable =>
+      failure=error
+      throw error
+    finally
+      try
+        services.shutdown()
+        val files=Files.walk(home.root)
+        try files.sorted(java.util.Comparator.reverseOrder[Path]()).forEach(p => {
+          require(p.toAbsolutePath.normalize().startsWith(home.root.toAbsolutePath.normalize()))
+          Files.delete(p);()
+        }) finally files.close()
+      catch case cleanup: Throwable =>
+        if failure!=null then failure.addSuppressed(cleanup) else throw cleanup
+  }

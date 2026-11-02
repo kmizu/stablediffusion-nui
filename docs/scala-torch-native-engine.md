@@ -236,3 +236,14 @@ module and the EngineLaunch/JSON-lines boundary.
 explicit native choice validation, old environment opt-in, and no silent fallback.
 Python's PyTorch wheels remain separately pinned in `python/requirements-torch.txt`;
 the desktop/application modules do not acquire a PyTorch dependency.
+
+## SDXL through Generator and PNG replay (2026-11-03)
+
+`NativeGeneratorSuite` now selects the replaceable backend boundary explicitly,
+then exercises `AppServices` and `Generator` with the tiny SDXL model. It saves a
+txt2img PNG, uses it as img2img input, checks prompt/negative/seed metadata and
+output size, and confirms no Python directory is created. The request carries
+custom original size/crop in `GenerationParams.extra`. The end-to-end test passed
+in30.826s on CPU. This verifies the common desktop generation/save path for tiny
+SDXL, while actual JavaFX UI interaction and normal SDXL output quality remain
+separate acceptance work.
