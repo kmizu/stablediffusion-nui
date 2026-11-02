@@ -11,6 +11,7 @@
 - #143 VRAM/最適化: main `341dc29` に部分統合、`ffdb2e6` で fp8-auto 拒否後の GUI 表示・生成、`d2aa609` で単一 MainWindow の checkpoint／Style／VAE 操作順序と生成時の待機状態を修正。実 SD1.5・SDXL と展開版 MCP の検証、Python 全体、Scala の回帰を実施。fp32 fallback の NaN と VRAM 制限は試験で再現したもの。物理低 VRAM 端末、物理マウス操作、SDXL ControlNet、MCP／restart／plugin と UI 操作の全体順序は未検証・保証外のため issue は open。`docs/optimization-handoff.md` と `docs/optimization-verification.md` を参照。
 - #18 ControlNet 前処理: main `0f9ff4a` に選択ファイル一括処理を部分統合。保護セッション切替時の公開を staging とロックで守り、実 engine の複数選択・失敗・cancel と保護 PNG 入出力も確認した。detector の許諾と実機、OS chooser 手操作などが残るため issue は open。`docs/controlnet-selected-batch-verification.md` を参照。
 - 追加調査: #2 の元拡張の固定 revision には正規 `.pt` fixture が見つからず、参照先の研究用 `.pt` が元拡張の出力と同一かは不明。詳細は `docs/aesthetic-gradients-verification.md`。#18 の配布版 chooser は隔離環境で起動したが、ウィンドウの入力座標を取得できず操作・検証できなかった。
+- ControlNet `inpaint` 前処理のマスク未反映は `_controlnets` を使う単体再現で確認した。通常の inpaint 自体のマスクとは別の問題。詳細と再現範囲は `docs/controlnet-fastload-verification.md`。修正・実モデル検証は未了。
 - 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
 - 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 
