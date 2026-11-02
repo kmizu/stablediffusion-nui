@@ -54,8 +54,12 @@ object NamedGenerationStates:
         val exists = try path.split("[\\r\\n]+").filter(_.nonEmpty).forall(p => Files.isRegularFile(Path.of(p.trim))) catch case NonFatal(_) => false
         Option.unless(exists)(PresetIssue("missing-input", key.render, s"Input file is missing: $path"))
       }
-      val batchInput = record.fields.get(FieldKey(Vector("batch", "input")))
-      val batchMissing = if record.fields.get(FieldKey(Vector("batch", "enabled"))).contains(PresetAtom.Flag(true)) then
+      val batchEnabledKey = FieldKey(Vector("batch", "enabled"))
+      val batchInputKey = FieldKey(Vector("batch", "input"))
+      val touchesBatch = record.fields.contains(batchEnabledKey) || record.fields.contains(batchInputKey)
+      val effective = before.values ++ plan.changes
+      val batchInput = effective.get(batchInputKey)
+      val batchMissing = if touchesBatch && effective.get(batchEnabledKey).contains(PresetAtom.Flag(true)) then
         val exists = batchInput.exists {
           case PresetAtom.Text(path) => try path.nonEmpty && Files.isDirectory(Path.of(path)) catch case NonFatal(_) => false
           case _ => false

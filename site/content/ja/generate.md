@@ -210,7 +210,7 @@ Hires. fix セクションには **Hires Fix Tweaks** の設定も含まれま�
 
 ## 名前付き生成設定
 
-**Named generation states…** を使うと、そのモードの設定一式に名前を付けて保存し、あとでまとめて復元できます。**Settings presets** が選んだ項目だけを上書きするのに対し、名前付き生成設定は保存した設定をすべて一緒に戻します。
+**Named generation states…** を使うと、そのモードの設定一式に名前を付けて保存し、あとでまとめて復元できます。復元時は、カテゴリや設定を選んで一部だけを戻すこともできます。
 
 1. txt2img、img2img、Inpaint のいずれかで設定を整え、**Named generation states…** を押します。ウィンドウの見出しに対象のモードが表示されます。
 2. 名前を入力して **Save named state** を押します。同じ名前があると、置き換えてよいか確認されます。名前はモードごとに別々です。
@@ -224,6 +224,8 @@ Hires. fix セクションには **Hires Fix Tweaks** の設定も含まれま�
 **History** タブは、Generate / Queue を押すたびにフォームを自動で記録します(モードごとに最新 50 件。最初の画像の 100 px サムネイル付き)。**Record every generation automatically** で記録を止められ、エントリの削除、**Clear history**、**Keep as named state**(名前付き生成設定へコピー)も使えます。保存先は `<アプリのフォルダ>/config/generation-history` です。
 
 タブの下のチェックボックス(Prompts / Sampling, size, seed, hires / Checkpoint・VAE・clip skip / ControlNet / Script and extension controls / WD batch and layout)で、**Restore state** が戻す範囲をカテゴリ単位に絞れます。名前付き設定にも履歴にも使えます。すべてチェックなら全部を戻します。
+
+一項目だけ戻したいときは、一覧から設定を選び **Restore selected setting** を押します。確認画面に戻す項目が表示されます。選んだ項目に必要なモデルやファイルだけを確認するので、ほかの項目の不足によって復元が止まることはありません。
 
 保存先は `<アプリのフォルダ>/config/generation-states` です。**Reload** は外部での変更を読み直し、**Restore backup** はライブラリ全体を 1 つ前に保存した状態に戻します(選んだ項目やモードだけではありません)。
 

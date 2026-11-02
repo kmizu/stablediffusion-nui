@@ -12,9 +12,11 @@ import scala.jdk.CollectionConverters.*
 import sdfx.core.config.{AppHome, Settings}
 import sdfx.core.presets.{PresetJson, PresetLimits}
 import sdfx.core.protocol.ModelEntry
+import sdfx.core.plugins.api.ChoiceSource
 import sdfx.engine.{AppServices, CatalogSnapshot}
 import sdfx.plugins.StandardPlugins
 import sdfx.ui.vm.{Mode, UiState}
+import sdfx.ui.view.W
 
 /** Root-run offline acceptance of the real MainWindow and named-state buttons/dialogs.
   * No engine startup, inference, model download or clipboard access. Arg: output directory.
@@ -77,6 +79,7 @@ object RealNamedGenerationStatesCheck:
         val created = new MainWindow(new Stage(), services, UiState(), CliOptions(), _ => ())
         created.show()
         created.catalogVM.snapshot.set(CatalogSnapshot(checkpoints = Seq(ModelEntry("fixture-model", "offline-model", "sd15"))))
+        created.catalogVM.choices(ChoiceSource.Upscalers).setAll("R-ESRGAN 4x+", "Lanczos")
         created.select(mode)
         created.openGenerationStates(mode)
         created
@@ -104,7 +107,7 @@ object RealNamedGenerationStatesCheck:
         !node[Button]("generation-states-save").isDisabled &&
           node[ListView[String]]("generation-states-list").getItems.contains(name)
       }}
-    def confirmButton(id: String): Unit =
+    def answerButton(id: String, answer: ButtonType): Unit =
       val task = new FutureTask[Unit](new Callable[Unit]:
         def call(): Unit = node[Button](id).fire())
       Platform.runLater(task)
@@ -116,9 +119,10 @@ object RealNamedGenerationStatesCheck:
         val pane = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene))
           .map(_.getRoot).collectFirst { case dialog: DialogPane => dialog }
           .getOrElse(sys.error("Expected real confirmation dialog; status: " + node[TextArea]("generation-states-status").getText))
-        pane.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+        pane.lookupButton(answer).asInstanceOf[Button].fire()
       }
       task.get(30, TimeUnit.SECONDS)
+    def confirmButton(id: String): Unit = answerButton(id, ButtonType.OK)
 
     try
       open()
@@ -175,6 +179,114 @@ object RealNamedGenerationStatesCheck:
       }
       screenshot("named-states-missing-model")
       checked("missing checkpoint visibly blocks Restore without partial form mutation")
+      // A single field must remain usable even when another saved resource is missing.
+      fx {
+        val picker = node[ComboBox[String]]("generation-states-field")
+        require(picker.getItems.contains("generation.prompt"))
+        picker.setValue("generation.prompt")
+        val scene = window.stage.getScene
+        val height = scene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]]
+        val steps = scene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]]
+        height.getEditor.setText("1024")
+        steps.getEditor.setText("invalid draft")
+      }
+      fx {
+        node[ComboBox[String]]("generation-states-field").setValue("model.checkpoint")
+        node[Button]("generation-states-restore-field").fire()
+        require(node[TextArea]("generation-states-status").getText.contains("model.checkpoint"))
+        require(window.stage.getScene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "1024")
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+        node[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      screenshot("named-states-single-field")
+      answerButton("generation-states-restore-field", ButtonType.CANCEL)
+      fx {
+        require(window.vms(mode).prompt.get == "must remain untouched")
+        require(window.stage.getScene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "1024")
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+      }
+      confirmButton("generation-states-restore-field")
+      fx {
+        require(window.vms(mode).prompt.get == "named state native roundtrip 日本語")
+        require(window.vms(mode).width.get == 896, "single-field restore changed another field")
+        require(window.vms(mode).height.get == 512, "single-field restore committed an unrelated numeric draft")
+        val scene = window.stage.getScene
+        require(scene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "1024")
+        require(scene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+      }
+      checked("single-field Restore ignores unrelated missing checkpoint and preserves other settings")
+      fx {
+        window.vms(mode).prompt.set("category draft test")
+        Seq("sampling", "model", "controlnet", "scripts", "other").foreach(c =>
+          node[CheckBox]("generation-states-cat-" + c).setSelected(false))
+      }
+      confirmButton("generation-states-restore")
+      fx {
+        require(window.vms(mode).prompt.get == "named state native roundtrip 日本語")
+        require(window.stage.getScene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "1024")
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+        Seq("sampling", "model", "controlnet", "scripts", "other").foreach(c =>
+          node[CheckBox]("generation-states-cat-" + c).setSelected(true))
+      }
+      checked("category Restore preserves drafts outside the selected categories")
+      fx { node[ComboBox[String]]("generation-states-field").setValue("generation.height") }
+      confirmButton("generation-states-restore-field")
+      fx {
+        val height = window.stage.getScene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]]
+        require(window.vms(mode).height.get == 512 && height.getEditor.getText == "512",
+          "restoring an unchanged numeric field must replace its selected draft")
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+      }
+      checked("single-field Restore replaces the selected numeric draft without touching other drafts")
+      fx {
+        window.panels(mode).sections(s"${mode.key}.plugin.freeu").setExpanded(true)
+        val row = window.panels(mode).content.lookup("#plugin-freeu-b1")
+        require(row != null, "FreeU input missing")
+        val spinner = row.lookup(".spinner").asInstanceOf[Spinner[java.lang.Double]]
+        require(spinner != null, "FreeU numeric editor missing")
+        spinner.getEditor.setText("1.8")
+        node[ComboBox[String]]("generation-states-field").setValue("plugin.freeu.b1")
+      }
+      confirmButton("generation-states-restore-field")
+      fx {
+        val spinner = window.panels(mode).content.lookup("#plugin-freeu-b1").lookup(".spinner").asInstanceOf[Spinner[java.lang.Double]]
+        require(spinner.getEditor.getText.toDouble == 1.37, s"selected plugin draft did not reset: text=${spinner.getEditor.getText}, value=${spinner.getValue}, owner=${W.numericOwner(spinner)}, prop=${window.plugins(mode).form("freeu").get.prop("b1").get.get}, status=${node[TextArea]("generation-states-status").getText}")
+        require(window.plugins(mode).form("freeu").get.prop("b1").get.get.toDouble == 1.37)
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+        val clip = window.stage.getScene.getRoot.lookupAll(".spinner").asScala.collectFirst {
+          case s: Spinner[?] if W.numericOwner(s).exists(_ eq window.model.clipSkip) => s
+        }.getOrElse(sys.error("shared clip-skip spinner missing"))
+        clip.getEditor.setText("3")
+        node[ComboBox[String]]("generation-states-field").setValue("model.clipSkip")
+      }
+      confirmButton("generation-states-restore-field")
+      fx {
+        val clip = window.stage.getScene.getRoot.lookupAll(".spinner").asScala.collectFirst {
+          case s: Spinner[?] if W.numericOwner(s).exists(_ eq window.model.clipSkip) => s
+        }.get
+        require(window.model.clipSkip.get == 2 && clip.getEditor.getText == "2", "shared clip skip draft did not reset")
+      }
+      checked("single-field Restore synchronizes selected plugin and shared numeric drafts")
+      var detachedScriptSpinner: Spinner[Integer] = null
+      fx {
+        window.plugins(mode).selectedScript.set("scramble_prompts")
+        val row = window.panels(mode).content.lookup("#plugin-scramble_prompts-count")
+        require(row != null, "script numeric control missing")
+        detachedScriptSpinner = row.lookup(".spinner").asInstanceOf[Spinner[Integer]]
+        detachedScriptSpinner.getEditor.setText("9")
+        window.plugins(mode).selectedScript.set("")
+        node[ComboBox[String]]("generation-states-field").setValue("plugin.scramble_prompts.count")
+      }
+      confirmButton("generation-states-restore-field")
+      fx { require(detachedScriptSpinner.getEditor.getText == "8", "detached script draft did not reset") }
+      checked("single-field Restore synchronizes a detached script editor")
+      fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(1)
+        require(node[ComboBox[String]]("generation-states-field").getValue == null,
+          "field selection from the previous record remains on an empty history")
+        require(node[Button]("generation-states-restore-field").isDisabled)
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(0)
+      }
       close()
       open()
       select("native roundtrip")

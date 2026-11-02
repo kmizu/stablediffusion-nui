@@ -12,6 +12,27 @@ import sdfx.ui.vm.NumberSync
 
 /** Small widget factory so every form looks and behaves the same. */
 object W:
+  private val numericOwnerKey = "sdfx.numeric-owner"
+  private val numericControls = new java.util.WeakHashMap[AnyRef, Vector[java.lang.ref.WeakReference[Spinner[?]]]]()
+  def numericOwner(node: Node): Option[AnyRef] = Option(node.getProperties.get(numericOwnerKey)).map(_.asInstanceOf[AnyRef])
+  def setNumericOwner(node: Node, owner: AnyRef): Unit =
+    node.getProperties.put(numericOwnerKey, owner)
+    node match
+      case spinner: Spinner[?] =>
+        val existing = Option(numericControls.get(owner)).getOrElse(Vector.empty).filter(_.get != null)
+        numericControls.put(owner, existing :+ new java.lang.ref.WeakReference(spinner))
+      case _ => ()
+
+  /** Also covers controls currently detached from a collapsed or inactive script form. */
+  def resetNumericDrafts(owners: Set[AnyRef]): Unit = owners.foreach { owner =>
+    Option(numericControls.get(owner)).toVector.flatten.flatMap(ref => Option(ref.get)).foreach { spinner =>
+      if numericOwner(spinner).exists(_ eq owner) then
+        val factory = spinner.getValueFactory.asInstanceOf[SpinnerValueFactory[AnyRef]]
+        if factory != null && factory.getConverter != null then
+          spinner.getEditor.setText(factory.getConverter.toString(factory.getValue))
+    }
+  }
+
   def tip[N <: Node](n: N, text: String): N =
     if text.nonEmpty then
       val t = new Tooltip(text)
@@ -83,6 +104,7 @@ object W:
   def intSpinner(p: IntegerProperty, min: Int, max: Int, step: Int = 1, width: Double = 86): Spinner[Integer] =
     val f = new SpinnerValueFactory.IntegerSpinnerValueFactory(min, max, p.get.max(min).min(max), step)
     val s = new Spinner[Integer](f)
+    setNumericOwner(s, p)
     s.setEditable(true)
     s.setPrefWidth(width)
     s.setMinWidth(width)
@@ -94,6 +116,7 @@ object W:
     val f = new SpinnerValueFactory.DoubleSpinnerValueFactory(min, max, p.get.max(min).min(max), step)
     f.setConverter(numberConverter(step))
     val s = new Spinner[java.lang.Double](f)
+    setNumericOwner(s, p)
     s.setEditable(true)
     s.setPrefWidth(width)
     s.setMinWidth(width)

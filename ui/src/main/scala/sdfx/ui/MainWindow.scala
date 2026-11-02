@@ -161,6 +161,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     Mode.values.map(m => m -> new GenerationPanel(ctx, vms(m), plugins(m), initial.expanded,
       () => lastSeed, openPayload, openPresets, openGenerationStates)).toMap
   ctx.commitPresetEditors = m => panels(m).commitPresetEditors()
+  ctx.resetPresetEditorDrafts = (m, owners) => panels(m).resetPresetEditorDrafts(owners)
   ctx.fastloadTarget = (mode, index) => vms.get(mode).flatMap(_.controlNet.lift(index)).map(_.toUnit)
   ctx.applyFastloadTarget = (mode, index, expected, incoming) =>
     vms.get(mode).toRight("ControlNet destination is unavailable")

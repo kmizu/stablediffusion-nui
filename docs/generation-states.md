@@ -47,6 +47,10 @@ are checked, so a missing checkpoint does not block restoring just the prompts. 
 a saved choice is missing from the current catalog (for example the default Hires Fix upscaler not being installed),
 restore a category subset instead, or install the item.
 
+The field picker and **Restore selected setting** restore just one saved setting. Only resources needed by that
+setting are checked. When restoring the WD batch enabled or input setting, the resulting enabled state and input
+folder are checked together.
+
 ## What is saved
 
 - Prompt and negative prompt, sampler/scheduler, steps, CFG, dimensions, counts,
@@ -82,8 +86,8 @@ that a different image is suitable for the saved inpaint settings.
 
 This feature independently implements manual named generation settings from the
 [State Manager reference](https://github.com/SenshiSentou/sd-webui-state-manager/tree/2af62ecd5287438bbc309f7e840d34aa5c8e3cb6).
-It does not import upstream IndexedDB/text history or claim upstream storage-format compatibility, has no HTTP API,
-and applies by category rather than by single setting. Automatic history with thumbnails is provided as described above. The MIT
+It does not import upstream IndexedDB/text history or claim upstream storage-format compatibility, and has no HTTP API.
+Automatic history with thumbnails, category restore and single-setting restore are provided as described above. The MIT
 notice is archived; see [the source/license audit](v003-source-license-audit.md).
 
 The actual native Save, Restore, missing-checkpoint refusal, fresh-window reload

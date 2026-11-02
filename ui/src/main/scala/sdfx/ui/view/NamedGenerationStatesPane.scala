@@ -3,7 +3,7 @@ package sdfx.ui.view
 import javafx.geometry.Insets
 import javafx.scene.control.*
 import javafx.scene.image.{Image, ImageView}
-import javafx.scene.layout.{FlowPane, HBox, Priority, VBox}
+import javafx.scene.layout.{FlowPane, HBox, Priority, Region, VBox}
 import java.nio.file.Files
 import sdfx.core.presets.*
 import sdfx.ui.presets.{GenerationHistoryStore, NamedGenerationStates, NativePresetFields, NativePresetsController, NativePresetsSession, StateCategory}
@@ -35,6 +35,18 @@ final class NamedGenerationStatesPane(
   detail.setId("generation-states-detail")
   detail.setEditable(false)
   detail.setWrapText(true)
+  private val fieldPicker = new ComboBox[String]()
+  private var fieldLabels = Map.empty[String, String]
+  fieldPicker.setConverter(new javafx.util.StringConverter[String]:
+    override def toString(value: String): String =
+      if value == null then "" else fieldLabels.get(value).fold(value)(label => s"$label · $value")
+    override def fromString(value: String): String = value)
+  fieldPicker.setId("generation-states-field")
+  fieldPicker.setPromptText("Choose a saved setting")
+  fieldPicker.setPrefWidth(360)
+  fieldPicker.setMinWidth(120)
+  fieldPicker.setMaxWidth(Double.MaxValue)
+  HBox.setHgrow(fieldPicker, Priority.ALWAYS)
   private val status = new TextArea()
   status.setId("generation-states-status")
   status.setEditable(false)
@@ -90,6 +102,7 @@ final class NamedGenerationStatesPane(
   private def refreshButtons(): Unit =
     save.setDisable(pending || readOnly || loaded.isEmpty)
     restore.setDisable(pending || selected.isEmpty)
+    restoreField.setDisable(pending || selected.isEmpty || fieldPicker.getValue == null)
     delete.setDisable(pending || readOnly || namedSelected.isEmpty)
     keep.setDisable(pending || readOnly || loaded.isEmpty || historySelected.size != 1)
     historyDelete.setDisable(historySelected.isEmpty)
@@ -98,12 +111,18 @@ final class NamedGenerationStatesPane(
     backup.setDisable(pending)
 
   private def showSelected(): Unit =
+    val previousField = Option(fieldPicker.getValue)
+    val fieldNames = selected.toVector.flatMap(_.fields.keys.toVector.map(_.render).sorted)
+    fieldLabels = fields(mode).schema.fields.map(spec => spec.key.render -> spec.label).toMap
+    fieldPicker.setValue(null)
+    fieldPicker.getItems.setAll(fieldNames*)
+    previousField.filter(fieldNames.contains).foreach(fieldPicker.setValue)
     selected match
       case None => detail.clear()
       case Some(record) =>
         if !historyActive then name.setText(record.name)
         val warnings = NamedGenerationStates.preflight(record, fields(mode), scopeOf(record)).left.toOption
-          .map(e => "Restore blocked; current settings remain unchanged:\n" + NamedGenerationStates.describe(e) + "\n\n").getOrElse("")
+          .map(e => "Category restore blocked; current settings remain unchanged. Individual settings may still be restored:\n" + NamedGenerationStates.describe(e) + "\n\n").getOrElse("")
         detail.setText(warnings + record.fields.toVector.sortBy(_._1.render)
           .map((key, value) => s"${key.render}: $value").mkString("\n"))
     refreshButtons()
@@ -123,39 +142,54 @@ final class NamedGenerationStatesPane(
         }
   }
   save.setId("generation-states-save")
-  private val restore = W.button("Restore state", "Restore the saved settings (all, or only the checked categories) after checking all resources") {
+  private def restoreRecord(record: PresetRecord, only: Option[Set[FieldKey]], scopeNote: String,
+      selectedField: Option[String] = None): Unit =
     val targetMode = mode
+    val keys = only.getOrElse(record.fields.keySet)
+    if keys.isEmpty then status.setText("The selected categories contain no saved fields; nothing to restore.")
+    else controllers(targetMode).admitApply() match
+      case Left(error) => failure(error)
+      case Right(_) => NamedGenerationStates.preflight(record, fields(targetMode), only) match
+        case Left(error) => failure(error)
+        case Right(_) =>
+          val partial = only.nonEmpty
+          val sharedNote = if keys.exists(_.segments.headOption.contains("model")) then
+            "Shared checkpoint/VAE/clip skip also change.\n" else ""
+          if confirm("Restore state?", s"Replace current ${targetMode.key} settings with '${record.name}'?\n$scopeNote${sharedNote}Current init image and painted mask stay in place.") then
+            // Confirmations run a nested event loop: repeat admission and preflight afterward.
+            val result = for
+              _ <- Either.cond(mode == targetMode && selected.contains(record) &&
+                selectedField.forall(value => Option(fieldPicker.getValue).contains(value)), (),
+                PresetError(Vector(PresetIssue("stale-selection", targetMode.key, "The selected state or mode changed during confirmation"))))
+              _ <- controllers(targetMode).admitApply()
+              _ <- NamedGenerationStates.preflight(record, fields(targetMode), only)
+              _ <- if partial then Right(()) else ctx.commitPresetEditors(targetMode).left.map(message =>
+                PresetError(Vector(PresetIssue("editor", targetMode.key, message))))
+              plan <- controllers(targetMode).apply(record, keys, ApplyBase.Current)
+            yield plan
+            result match
+              case Left(error) => failure(error)
+              case Right(_) =>
+                if partial then ctx.resetPresetEditorDrafts(targetMode, fields(targetMode).numericEditorOwners(keys))
+                val what = if partial then s"${keys.size} selected fields of '${record.name}'" else s"'${record.name}'"
+                status.setText(s"Restored $what. Init image and painted mask were kept; no generation was started.")
+  private val restore = W.button("Restore state", "Restore the saved settings (all, or only the checked categories) after checking all resources") {
     selected.foreach { record =>
       val only = scopeOf(record)
-      val keys = only.getOrElse(record.fields.keySet)
-      if keys.isEmpty then status.setText("The selected categories contain no saved fields; nothing to restore.")
-      else controllers(targetMode).admitApply() match
-        case Left(error) => failure(error)
-        case Right(_) => NamedGenerationStates.preflight(record, fields(targetMode), only) match
-          case Left(error) => failure(error)
-          case Right(_) =>
-            val partial = only.nonEmpty
-            val scopeNote = if partial then
-              s"Only: ${chosenCategories.toVector.sortBy(_.ordinal).map(_.label).mkString(", ")}.\n" else ""
-            val sharedNote = if keys.exists(_.segments.headOption.contains("model")) then
-              "Shared checkpoint/VAE/clip skip also change.\n" else ""
-            if confirm("Restore state?", s"Replace current ${targetMode.key} settings with '${record.name}'?\n$scopeNote${sharedNote}Current init image and painted mask stay in place.") then
-              // Confirmations run a nested event loop: repeat admission and preflight afterward.
-              val result = for
-                _ <- controllers(targetMode).admitApply()
-                _ <- NamedGenerationStates.preflight(record, fields(targetMode), only)
-                _ <- ctx.commitPresetEditors(targetMode).left.map(message =>
-                  PresetError(Vector(PresetIssue("editor", targetMode.key, message))))
-                plan <- controllers(targetMode).apply(record, keys, ApplyBase.Current)
-              yield plan
-              result match
-                case Left(error) => failure(error)
-                case Right(_) =>
-                  val what = if partial then s"${keys.size} selected fields of '${record.name}'" else s"'${record.name}'"
-                  status.setText(s"Restored $what. Init image and painted mask were kept; no generation was started.")
+      val scopeNote = if only.nonEmpty then s"Only: ${chosenCategories.toVector.sortBy(_.ordinal).map(_.label).mkString(", ")}.\n" else ""
+      restoreRecord(record, only, scopeNote)
     }
   }
   restore.setId("generation-states-restore")
+  private val restoreField = W.button("Restore selected setting", "Restore just one saved setting after checking its resources") {
+    selected.foreach { record =>
+      Option(fieldPicker.getValue).flatMap(name => record.fields.keys.find(_.render == name)).foreach { key =>
+        restoreRecord(record, Some(Set(key)), s"Only: ${key.render}.\n", Some(key.render))
+      }
+    }
+  }
+  restoreField.setId("generation-states-restore-field")
+  restoreField.setMinWidth(Region.USE_PREF_SIZE)
   private val delete = W.button("Delete", "Delete the selected named state") {
     val targetMode = mode
     namedSelected.foreach { record => loaded.foreach { state =>
@@ -235,6 +269,7 @@ final class NamedGenerationStatesPane(
       def onChanged(c: javafx.collections.ListChangeListener.Change[? <: PresetRecord]): Unit = refreshButtons())
   tabs.getSelectionModel.selectedItemProperty.addListener((_, _, _) => showSelected())
   categoryBoxes.foreach(_._2.selectedProperty.addListener((_, _, _) => showSelected()))
+  fieldPicker.valueProperty.addListener((_, _, _) => refreshButtons())
 
   historyList.setCellFactory(_ => new ListCell[PresetRecord]:
     override def updateItem(item: PresetRecord, empty: Boolean): Unit =
@@ -270,7 +305,7 @@ final class NamedGenerationStatesPane(
   val node = new VBox(10, heading, scope,
     W.label("Unlike Settings presets, a named state always captures all supported settings for one mode.", "hint"),
     tabs, name, W.label("Restore only these categories (all checked = complete state):", "hint"), categories,
-    actions, detail, status)
+    actions, new HBox(8, fieldPicker, restoreField), detail, status)
   node.setPadding(new Insets(16))
   VBox.setVgrow(detail, Priority.ALWAYS)
   history.onChange(() => refreshHistory())

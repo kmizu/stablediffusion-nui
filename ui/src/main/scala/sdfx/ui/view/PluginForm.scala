@@ -139,9 +139,18 @@ object PluginForm:
 
   private def control(ctx: UiContext, c: Control, widget: Widget, p: StringProperty, pluginId: String): Node = (c, widget) match
     case (s: Control.Slider, _) =>
-      W.doubleSlider(doubleProp(p, s.defaultValue), s.min, s.max, s.step)
+      val row = W.doubleSlider(doubleProp(p, s.defaultValue), s.min, s.max, s.step)
+      row.getChildren.forEach { case spinner: Spinner[?] => W.setNumericOwner(spinner, p); case _ => () }
+      row
     case (i: Control.IntField, _) =>
-      if i.max - i.min <= 4096 then W.intSlider(intProp(p, i.defaultValue), i.min, i.max) else W.intSpinner(intProp(p, i.defaultValue), i.min, i.max)
+      if i.max - i.min <= 4096 then
+        val row = W.intSlider(intProp(p, i.defaultValue), i.min, i.max)
+        row.getChildren.forEach { case spinner: Spinner[?] => W.setNumericOwner(spinner, p); case _ => () }
+        row
+      else
+        val spinner = W.intSpinner(intProp(p, i.defaultValue), i.min, i.max)
+        W.setNumericOwner(spinner, p)
+        spinner
     case (ch: Control.Choice, _) if ch.previewResources.nonEmpty =>
       PreviewChoice.render(ch, p)
     case (ch: Control.Choice, _) =>

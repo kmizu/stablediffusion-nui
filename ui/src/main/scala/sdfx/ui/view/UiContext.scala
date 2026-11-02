@@ -59,6 +59,7 @@ final class UiContext(val services: AppServices, val catalog: CatalogVM, val sta
   /** Commits the named mode's existing numeric editor drafts before preset capture/apply. */
   var commitPresetEditors: Mode => Either[String, Unit] =
     _ => Left("Preset destination editors are not attached")
+  var resetPresetEditorDrafts: (Mode, Set[AnyRef]) => Unit = (_, _) => ()
   var applyPromptStyle: PromptStyle => Unit = _ => ()
   var applyExtendedStyle: ExtendedStyle => Unit = _ => ()
   /** Held through the entire model/VAE load and form commit; direct callbacks must share the same guard. */

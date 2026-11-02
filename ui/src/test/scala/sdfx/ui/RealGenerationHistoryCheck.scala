@@ -6,7 +6,7 @@ import java.util.concurrent.{Callable, ConcurrentLinkedQueue, CountDownLatch, Fu
 import javafx.application.Platform
 import javafx.embed.swing.SwingFXUtils
 import javafx.scene.Node
-import javafx.scene.control.{Button, ButtonType, CheckBox, DialogPane, ListView, TabPane, TextArea, TextField}
+import javafx.scene.control.{Button, ButtonType, CheckBox, ComboBox, DialogPane, ListView, TabPane, TextArea, TextField}
 import javafx.stage.{Stage, Window}
 import javax.imageio.ImageIO
 import scala.concurrent.duration.*
@@ -166,6 +166,23 @@ object RealGenerationHistoryCheck:
       // 4. Category-selective restore of the OLDER entry: prompts only
       selectHistory(1)
       eventually("older entry selected") { fx(control[ListView[PresetRecord]]("generation-history-list").getSelectionModel.getSelectedItems.size == 1) }
+      fx { control[ComboBox[String]]("generation-states-field").setValue("generation.prompt") }
+      confirmFire("generation-states-restore-field")
+      fx {
+        val vm = window.vms(Mode.Txt2Img)
+        require(vm.prompt.get == paramsA.prompt, "individual prompt not restored")
+        require(vm.seed.get == 7102L && vm.steps.get == steps + 1 && vm.cfgScale.get == 8.0,
+          "single-field restore changed other fields")
+      }
+      fx { control[CheckBox]("generation-history-auto").setSelected(false) }
+      val imageSingle = generate()
+      val singleMetadata = sdfx.core.png.PngMetadata.readParameters(imageSingle).getOrElse("")
+      require(singleMetadata.contains(paramsA.prompt) && singleMetadata.contains("Seed: 7102"), singleMetadata)
+      fx {
+        window.vms(Mode.Txt2Img).prompt.set(paramsB.prompt)
+        control[CheckBox]("generation-history-auto").setSelected(true)
+      }
+      note(s"single-field history restore changed only the selected prompt and generated image $imageSingle")
       setCategories(Set("prompts"))
       confirmFire("generation-states-restore")
       fx {

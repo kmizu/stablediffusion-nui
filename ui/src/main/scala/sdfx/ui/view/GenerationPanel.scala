@@ -100,6 +100,13 @@ final class GenerationPanel(
       }
     }
     all.map(changes => changes.foreach(_()))
+
+  /** Discard only successfully restored numeric fields' uncommitted editor text. */
+  def resetPresetEditorDrafts(owners: Set[AnyRef]): Unit =
+    W.resetNumericDrafts(owners)
+    presetLongFields.values.foreach { (field, property) =>
+      if owners.contains(property) then field.setText(property.get.toString)
+    }
   private def isExpanded(key: String, default: Boolean) = expanded.getOrElse(s"${mode.key}.$key", default)
   private def track(key: String, p: TitledPane): TitledPane =
     sections(s"${mode.key}.$key") = p
