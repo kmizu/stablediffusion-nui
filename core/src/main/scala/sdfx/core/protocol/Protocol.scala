@@ -101,7 +101,7 @@ case class MetadataUtilsResult(path: String, metadata: Map[String, String] = Map
 case class LoadModelRequest(path: String, dtype: String = "fp16", vramMode: String = "gpu", vaePath: Option[String] = None, vaeTiling: Boolean = false,
     vaeSlicing: Boolean = false,
     fp8Storage: Boolean = false, vaeAuto: Boolean = true, vaeFp16: Boolean = false) derives RW
-case class LoadedModel(name: String, path: String, kind: String, hash: String, loadedMs: Long = 0, vaeName: Option[String] = None, vaeHash: Option[String] = None, modelToken: Option[String] = None) derives RW
+case class LoadedModel(name: String, path: String, kind: String, hash: String, loadedMs: Long = 0, vaeName: Option[String] = None, vaeHash: Option[String] = None, modelToken: Option[String] = None, vaePath: Option[String] = None) derives RW
 
 case class SamplerInfo(name: String, supported: Boolean = true, defaultScheduler: String = "Uniform") derives RW
 case class SamplerList(samplers: Seq[SamplerInfo], schedulers: Seq[String], upscalers: Seq[String] = Nil, preprocessors: Seq[String] = Nil) derives RW

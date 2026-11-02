@@ -565,6 +565,18 @@ class McpToolsSuite extends munit.FunSuite:
     assertEquals(status("engine")("device").str, "cpu")
   }
 
+  test("worker VAE path stays out of MCP status and model responses") {
+    ok("set_model", ujson.Obj("name" -> "foo"))
+    val model = services.setVae(Some("vae-ft-mse"), remember = false)
+    val privatePath = model.vaePath.getOrElse(fail("fake worker did not return VAE path"))
+    try
+      for tool <- Seq("get_status", "list_models") do
+        val response = ok(tool, ujson.Obj())
+        assert(!response.toString.contains("vae_path"), s"$tool exposed the worker field")
+        assert(!response.toString.contains(privatePath.replace("\\", "\\\\")), s"$tool exposed the VAE path")
+    finally services.setVae(None, remember = false)
+  }
+
   test("structuredContent of txt2img / img2img conforms to the declared outputSchema") {
     val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
     def schemaOf(n: String) = ts.find(_("name").str == n).get("outputSchema")

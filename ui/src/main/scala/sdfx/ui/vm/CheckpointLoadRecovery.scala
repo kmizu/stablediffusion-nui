@@ -10,10 +10,10 @@ private[ui] final class CheckpointLoadRecovery:
     epoch += 1
     epoch
 
-  /** Reserve a newer checkpoint epoch only when an extended style will load another checkpoint. */
+  /** Any explicit style checkpoint is a newer choice, even if its UI label already matches. */
   def beginStyleCheckpoint(current: String, target: String): Boolean =
     val changesCheckpoint = target.nonEmpty && current != target
-    if changesCheckpoint then beginCheckpoint()
+    if target.nonEmpty then beginCheckpoint()
     changesCheckpoint
 
   def currentEpoch: Long = epoch

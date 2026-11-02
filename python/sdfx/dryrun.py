@@ -145,7 +145,7 @@ class FakeEngine(BaseEngine):
         self.load_opts = req
         self.vae = None
         if req.vae_path:
-            self.vae = {"vae_name": models.model_name(req.vae_path), "vae_hash": models.path_hash(req.vae_path)}
+            self.vae = {"vae_name": models.model_name(req.vae_path), "vae_hash": models.path_hash(req.vae_path), "path": req.vae_path}
         self.model = {"name": models.model_name(req.path), "path": req.path,
                       "kind": "sd15" if kind == "unknown" else kind, "hash": models.short_hash(req.path)}
         return self._loaded(int((time.monotonic() - t0) * 1000))
@@ -155,6 +155,7 @@ class FakeEngine(BaseEngine):
         m["loaded_ms"] = ms
         m["vae_name"] = self.vae["vae_name"] if self.vae else None
         m["vae_hash"] = self.vae["vae_hash"] if self.vae else None
+        m["vae_path"] = self.vae["path"] if self.vae else None
         return m
 
     def set_vae(self, params: dict, ctx: JobContext) -> dict:
@@ -164,7 +165,7 @@ class FakeEngine(BaseEngine):
         if p:
             if not os.path.exists(p):
                 raise EngineError(MODEL_LOAD_FAILED, f"VAE file not found: {p}")
-            self.vae = {"vae_name": models.model_name(p), "vae_hash": models.path_hash(p)}
+            self.vae = {"vae_name": models.model_name(p), "vae_hash": models.path_hash(p), "path": p}
         else:
             self.vae = None
         self.load_opts.vae_path = p or None

@@ -95,6 +95,7 @@ def model_info():
         "loaded_ms": 5,
         "vae_name": os.path.basename(vae) if vae else None,
         "vae_hash": "feed0000" if vae else None,
+        "vae_path": vae,
     }
 
 

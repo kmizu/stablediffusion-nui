@@ -96,6 +96,7 @@ def model_info():
         "loaded_ms": 5,
         "vae_name": os.path.basename(vae) if vae else None,
         "vae_hash": "feed0000" if vae else None,
+        "vae_path": vae,
     }
 
 
@@ -209,6 +210,22 @@ def handle_work(rid, typ, params):
         elif typ == "batch_interrogate_execute":
             result(rid, {"rows": [], "partial": True})
         elif typ == "load_model":
+            # Opt-in deterministic UI integration gate; other tests do not set this variable.
+            gate_dir = os.environ.get("SDFX_FAKE_MODEL_GATE_DIR")
+            if gate_dir and os.path.basename(params.get("path", "")) == "B.safetensors" and not state.get("ui_gate_used"):
+                state["ui_gate_used"] = True
+                with open(os.path.join(gate_dir, "ready"), "w", encoding="utf-8") as f:
+                    f.write("B request entered fake worker")
+                deadline = time.monotonic() + 30
+                while not os.path.exists(os.path.join(gate_dir, "release")) and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                if not os.path.exists(os.path.join(gate_dir, "release")):
+                    raise RuntimeError("UI gate timed out")
+                if os.environ.get("SDFX_FAKE_LOSE_MODEL_ON_GATE") == "1":
+                    state["loaded"] = None
+                    state["vae"] = None
+                error(rid, "model_load_failed", "injected first B load failure")
+                return
             if opt("--crash-on-load"):
                 sys.stderr.write("crash during load" + chr(10))
                 sys.stderr.flush()

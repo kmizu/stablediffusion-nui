@@ -80,3 +80,12 @@ SD1.5 real MainWindow plus AppServices now also passed the auto+fp8 load-refusal
 
 
 A real JavaFX SD1.5 test reproduced rejected auto+fp8 checkpoint switches leaving a wrong GUI selection and breaking the next generation. A narrow confirmed pre-free refusal recovery now restores the retained checkpoint, with checkpoint/style selection epoch guards; normal and VAE-interleaved rejection both passed actual GPU generation with a planner-only simulated cap. The worker request dispatch order is not serialized by the UI guard, and style success can still overwrite a newer VAE selection; these are existing unverified concurrency risks. See the final section of `optimization-verification.md`.
+
+
+Model-selection ordering candidate: MainWindow checkpoint, VAE and style requests use a nonblocking ordered queue; a style rechecks worker state and conservatively reloads an explicit checkpoint after a previous failure. Pending selection rejects generation even after mask export; disposal cancels not-yet-admitted queue work. Internal optional worker `vae_path` avoids reloading the same VAE; older workers are treated conservatively. MainWindow+fake-worker integration passed both retained and lost worker-state scenarios, later VAE selection, mask cleanup and same-VAE no-reload. MCP/restart/plugin operations outside the UI handlers are not serialized by this queue. See final verification section; real-model and latest-main integration are pending.
+
+
+Ordering candidate integrated with main `87aea1f` at `1130211`: Scala focused and two UI/fake-worker scenarios plus assembly passed, full Python 3021 passed / 3 skipped, and real JavaFX SD1.5/SDXL GPU regressions passed with images viewed. Exact hashes, cache levels and boundaries are in the final verification section. MCP/restart/plugin callers bypass the UI ordering queue. Current main may have advanced and must be rechecked before integration.
+
+
+Ordering candidate merged main `1c84470` at `4a098c4`; focused Scala, UI/fake-worker interleavings, actual MainWindow completion Escape check, and assembly passed. Test ZIP `3f797c7eab1224372e56acf84373ae58b33c839f982f388e8f1e6084803643b0` has matching payload and jar `c4ecad66b23732706e31adad7852242fb7a8981c1abc36b9f0be2e7dc83d5176`; extracted launcher MCP short DeepCache smoke passed SD1.5 and SDXL, images viewed. Full real GUI GPU checks were on earlier main `87aea1f`, as recorded separately. UI queue ordering excludes MCP/restart/plugin operations; physical low-VRAM remains untested.

@@ -230,6 +230,13 @@ class ProtocolSuite extends munit.FunSuite:
       LoadedModel("n", "p", "sd15", "h"))
   }
 
+  test("loaded model VAE path is optional for older workers and round trips for new workers") {
+    val old = Json.fromJs[LoadedModel](ujson.read("""{"name":"n","path":"p","kind":"sd15","hash":"h","vae_name":"custom"}"""))
+    assertEquals(old.vaePath, None)
+    val current = old.copy(vaePath = Some("/private/vae.safetensors"))
+    assertEquals(Json.fromJs[LoadedModel](Json.toJs(current)), current)
+  }
+
   test("EngineError") {
     val e = EngineError(Protocol.ErrorCodes.Interrupted, "stopped")
     assert(e.isInterrupted)

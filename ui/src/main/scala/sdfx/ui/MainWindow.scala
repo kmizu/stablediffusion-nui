@@ -42,6 +42,8 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   private var loads = Vector.empty[(Long, String)]
   private var loadSeq = 0L
   private val checkpointLoadRecovery = new CheckpointLoadRecovery
+  private val modelSelectionQueue = new ModelSelectionQueue(Fx.bg)
+  private val vaeSelectionRevision = new VaeSelectionRevision
   private val cardWindowsPaths = LocalPreviewFiles.systemPlatform.windows
   private def validateCardModel(id: CardId): scala.concurrent.Future[Either[String, Unit]] =
     scala.concurrent.Future {
@@ -527,13 +529,30 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       val id = beginLoad(s"Style ${style.name}")
       val currentCheckpoint = model.checkpoint.get
       val currentVae = model.vae.get
-      val changesCheckpoint = checkpointLoadRecovery.beginStyleCheckpoint(currentCheckpoint, style.checkpoint)
+      checkpointLoadRecovery.beginStyleCheckpoint(currentCheckpoint, style.checkpoint)
       val styleCheckpointEpoch = checkpointLoadRecovery.currentEpoch
-      Fx.async {
-        if changesCheckpoint then services.loadCheckpoint(style.checkpoint)
-        if ExtendedStyle.normalizeVae(currentVae) != targetVae || currentCheckpoint != style.checkpoint then services.setVae(Some(targetVae))
-      } { _ =>
-        try
+      val changesVae = ExtendedStyle.normalizeVae(currentVae) != targetVae || currentCheckpoint != style.checkpoint
+      vaeSelectionRevision.begin()
+      val styleVaeRevision = vaeSelectionRevision.current
+      Fx.onFx(modelSelectionQueue.submit {
+        val uncertain = modelSelectionQueue.isUncertain
+        if uncertain && style.checkpoint.isEmpty then
+          throw new IllegalStateException("A previous model selection failed; select a checkpoint before applying this style")
+        if style.checkpoint.nonEmpty then
+          val target = services.catalog.findCheckpoint(style.checkpoint)
+            .getOrElse(throw new IllegalArgumentException(s"Extended style checkpoint not found: ${style.checkpoint}"))
+          if ModelSelectionPolicy.needsCheckpoint(target.path, services.supervisor.loadedModel.map(_.path), uncertain) then
+            services.loadCheckpoint(style.checkpoint)
+        // Compare with the actual worker response, not optimistic UI selection.
+        val targetPath = Option.when(targetVae != "Automatic" && targetVae != "None") {
+          services.catalog.findVae(targetVae).getOrElse(throw new IllegalArgumentException(s"Extended style VAE not found: $targetVae")).path
+        }
+        services.supervisor.loadedModel match
+          case Some(loaded) if ModelSelectionPolicy.needsVae(targetPath, loaded.vaeName, loaded.vaePath) => services.setVae(Some(targetVae))
+          case None if changesVae => services.setVae(Some(targetVae))
+          case _ => ()
+      }) { _ =>
+        if !disposed then try
           endLoad(id)
           // Update only documented settings; unrelated settings and disabled drafts remain intact.
           vm.prompt.set(style.prompt)
@@ -542,12 +561,13 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
           vm.height.set(style.height)
           if style.checkpoint.nonEmpty && checkpointLoadRecovery.canApplyStyle(styleCheckpointEpoch, currentCheckpoint, model.checkpoint.get) then
             model.checkpoint.set(style.checkpoint)
-          model.vae.set(targetVae)
+          if vaeSelectionRevision.unchanged(styleVaeRevision, currentVae, model.vae.get) then
+            model.vae.set(targetVae)
           select(mode)
           ctx.success(s"Applied extended style '${style.name}'")
         finally ctx.extendedStyleApplying.set(false)
       } { e =>
-        try
+        if !disposed then try
           endLoad(id)
           if checkpointLoadRecovery.canRestoreStyle(styleCheckpointEpoch, currentCheckpoint, model.checkpoint.get) then
             services.supervisor.loadedModel.foreach(m => model.checkpoint.set(m.name))
@@ -659,6 +679,9 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   // ---- actions -----------------------------------------------------------------------------------------
   def generate(queueOnly: Boolean, editorPreview: Option[String] = None): Unit =
     val mode = activeMode
+    if !ModelSelectionPolicy.canGenerate(loads.nonEmpty, disposed) then
+      if !disposed then ctx.info("Wait for the model selection to finish before generating")
+      return
     if !queueOnly && progress.get.running then
       ctx.info("A job is running — use Queue (Ctrl+Shift+Enter) to add another")
       return
@@ -699,8 +722,13 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       return
     def submit(tempFiles: Seq[Path]): Unit =
       val built = JobBuilder.build(vm, plugins(mode), sdfx.engine.CaptureOptions(services.settings.apiPayloadIncludeImageContents), imageSecret)
-      ctx.recordPrompt(vm.prompt.get, vm.negativePrompt.get)
       val ordinary = built.copy(editorPreview = editorPreview.map(EditorPreviewPayload(_)))
+      if !ModelSelectionPolicy.canGenerate(loads.nonEmpty, disposed) then
+        ctx.temps.registerJob(ordinary.id, tempFiles)
+        ctx.temps.releaseJob(ordinary.id)
+        if tempFiles.exists(_.toString == vm.maskImage.get) then vm.maskImage.set("")
+        if !disposed then ctx.info("Wait for the model selection to finish before generating")
+        return
       if editorPreview.nonEmpty && (ordinary.script.nonEmpty || wdChoice.nonEmpty) then
         // A script can change while an asynchronous mask export is in flight.
         ctx.temps.registerJob(ordinary.id, tempFiles)
@@ -708,6 +736,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
         if tempFiles.exists(_.toString == vm.maskImage.get) then vm.maskImage.set("")
         ctx.error("Embedding editor preview cannot run with a script or WD batch.")
         return
+      ctx.recordPrompt(vm.prompt.get, vm.negativePrompt.get)
       val job = wdChoice match
         case None => ordinary
         case Some((input, name)) =>
@@ -944,29 +973,33 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     val attempt = checkpointLoadRecovery.beginCheckpoint()
     model.checkpoint.set(name)
     val id = beginLoad(name)
-    Fx.async(services.loadCheckpoint(name)) { m =>
-      endLoad(id)
-      ctx.success(f"Loaded ${m.name}%s (${m.kind}%s) in ${m.loadedMs / 1000.0}%.1f s")
+    Fx.onFx(modelSelectionQueue.submit(services.loadCheckpoint(name))) { m =>
+      if !disposed then
+        endLoad(id)
+        ctx.success(f"Loaded ${m.name}%s (${m.kind}%s) in ${m.loadedMs / 1000.0}%.1f s")
     } { e =>
-      endLoad(id)
-      // This specific worker rejection happens before it frees the prior model.
-      // Keep the selection aligned with that model, but never overwrite a newer
-      // user selection when an older asynchronous request finishes late.
-      if checkpointLoadRecovery.shouldRestore(attempt, name, model.checkpoint.get, e) then
-        services.supervisor.loadedModel.foreach { current =>
-          model.checkpoint.set(services.catalog.findCheckpoint(current.path).map(_.name).getOrElse(current.name))
-        }
-      ctx.error(s"Cannot load checkpoint: ${friendly(Fx.message(e))}")
+      if !disposed then
+        endLoad(id)
+        // This specific worker rejection happens before it frees the prior model.
+        // Keep the selection aligned with that model, but never overwrite a newer
+        // user selection when an older asynchronous request finishes late.
+        if checkpointLoadRecovery.shouldRestore(attempt, name, model.checkpoint.get, e) then
+          services.supervisor.loadedModel.foreach { current =>
+            model.checkpoint.set(services.catalog.findCheckpoint(current.path).map(_.name).getOrElse(current.name))
+          }
+        ctx.error(s"Cannot load checkpoint: ${friendly(Fx.message(e))}")
     }
     id
 
   def setVae(v: String): Unit =
+    vaeSelectionRevision.begin()
     val id = beginLoad(s"VAE $v")
-    Fx.async(services.setVae(Some(v))) { _ =>
-      endLoad(id)
+    Fx.onFx(modelSelectionQueue.submit(services.setVae(Some(v)))) { _ =>
+      if !disposed then endLoad(id)
     } { e =>
-      endLoad(id)
-      ctx.error(s"Cannot set VAE: ${Fx.message(e)}")
+      if !disposed then
+        endLoad(id)
+        ctx.error(s"Cannot set VAE: ${Fx.message(e)}")
     }
 
   def refreshCatalog(): Unit =
@@ -1205,6 +1238,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   private val cleanup = new UiCleanup
   def dispose(): Unit =
     disposed = true
+    modelSelectionQueue.close()
     cleanup.run(Seq(
       "image scrambling controls" -> (() => { scrambleBatch.dispose(); scrambleSession.dispose() }),
       "difference previews" -> (() => panels.values.foreach(_.difference.foreach(_.dispose()))),

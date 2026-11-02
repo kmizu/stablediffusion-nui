@@ -236,3 +236,14 @@ def test_auto_fp8_rejection_preserves_loaded_model(monkeypatch):
         engine.load_model({}, ctx)
     assert "unload" in str(error.value).lower()
     assert engine.pipe is old_pipe and engine.model is old_model
+
+
+def test_real_engine_loaded_response_includes_vae_path():
+    from sdfx.engine import Engine
+    engine = Engine.__new__(Engine)
+    engine.model = {"name": "fixture", "path": "model.safetensors", "kind": "sd15", "hash": "hash"}
+    engine.load_opts = LoadModelRequest()
+    engine.vae_info = {"vae_name": "shared", "vae_hash": "abcdef", "path": "folder/shared.safetensors"}
+    assert engine._loaded()["vae_path"] == "folder/shared.safetensors"
+    engine.vae_info = None
+    assert engine._loaded()["vae_path"] is None

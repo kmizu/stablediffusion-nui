@@ -39,12 +39,18 @@ class CheckpointLoadRecoverySuite extends munit.FunSuite:
     assert(!gate.shouldRestore(old, "B", "B", refusal))
   }
 
-  test("style with no checkpoint change does not invalidate a pending selection") {
+  test("a style without a checkpoint leaves the pending selection current") {
     val gate = new CheckpointLoadRecovery
     val old = gate.beginCheckpoint()
     assert(!gate.beginStyleCheckpoint("B", ""))
-    assert(!gate.beginStyleCheckpoint("B", "B"))
     assert(gate.shouldRestore(old, "B", "B", refusal))
+  }
+
+  test("a style explicitly selecting the same label is still a newer selection") {
+    val gate = new CheckpointLoadRecovery
+    val old = gate.beginCheckpoint()
+    assert(!gate.beginStyleCheckpoint("B", "B"))
+    assert(!gate.shouldRestore(old, "B", "B", refusal))
   }
 
   test("a stale extended-style failure cannot overwrite a newer checkpoint") {

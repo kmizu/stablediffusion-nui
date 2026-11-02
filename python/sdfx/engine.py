@@ -449,6 +449,7 @@ class Engine(BaseEngine):
         m["optimizations"] = perf.describe(self.load_opts, getattr(self, "vram_reason", ""))
         m["vae_name"] = self.vae_info["vae_name"] if self.vae_info else None
         m["vae_hash"] = self.vae_info["vae_hash"] if self.vae_info else None
+        m["vae_path"] = self.vae_info["path"] if self.vae_info else None
         return m
 
     def _load_vae_module(self, path: str):
