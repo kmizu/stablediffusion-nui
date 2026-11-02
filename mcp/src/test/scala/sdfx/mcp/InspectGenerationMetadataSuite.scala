@@ -552,3 +552,23 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("clip_io"))
   }
+
+  test("Compile infotext becomes a typed candidate and its keys are consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("compile.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val plugin = new sdfx.plugins.CompilePlugin
+    val values = sdfx.core.plugins.api.Values(sdfx.core.plugins.api.Values.defaults(plugin.controls).map ++
+      Map("enabled" -> "true", "backend" -> "TensorRT", "min_block_size" -> "8"))
+    val params = plugin.process(sdfx.core.model.GenerationParams(prompt = "cat"), values)
+    val text = sdfx.core.infotext.Infotext.write(params, sdfx.core.infotext.ImageFacts(seed = 4))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("always_on")("compile")
+    assertEquals(candidate("enabled").bool, true)
+    assertEquals(candidate("backend").str, "TensorRT")
+    assertEquals(candidate("min_block_size").num, 8.0)
+    assert(!result("unapplied_fields").obj.keySet.exists(k => sdfx.plugins.CompilePlugin.InfotextKeys.contains(k)))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("compile"))
+  }

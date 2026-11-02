@@ -5,7 +5,7 @@ import java.util.Base64
 import sdfx.core.infotext.Infotext
 import sdfx.core.plugins.api.{Control, Plugin, Values}
 import sdfx.core.png.PngMetadata
-import sdfx.plugins.{ClipIoPlugin, CnAnimationPlugin, AnimateDiffPlugin, BatchFaceSwapPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
+import sdfx.plugins.{CompilePlugin, ClipIoPlugin, CnAnimationPlugin, AnimateDiffPlugin, BatchFaceSwapPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
 import scala.util.control.NonFatal
 
 /** Inspect only: no model load, plugin execution, script execution or generation. */
@@ -159,6 +159,7 @@ object InspectGenerationMetadata:
       "llul" -> LlulPlugin.replay(f).filter(_ => f.contains(LlulPlugin.EnabledKey)),
       "aesthetic_gradients" -> AestheticGradientsPlugin.replay(f).filter(_ => f.contains(AestheticGradientsPlugin.EmbeddingKey)),
       "clip_io" -> ClipIoPlugin.replay(f).filter(_ => ClipIoPlugin.InfotextKeys.exists(f.contains)),
+      "compile" -> CompilePlugin.replay(f).filter(_ => f.contains(CompilePlugin.BackendKey)),
       "aesthetic_score" -> AestheticScorePlugin.replay(f).filter(_ => AestheticScorePlugin.TriggerKeys.exists(f.contains)),
       "batch_face_swap" -> BatchFaceSwapPlugin.replay(f).filter(_ => f.contains(BatchFaceSwapPlugin.InfotextKey)),
       "model_keyword" -> Option.when(f.contains("Model keyword settings") || f.get("Model keyword replay").exists(_.equalsIgnoreCase("true")))(Values(Map("enabled" -> "false")))
@@ -214,6 +215,7 @@ object InspectGenerationMetadata:
       (if on.value.contains("sonar") then SonarPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("llul") then LlulPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("clip_io") then ClipIoPlugin.InfotextKeys.toSet else Set.empty[String]) ++
+      (if on.value.contains("compile") then CompilePlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("aesthetic_gradients") then AestheticGradientsPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("aesthetic_score") then AestheticScorePlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("batch_face_swap") then Set(BatchFaceSwapPlugin.InfotextKey) else Set.empty[String])

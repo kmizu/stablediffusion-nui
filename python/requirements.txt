@@ -16,6 +16,12 @@ psutil==7.0.0
 onnxruntime==1.23.2  # WD14 tagger (Caption plugin, method wd14), the NudeNet NSFW Censor detector, the NSFWJS filter and the Character Searcher person detector, ISNet matting and WD tagger (CPU)
 # optional: PhotoMaker plugin (v1 adapters). Install without dependencies so the pins above stay intact:
 #   pip install --no-deps "git+https://github.com/TencentARC/PhotoMaker.git"
+# optional: Compile hook, TensorRT backend (versions must match your torch build; tensorrt is NVIDIA proprietary,
+# installed by you, not redistributed). Torch-TensorRT 2.7 + tensorrt 10.9 pair with torch 2.7:
+#   pip install torch-tensorrt==2.7.0 --extra-index-url https://download.pytorch.org/whl/cu128
+#   pip install tensorrt-cu12==10.9.0.34 tensorrt-cu12-libs==10.9.0.34 tensorrt-cu12-bindings==10.9.0.34
+# optional: Compile hook, Inductor backend (Windows also needs MSVC cl.exe on PATH):
+#   pip install "triton-windows<3.4"
 # optional extra preprocessors (openpose, lineart, hed, mlsd, normal_bae):
 # controlnet_aux==0.0.10
 # optional: ADetailer YOLO detectors (face_yolov8n.pt etc.; "opencv_face" works without it):

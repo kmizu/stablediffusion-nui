@@ -1419,7 +1419,7 @@
 "index": 236,
 "name": "TensorRT",
 "url": "https://github.com/NVIDIA/Stable-Diffusion-WebUI-TensorRT",
-"status": "todo:core:compile"
+"status": "done:core:compile"
 },
 {
 "index": 237,

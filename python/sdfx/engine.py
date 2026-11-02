@@ -224,7 +224,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "clip_io"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "clip_io", "compile"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")
@@ -1403,6 +1403,10 @@ class Engine(BaseEngine):
             ext_mod.install(self, pipe, task, gp, req, kw, ctx, cleanups, plan=xplan, w=w, h=h, sched=sched,
                             cfg_scale=cfg_scale, image=image, mask=mask, steps=steps, seed=hook_seed,
                             branch_hooks=branch_hooks, forward_wrappers=forward_wrappers, pass_=pass_)
+            if hooks_mod.hook_config(gp.hooks, "compile", {}) is not None:
+                from . import compile_accel
+                compile_accel.install(self, pipe, gp, ctx, cleanups, controlnet=bool(cn_models), pass_=pass_,
+                                      shape=(w, h, len(seeds)))
             if pag:
                 # Capture after IP load/unload: restoring pre-install processors would discard IP weights while
                 # IPAdapterState still considers them loaded. Also restore native PAG changes on failure.
