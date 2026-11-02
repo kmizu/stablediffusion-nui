@@ -37,6 +37,7 @@ BASE = [
     ("christophschuhmann/improved-aesthetic-predictor", "model dependency", "Apache-2.0 aesthetic predictor weight sac+logos+ava1-l14-linearMSE.pth (3,714,759 bytes, SHA-256 21dd590f3ccdc646f0d53120778b296013b096a035a2718c9cb0d511bff0f1e0) at pinned commit 6934dd81792f086e613a121dbce43082cb8be85e, downloaded on first use for the `aesthetic_score` plugin and size/SHA-256 checked; not bundled; the MLP is written independently"),
     ("crowsonkb/simulacra-aesthetic-models", "model dependency", "MIT simulacra linear predictors sac_public_2022_06_29_vit_l_14_linear.pth (4,135 bytes) and vit_b_16 (3,111 bytes) at pinned commit 701f7678b305acf8a0634350365a86beb95dd87d, downloaded on first use for the `aesthetic_score` plugin and size/SHA-256 checked; not bundled; the linear head is written independently"),
     ("openai/CLIP", "model dependency", "MIT CLIP project. The ViT-L/14 (openai/clip-vit-large-patch14, revision 32bd64288804d66eefd0ccbe215aa642df71cc41, model.safetensors 1,710,540,580 bytes) and ViT-B/16 (openai/clip-vit-base-patch16, revision 57c216476eefef5ab752ec549e440a49ae4ae5f3, pytorch_model.bin 598,641,023 bytes) Hugging Face conversions of its weights are downloaded on first use for the `aesthetic_score` plugin and size/SHA-256 checked; their model cards state no licence; not bundled"),
+    ("continue-revolution/sd-webui-animatediff", "reimplemented", "Pinned CC BY-NC-SA 4.0 source a88e88912bcbae0531caccfc50fd639f6ea83fd0 (non-commercial, share-alike); only its README and docs/*.md were used for the behaviour (context batch size, closed loop, stride and overlap, prompt travel, Img2Vid latent blend, FreeInit, save formats), re-implemented as the `animatediff` script and engine hook on diffusers' MotionAdapter; no upstream code was read or copied. Motion module weights are downloaded by the user (guoyww/animatediff: Apache-2.0; conrevo/AnimateDiff-A1111: no licence declared) and are not redistributed"),
     ("hnmr293/sd-webui-llul", "reimplemented", "Unlicensed behavior reference 6c5ac1b0aa29736e0aad3476939e4e05f25d20d7 (its LICENSE holds only the heading `MIT License`); independent local latent upscaling hooks on the diffusers U-Net; no upstream code copied"),
     ("v0xie/sd-webui-incantations", "reimplemented", "Pinned GPL-3.0 source 980d63838a2b8c8659a01b242e55551870619d6a; independent Smoothed Energy Guidance, S-CFG, PAG with SANF, CFG scheduler and Multi-Concept T2I-Zero; no upstream code copied"),
     ("scraed/CharacteristicGuidanceWebUI", "reimplemented", "Pinned GPL-3.0 source e2f9fdca460beed1366647e2eea8276a63f98484; independent characteristic guidance iteration; no upstream code copied"),
@@ -197,7 +198,7 @@ BASE = [
     ("microsoft/onnxruntime", "dependency", "WD14 tagger and optional local WD v3 batch inference"),
     ("ultralytics/ultralytics", "dependency", "YOLO detectors for ADetailer (optional Python package)"),
     ("danielgatis/rembg", "dependency", "background removal models (optional Python package)"),
-    ("FFmpeg/FFmpeg", "dependency", "Optional external ffmpeg executable for Save Intermediate and Steps Animation video export; "
+    ("FFmpeg/FFmpeg", "dependency", "Optional external ffmpeg executable for Save Intermediate, Steps Animation and AnimateDiff (MP4 / WEBM) video export; "
      "no FFmpeg binary is bundled or installed by this app. Upstream LICENSE.md explains build-dependent licensing: "
      "LGPL-2.1-or-later by default; --enable-gpl changes the combined build to GPL-2.0-or-later, "
      "--enable-version3 selects version 3, and linked libraries can change the terms. "
@@ -215,6 +216,7 @@ BASE = [
 PINNED_LICENSES = {
     "antis0007/sd-webui-gelbooru-prompt": ("b0128f931a8306a8f1a030c515792e3128b97f04", "LICENSE", "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986", "GPL-3.0"),
     "nochnoe/sd-webui-e621-prompt": ("74ce0a50d788abfa42d67b0614f7195d3f71294c", "LICENSE", "442e98fcf4a5025b373765e15a9e41a3d1aef54b6f5413313e3e669c5f209252", "MIT"),
+    "continue-revolution/sd-webui-animatediff": ("a88e88912bcbae0531caccfc50fd639f6ea83fd0", "LICENSE", "9e502ba75fd0fd30cea5497b438a4bc12f07f02bc932a7a6041fd6a18b8f46a0", "CC-BY-NC-SA-4.0"),
     "Kahsolt/stable-diffusion-webui-sonar": ("15f92859f70f624513796dde91396109134da47b", "LICENSE", "db9e98edd8524ac09e959b256bfb5687d27f88a9a442be629b0e55d102bfc0eb", "MIT"),
     "tsngo/stable-diffusion-webui-aesthetic-image-scorer": ("1c3ab7a116ab5bc3b81d718e6383edd98903a01f", "LICENSE", "f5ca122d1eed10b6471854b92bb9ea69da0d40ec229a2677d83e0f2166b3c517", "MIT"),
     "p1atdev/stable-diffusion-webui-cafe-aesthetic": ("d1c7ee842736f9d9cc6564c2c92a5bff54d19e26", "LICENSE", "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef", "AGPL-3.0"),

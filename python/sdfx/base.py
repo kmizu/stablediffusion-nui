@@ -575,6 +575,11 @@ class BaseEngine:
     def novel_view(self, params: dict, ctx: JobContext) -> dict:
         self._no_extra("novel view")
 
+    def animatediff_encode(self, params: dict, ctx: JobContext) -> dict:
+        """AnimateDiff frames -> GIF / WEBP / MP4 / WEBM (Pillow and ffmpeg only, no model needed)."""
+        from .animatediff import encode_request
+        return encode_request(params, ctx)
+
     def memory(self, params: dict, ctx: JobContext) -> dict:
         return {"allocated_mb": 0.0, "reserved_mb": 0.0, "total_mb": 0.0, "ram_used_mb": ram_used_mb()}
 

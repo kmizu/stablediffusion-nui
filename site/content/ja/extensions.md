@@ -206,6 +206,7 @@ Hires. fix 自体の使い方は [画像の生成](generate.html) を参照し�
 | **Seed travel** | シード間のノイズを補間したフレームを作り、フレームとアニメーション GIF を保存します。txt2img 専用です。 |
 | **Shift attention** | プロンプトに `(word:0.5~1.5)` と書くと、重みを変化させたフレームと GIF を保存します。 |
 | **Steps Animation** | 1 回の生成のノイズ除去の途中経過から動画を作ります。 |
+| **AnimateDiff** | AnimateDiff のモーションモジュールで動画を生成します(SD 1.x のチェックポイントには SD 1.x 用、SDXL には SDXL 用のモジュール)。モジュール(`mm_sd15_v3.safetensors` のようなファイル、diffusers 形式のフォルダ、または `guoyww/animatediff-motion-adapter-v1-5-2` のような Hugging Face のリポジトリ ID)は実行時に読み込み済みのチェックポイントへ差し込まれるので、LoRA・Embedding などの設定はそのまま効きます。フレーム数・FPS・ループ回数・保存形式(GIF / MP4 / WEBP / WEBM。PNG は全フレームをギャラリーに保存、TXT は生成情報のテキスト)を指定します。コンテキストのバッチサイズより長い動画は重なり合うウィンドウで処理します(Overlap・Stride・Closed loop N / R-P / R+P / A)。プロンプトトラベルは、先頭の行・`フレーム番号: プロンプト` の行・末尾の行で書きます。img2img タブの Img2Vid は初期画像(と任意の最終フレーム)を開始ノイズに混ぜ、FreeInit は開始ノイズを整えます(txt2img)。最初のフレームを生成情報(キー `AnimateDiff`)付きでギャラリーに保存し、動画ファイルはその隣に保存します。バッチサイズは 1 のみで、Hires. fix・ControlNet V2V・SparseCtrl・Motion LoRA・FILM 補間には対応していません。MP4 / WEBM には ffmpeg(PATH 上)が必要です。 |
 | **Stable Video Diffusion** | SVD モデルで初期画像を動かし、GIF と最初のフレームを保存します。img2img 専用です。 |
 | **Zero123 novel view** | 初期画像の物体を別の角度から描きます。img2img 専用です。 |
 

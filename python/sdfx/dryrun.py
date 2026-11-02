@@ -85,7 +85,7 @@ class FakeEngine(BaseEngine):
         return (["inpaint_difference"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + nsfw + ["controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "pag", "controlnet", "apg", "mahiro", "rescale_cfg", "semantic_guidance", "agent_attention", "cd_tuner", "incantations", "sonar", "llul", "aesthetic_gradients", "characteristic_guidance",
                 "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier", "soft_inpainting", "sag", "neveroom",
                 "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint", "photomaker", "img2imgalt",
-                "face_restore", "caption", "img2vid", "novel_view", "ldsr", "marigold", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "system_info", "prevent_interrupt"] + list(SAMPLING_HOOKS) + (
+                "face_restore", "caption", "img2vid", "novel_view", "ldsr", "marigold", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "system_info", "prevent_interrupt"] + list(SAMPLING_HOOKS) + (
                     ["temporal_lab"] if HAVE_NUMPY and HAVE_PIL else []) + (
                     ["custom_code"] if os.environ.get("SDFX_ALLOW_CODE") == "1" else [])
 
@@ -281,10 +281,26 @@ class FakeEngine(BaseEngine):
 
         images = []
         interrupted = False
+        from . import animatediff
+        ad_cfg = hook_config(gp.hooks, "animatediff", animatediff.DEFAULTS)
+        ad_cfg = animatediff.normalize(ad_cfg) if ad_cfg is not None else None
+        if ad_cfg is not None:
+            if bs != 1:
+                raise EngineError(INVALID_PARAMS, "AnimateDiff: batch size must be 1 (one video per image; use the batch count for several videos)")
+            if hires or refine_config is not None:
+                raise EngineError(UNSUPPORTED, "AnimateDiff cannot be combined with Hires. fix")
+            if not HAVE_PIL:
+                raise EngineError(UNSUPPORTED, "AnimateDiff dry run needs Pillow")
         try:
             for it in range(n_iter):
                 idx0 = it * bs
                 self._run_pass(ctx, base_steps, "base", idx0 * repeats, total, seed + idx0, req.preview_every, (w, h))
+                if ad_cfg is not None:
+                    for frame in range(ad_cfg["video_length"]):
+                        path = next_output_path(req.output_dir, str(seed + idx0))
+                        save_png(fake_image(w, h, seed + idx0, seed + idx0 + 1, frame / max(1, ad_cfg["video_length"] - 1)), path)
+                        images.append({"path": path, "seed": seed + idx0, "subseed": subseed + idx0, "width": w, "height": h})
+                    continue
                 for repeat in range(repeats):
                     hr_seeds, hr_subs = hr_plan.batch(idx0, bs, repeat) if hr_plan else (
                         [seed + idx0 + j for j in range(bs)], [subseed + idx0 + j for j in range(bs)])

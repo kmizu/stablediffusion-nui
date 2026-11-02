@@ -21,7 +21,7 @@ from .protocol import (INTERNAL, INTERRUPTED, INVALID_PARAMS, OOM, UNSUPPORTED, 
 log = logging.getLogger("sdfx.server")
 
 QUEUED_TYPES = ("list_models", "list_files", "list_samplers", "load_model", "set_vae", "txt2img", "img2img",
-                "preprocess", "inpaint_difference_preview", "upscale", "unload", "memory", "restore_faces", "caption", "run_code", "img2vid",
+                "preprocess", "inpaint_difference_preview", "upscale", "unload", "memory", "restore_faces", "caption", "run_code", "img2vid", "animatediff_encode",
                 "novel_view", "merge_models", "convert_model", "image_tool", "tokenize", "aesthetic_embedding", "embedding_inspector", "embedding_editor", "system_info",
                 "vram_estimator", "system_benchmark", "system_submission_preview", "system_submit", "vae_tools", "temporal_lab", "model_keyword", "model_keyword_plan",
                 "batch_interrogate_prepare", "batch_interrogate_execute", "metadata_utils", "embedding_merge", "controlnet_fastload_data")

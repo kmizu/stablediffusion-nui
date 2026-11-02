@@ -1155,7 +1155,7 @@
 "index": 192,
 "name": "sd-webui-animatediff",
 "url": "https://github.com/continue-revolution/sd-webui-animatediff.git",
-"status": "todo:animatediff"
+"status": "done:animatediff"
 },
 {
 "index": 193,

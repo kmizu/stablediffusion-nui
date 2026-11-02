@@ -73,6 +73,14 @@ final class PluginsVM(val mode: Mode, scripts: Seq[Plugin], alwaysOnPlugins: Seq
       }
       case None => if selectedScript.get == "old_sd_firstpasser" then selectedScript.set("")
 
+  def restoreAnimateDiff(fields: Map[String, String]): Unit =
+    sdfx.plugins.AnimateDiffPlugin.replay(fields) match
+      case Some(values) => form("animatediff").foreach { f =>
+        f.load(values)
+        selectedScript.set("animatediff")
+      }
+      case None => if selectedScript.get == "animatediff" then selectedScript.set("")
+
   def scriptJob: Option[(Plugin, Values)] =
     scriptForms.find(_.plugin.id == selectedScript.get).map(f => f.plugin -> f.values)
 

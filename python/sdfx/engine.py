@@ -25,7 +25,7 @@ import diffusers  # noqa: F401
 from . import controlnet as cn_mod
 from . import hires as hires_mod
 from . import hooks as hooks_mod
-from . import adapters, extras, inpaint, lora_blocks, models, preview, prompt, prompt_schedule, schedulers, sonar, upscalers
+from . import adapters, animatediff, extras, inpaint, lora_blocks, models, preview, prompt, prompt_schedule, schedulers, sonar, upscalers
 from . import weight_gradient, save_intermediate, latent_upscale, steps_animation
 from . import aesthetic_gradients, negpip
 from . import neutral_prompt, neutral_runtime, prompt_fusion
@@ -219,7 +219,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")
@@ -1613,6 +1613,8 @@ class Engine(BaseEngine):
             from .hardware_info import ImageTiming, cached_profile
             hardware_timer = ImageTiming(gp.batch_size, started_at=hardware_started)
             hardware_profile = cached_profile(self)
+        ad_cfg = hooks_mod.hook_config(gp.hooks, "animatediff", animatediff.DEFAULTS)
+        ad_cfg = animatediff.normalize(ad_cfg) if ad_cfg is not None else None
         latent_config = hooks_mod.hook_config(gp.hooks, "latent_upscale", {})
         if latent_config is not None:
             latent_config = latent_upscale.normalize(latent_config)
@@ -1750,6 +1752,10 @@ class Engine(BaseEngine):
         if mode == "img2img":
             init_img = load_rgb(gp.img2img.init_image)
         cn = self._controlnets(gp, req, init_img, w, h, ctx)
+        if ad_cfg is not None:
+            animatediff.validate_job(self, gp, mode, ad_cfg, hires=hires, controlnet=bool(cn[0]), inpaint_model=is_inpaint_model,
+                                     model_keyword=keyword_plan is not None, refine=refine_config is not None,
+                                     hires_plan=hr_plan is not None)
         if ctx.resource_hashes is not None:
             from .resource_hashes import record_file
             for path, model in cn[0]:
@@ -1873,6 +1879,10 @@ class Engine(BaseEngine):
                         hr_actual = hires_steps(hp.second_pass_steps or gp.steps, hp.denoising_strength)[2]
                         hr_embeds = self._adjust_embeds(gp, self._encode_scheduled(hr_pos, hr_neg, gp, bs,
                             gp.steps, hp.second_pass_steps or gp.steps, gradient_total=hr_actual), ctx)
+                if ad_cfg is not None:
+                    video = animatediff.generate_frames(self, gp, req, ctx, ad_cfg, mode, seeds[0])
+                    finish_batch(video, [seeds[0]] * len(video), [subs[0]] * len(video), [seeds[0]] * len(video), idx0, it)
+                    continue
                 if mode == "txt2img":
                     latent_hr = hires and hires_mod.is_latent(hp.upscaler)
                     otype = "latent" if latent_hr else "pil"
@@ -2157,7 +2167,7 @@ class Engine(BaseEngine):
                          embeds=embeds, steps=gp.steps, w=w, h=h, seeds=seeds, pass_="base", image_idx=idx0,
                          images_total=total, latents=noise, image=image, cn=cn, pag=pag, hook_seed=seeds[0])
 
-    def _decode(self, latents, ctx=None, recovery_dir=None):
+    def _decode(self, latents, ctx=None, recovery_dir=None, device=None):
         from contextlib import nullcontext
         from .vae_tools import catch_decode
         pipe = self.pipe
@@ -2169,7 +2179,8 @@ class Engine(BaseEngine):
             try:
                 if needs_upcast:
                     vae.to(torch.float32)
-                lat = latents.to(vae.device, vae.dtype) / vae.config.scaling_factor
+                # `device`: the compute device. With model offload the VAE rests on the CPU until its decode hook moves it.
+                lat = latents.to(device or vae.device, vae.dtype) / vae.config.scaling_factor
                 img = vae.decode(lat, return_dict=False)[0]
             finally:
                 if needs_upcast:

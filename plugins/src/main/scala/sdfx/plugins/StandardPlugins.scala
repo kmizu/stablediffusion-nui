@@ -58,6 +58,7 @@ object StandardPlugins:
     new UltimateSdUpscalePlugin,
     new LoopbackScalerPlugin,
     new OldSdFirstpasserPlugin,
+    new AnimateDiffPlugin,
     // checkpoint tools (extension index)
     new ModelMergePlugin, new ModelConverterPlugin,
     // mask-driven img2img (extension index)

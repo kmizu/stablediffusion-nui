@@ -5,7 +5,7 @@ import java.util.Base64
 import sdfx.core.infotext.Infotext
 import sdfx.core.plugins.api.{Control, Plugin, Values}
 import sdfx.core.png.PngMetadata
-import sdfx.plugins.{AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
+import sdfx.plugins.{AnimateDiffPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
 import scala.util.control.NonFatal
 
 /** Inspect only: no model load, plugin execution, script execution or generation. */
@@ -214,9 +214,12 @@ object InspectGenerationMetadata:
       (if on.value.contains("aesthetic_gradients") then AestheticGradientsPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("aesthetic_score") then AestheticScorePlugin.InfotextKeys.toSet else Set.empty[String])
     // Script candidates: only reported, run_script is called by the agent with these values and generation_args.
-    val scripts = ujson.Obj.from(OldSdFirstpasserPlugin.replay(f).flatMap(v =>
-      StandardPlugins.scripts(() => Nil).find(_.id == OldSdFirstpasserPlugin.Id).map(pl => OldSdFirstpasserPlugin.Id -> typed(pl, v))).toSeq)
-    val scriptKeys = if scripts.value.contains(OldSdFirstpasserPlugin.Id) then OldSdFirstpasserPlugin.InfotextKeys.toSet else Set.empty[String]
+    val scriptCandidates: Seq[(String, Values, Seq[String])] =
+      OldSdFirstpasserPlugin.replay(f).map(v => (OldSdFirstpasserPlugin.Id, v, OldSdFirstpasserPlugin.InfotextKeys)).toSeq ++
+        AnimateDiffPlugin.replay(f).map(v => (AnimateDiffPlugin.Id, v, AnimateDiffPlugin.InfotextKeys)).toSeq
+    val scripts = ujson.Obj.from(scriptCandidates.flatMap { case (id, v, _) =>
+      StandardPlugins.scripts(() => Nil).find(_.id == id).map(pl => id -> typed(pl, v)) })
+    val scriptKeys = scriptCandidates.filter { case (id, _, _) => scripts.value.contains(id) }.flatMap(_._3).toSet
     val unconsumed = f.filterNot((key, _) => represented.contains(key) || scriptKeys.contains(key))
     ujson.Obj("infotext" -> text, "generation_args" -> args, "always_on" -> on, "scripts" -> scripts,
       "unapplied_fields" -> ujson.Obj.from(unconsumed.map((k, v) => k -> ujson.Str(v))),

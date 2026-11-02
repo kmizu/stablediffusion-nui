@@ -473,3 +473,23 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     PngMetadata.write(image, path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512, hash: abc"))
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("aesthetic_score"))
   }
+
+  test("AnimateDiff infotext becomes a typed script candidate and its key is consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("video.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val value = "\"{'model': 'mm_sd15_v3.safetensors', 'video_length': 24, 'fps': 10, 'closed_loop': 'R-P', 'batch_size': 16, " +
+      "'stride': 2, 'overlap': 4, 'format': ['GIF', 'MP4']}\""
+    val text = s"cat\nSteps: 20, Seed: 4, Size: 512x512, AnimateDiff: $value"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("scripts")("animatediff")
+    assertEquals(candidate("model").str, "mm_sd15_v3.safetensors")
+    assertEquals(candidate("video_length").num, 24.0)
+    assertEquals(candidate("closed_loop").str, "R-P")
+    assertEquals(candidate("format_mp4").bool, true)
+    assertEquals(candidate("format_png").bool, false)
+    assert(!result("unapplied_fields").obj.contains("AnimateDiff"), result("unapplied_fields").render())
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("scripts").obj.contains("animatediff"))
+  }

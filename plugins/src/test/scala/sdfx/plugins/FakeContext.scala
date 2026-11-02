@@ -79,7 +79,8 @@ class FakeContext(val interruptAfter: Int = Int.MaxValue, val echoInit: Boolean 
   private def produce(p: GenerationParams, sub: String, record: ArrayBuffer[Path]): Seq[OutputImage] =
     p.img2img.foreach(ii => inputs += ((ImageIO.read(new java.io.File(ii.initImage)), ii.mask.map(m => ImageIO.read(new java.io.File(m))))))
     val base = if p.seed < 0 then { nextRandom += 1; nextRandom } else p.seed
-    (0 until p.imagesPerJob).map { i =>
+    val frames = p.hooks.get("animatediff").flatMap(_.obj.get("video_length")).map(_.num.toInt)
+    (0 until frames.fold(p.imagesPerJob)(_ * p.nIter)).map { i =>
       val seed = base + i
       val img = p.img2img match
         case Some(ii) if echoInit =>
@@ -126,6 +127,14 @@ class FakeContext(val interruptAfter: Int = Int.MaxValue, val echoInit: Boolean 
         val gif = prev.resolveSibling("clip.gif")
         Files.writeString(gif, "GIF89a")
         ujson.Obj("path" -> gif.toString, "frames" -> 4, "preview" -> prev.toString)
+      case "animatediff_encode" =>
+        val out = ujson.Obj()
+        params("formats").arr.map(_.str).foreach { f =>
+          val file = dir.resolve(s"video-${params("name").str}.${f.toLowerCase}")
+          Files.writeString(file, s"$f frames=${params("images").arr.size} fps=${params("fps").num.toInt}")
+          out(f) = file.toString
+        }
+        ujson.Obj("outputs" -> out, "frames" -> params("images").arr.size)
       case other => throw new UnsupportedOperationException(other)
 
   val loadedCheckpoints = ArrayBuffer[(String, Option[String])]()
