@@ -147,7 +147,7 @@
 "index": 24,
 "name": "Image browser",
 "url": "https://github.com/AlUlkesh/stable-diffusion-webui-images-browser.git",
-"status": "done:core:gallery"
+"status": "done:core:images_browser"
 },
 {
 "index": 25,

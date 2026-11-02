@@ -196,6 +196,8 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     if controlNetFastload.inspectPath(path) then tabs.getSelectionModel.select(controlNetFastloadTab)
     else ctx.error("ControlNet Fastload is busy; try again when it finishes.")
   })
+  val imageBrowser = new ImageBrowserTab(ctx, new sdfx.core.imagebrowser.BrowserEnv(() => services.home.outputs(services.settings), services.home.configDir,
+    new sdfx.core.imagebrowser.SystemTrash(new sdfx.core.imagebrowser.FolderTrash(() => services.home.outputs(services.settings).resolve(".trash")))))
   val embeddingMerge = new EmbeddingMergeTab(ctx)
   val modelPresets = new ModelPresetsTab(ctx,
     () => services.supervisor.loadedModel.map(m => Path.of(m.path)),
@@ -281,6 +283,9 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   scrambleTab.setId("image-scrambling-tab")
   tabs.getTabs.addAll(pngTab, extrasTab, tokenizerTab, embeddingInspectorTab, embeddingEditorTab, temporalLabTab, systemInfoTab, stylesTab, keywordTab, comparisonTab, vaeToolsTab, metadataUtilsTab, embeddingMergeTab, modelPresetsTab, controlNetFastloadTab, controlNetFastloadGalleryTab, scrambleTab)
   tabs.getTabs.add(new Tab("VRAM Estimator", vramEstimator.node))
+  private val imageBrowserTab = new Tab("Image Browser", imageBrowser.node)
+  imageBrowserTab.setId("image-browser-tab")
+  tabs.getTabs.add(imageBrowserTab)
   private var comparisonDivider = initial.dividers.get("main").flatMap(_.headOption).getOrElse(.42)
   Mode.values.foreach { mode =>
     plugins(mode).form("model_keyword").flatMap(_.prop("lora")).foreach { value =>
@@ -294,9 +299,10 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     }
     vramEstimates.foreach((mode, estimate) => estimate.setActive(modeOf(t).contains(mode)))
     systemInfo.setActive(t eq systemInfoTab)
+    if t eq imageBrowserTab then imageBrowser.shown()
     if (previous eq stylesTab) && (t ne stylesTab) then stylesEditor.leave()
     refreshComparisonOptions()
-    if t eq comparisonTab then
+    if (t eq comparisonTab) || (t eq imageBrowserTab) then // both need the whole window width
       if mainSplit.getItems.contains(rightBox) then
         if mainSplit.getWidth > 0 then comparisonDivider = mainSplit.getDividerPositions.headOption.getOrElse(comparisonDivider)
         mainSplit.getItems.remove(rightBox)
@@ -421,6 +427,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   // ---- wiring ------------------------------------------------------------------------------------------
   ctx.sendToTab = (m, p, t) => sendTo(m, p, t)
   ctx.showImage = p => preview.show(p)
+  ctx.sendToExtras = p => { extras.image.set(p.toString); tabs.getSelectionModel.select(extrasTab); ctx.info("Sent to Extras") }
   ctx.openStylesEditor = () => { stylesEditor.reload(); tabs.getSelectionModel.select(stylesTab) }
   ctx.currentGeneration = () => vms(activeMode).toParams
   ctx.editPositivePrompt = (text, replace) =>
@@ -880,6 +887,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
           if s.outputDir != before.outputDir || s.hiresFixTweaks.outputDir != before.hiresFixTweaks.outputDir then
             services.resetGallery()
             reloadGallery()
+            imageBrowser.build()
           val engineChanged = s.pythonExe != before.pythonExe || s.dtype != before.dtype || s.vramMode != before.vramMode ||
             s.vaeTiling != before.vaeTiling || s.hfOffline != before.hfOffline ||
             WdSettingsState.restartRequired(before, s)
@@ -1073,6 +1081,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       "model presets" -> (() => modelPresets.dispose()),
       "controlnet fastload" -> (() => controlNetFastload.dispose()),
       "controlnet fastload gallery" -> (() => controlNetFastloadGallery.dispose()),
+      "image browser" -> (() => imageBrowser.dispose()),
       "VRAM timer" -> (() => vramPoll.stop()),
       "MCP controller" -> (() => mcpExec.execute(() => mcp.close())),
       "MCP executor" -> (() => mcpExec.shutdown()),

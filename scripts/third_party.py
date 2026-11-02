@@ -28,6 +28,7 @@ BASE = [
     ("RED1cat/Gelbooru-Prompt-Randomizer", "reimplemented", "Unlicensed behavior reference 032805388740dad2bcd06493f0286c8792e71230; only its README was used (random Gelbooru post with required and excluded tags), re-implemented in the `booru_prompt` script; no upstream code was read or copied"),
     ("Kahsolt/stable-diffusion-webui-sonar", "reimplemented", "Pinned MIT source 15f92859f70f624513796dde91396109134da47b; independent momentum Euler / Euler a / Naive scheduler steps, reference-image guidance and upscale from the source behaviour; no upstream code copied"),
     ("Elldreth/loopback_scaler", "reimplemented", "Pinned MIT source 184a53e6d22579c578c6ee1bf55d821479213c49; independent native img2img loop schedule and final filters; no upstream code copied"),
+    ("AlUlkesh/stable-diffusion-webui-images-browser", "reimplemented", "Unlicensed behavior reference 12a951318b27abd0d9099451e92cbf1de508ee4f; only its README and the observable list of controls, options and keybindings were used for the native Image Browser tab. No upstream code was copied."),
     ("light-and-ray/sd-webui-old-sd-firstpasser", "reimplemented", "Unlicensed behavior reference 74eb6b965bc5dbb65be99999b4a86bfbb0ee2b13; only its README was used (firstpass with an old SD 1.x / SDXL checkpoint, upscale, main-checkpoint img2img, Hires fix supported), re-implemented as the `old_sd_firstpasser` txt2img script; no upstream code was read or copied (its README screenshot was viewed only to name the controls)"),
     ("AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients", "reimplemented", "Unlicensed behavior reference 2624e5dd4902cb731287b426ad483e741ece85bb; only its README and the method of the paper it cites (Gallego, Personalizing Text-to-Image Generation via Aesthetic Gradients, 2022) were used, re-implemented as the `aesthetic_gradients` AlwaysOn hook; no upstream code was read or copied"),
     ("openai/clip-vit-large-patch14", "model dependency", "CLIP ViT-L/14 with its text and visual projections for the Aesthetic Gradients embeddings (the openai/CLIP code repository is MIT; the Hugging Face model card states no licence). config.json (4,519 bytes, SHA-256 8a09b467700c58138c29d53c605b34ebc69beaadd13274a8a2af8ad2c2f4032a) and model.safetensors (1,710,540,580 bytes, SHA-256 a2bf730a0c7debf160f7a6b50b3aaf3703e7e88ac73de7a314903141db026dcb) of Hugging Face revision 32bd64288804d66eefd0ccbe215aa642df71cc41 are downloaded on first use and size/SHA-256 checked; not bundled"),
@@ -290,6 +291,8 @@ PINNED_UNLICENSED = {
         "4e25eebd4b24fb903d2815ac30b787f37a98923c", "no license file published at pinned source"),
     "Gerschel/sd_web_ui_preset_utils": (
         "e301734567f37ac53c6225aec3a5c9858b357e7e", "no license file published"),
+    "AlUlkesh/stable-diffusion-webui-images-browser": (
+        "12a951318b27abd0d9099451e92cbf1de508ee4f", "no license file published at pinned source"),
     "AUTOMATIC1111/stable-diffusion-webui-nsfw-censor": (
         "c21cc99b731ff295039b0531e73968d1bf384570", "no license file published at pinned source"),
     "aria1th/sd-webui-nsfw-filter": (

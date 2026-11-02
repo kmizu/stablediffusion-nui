@@ -61,6 +61,8 @@ final class UiContext(val services: AppServices, val catalog: CatalogVM, val sta
 
   /** Wired by the main window: send an image (+ optional infotext) to a generation tab. */
   var sendToTab: (Mode, Path, Option[String]) => Unit = (_, _, _) => ()
+  /** Wired by the main window: put an image into the Extras tab input and show that tab. */
+  var sendToExtras: Path => Unit = _ => ()
   /** Wired by the main window: show an image in the big preview. */
   var showImage: Path => Unit = _ => ()
   /** Read-only comparison routes, wired by MainWindow. */
