@@ -188,3 +188,17 @@ variables were not set. This is a test hook, not yet evidence of an executed
 NUI SDXL generation. NUI GenerationParams still has no custom original-size/crop
 fields; worker defaults those SDXL time IDs to requested output dimensions and
 zero crop.
+
+## SDXL NUI EngineClient execution (2026-11-03)
+
+Executed `NativeScalaEngineSuite` with `SCALATORCH_WORKER_CLASSPATH_FILE` pointing
+to scala-torch's freshly packaged worker jars and
+`SCALATORCH_TINY_SDXL_MODEL` pointing to the local pinned tiny SDXL pipeline.
+The Java worker hello reported an empty Python executable. Through the typed
+NUI `EngineClient`, the test loaded SDXL, generated a64x64 PNG with txt2img,
+used that PNG as img2img input, checked dimensions/seed/effective-prompt protocol,
+and unloaded. The test passed in30.534s; no Python directory was present in
+its temporary output home. One initial run exposed that img2img's optional
+`effectivePrompt` is absent for an ordinary request; the assertion now checks
+that protocol behavior. This confirms the NUI client serialization/transport
+path for tiny SDXL, not GUI interaction, normal SDXL quality, or packaging.

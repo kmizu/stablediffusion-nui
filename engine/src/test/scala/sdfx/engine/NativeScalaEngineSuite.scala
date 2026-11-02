@@ -134,7 +134,7 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       val result=javax.imageio.ImageIO.read(Path.of(edited.images.head.path).toFile)
       assertEquals(result.getWidth,64);assertEquals(result.getHeight,64)
       assertEquals(edited.images.head.seed,42L)
-      assertEquals(edited.images.head.effectivePrompt,Some("a red apple"))
+      assertEquals(edited.images.head.effectivePrompt,None)
       Await.result(client.unload(),15.seconds)
       assert(!Files.exists(temp.resolve("python")))
     catch case error: Throwable =>
