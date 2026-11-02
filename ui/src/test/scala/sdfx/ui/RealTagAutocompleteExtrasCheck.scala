@@ -59,7 +59,7 @@ object RealTagAutocompleteExtrasCheck:
     Files.writeString(wildcardDir.resolve("colors/warm.txt"), (Vector("orange") ++ (2 to 15).map(n => s"item $n")).mkString("\n"))
     Files.writeString(wildcardDir.resolve("colors/cold.txt"), "blue\n")
     val files = Files.createDirectories(run.resolve("data"))
-    val tagCsv = files.resolve("tags.csv")
+    val tagCsv = files.resolve("danbooru.csv")
     Files.writeString(tagCsv, "blue_hair,4,20,azure_hair\nblue_eyes,0,10,\nred_(dress),0,5,\n")
     val translationCsv = files.resolve("translation.csv")
     Files.writeString(translationCsv, "blue_hair,青い髪\nblue_eyes,青い目\n", java.nio.charset.StandardCharsets.UTF_8)
@@ -125,7 +125,8 @@ object RealTagAutocompleteExtrasCheck:
         def field(id: String) = root.lookup("#" + id).asInstanceOf[TextField]
         field("tac-tags").setText(tagCsv.toString); field("tac-translation").setText(translationCsv.toString)
         field("tac-extra").setText(extraCsv.toString); field("tac-chants-file").setText(chantsJson.toString)
-        root.lookup("#tac-colormap").asInstanceOf[TextArea].setText("""{"tags":{"4":["red","blue"],"1":["gold","purple"]},"extra":{"0":["lime","orange"]}}""")
+        root.lookup("#tac-colormap").asInstanceOf[TextArea].setText("""{"danbooru":{"4":["red","blue"],"1":["gold","purple"]},"extra":{"0":["lime","orange"]}}""")
+        root.lookup("#tac-wiki").asInstanceOf[CheckBox].setSelected(true)
         root.lookup("#tac-delay").asInstanceOf[javafx.scene.control.Spinner[Integer]].getEditor.setText("250")
         root.lookup("#tac-wildcard-path-mode").asInstanceOf[javafx.scene.control.ComboBox[String]].getSelectionModel.select(1)
         check("dialog exposes the new options")(Seq("tac-underscores", "tac-escape", "tac-comma", "tac-alias", "tac-wildcards",
@@ -137,6 +138,7 @@ object RealTagAutocompleteExtrasCheck:
         window.ctx.tagDictionary.data.extra.size == 1 && window.ctx.tagDictionary.tags.size == 3 && window.ctx.tagDictionary.data.wildcards.size == 5 } }
       check("dialog Save persisted paths in settings")(services.settings.tagComplete.translationCsv.contains(translationCsv.toString) &&
         services.settings.tagAutocompleteCsv.contains(tagCsv.toString) && services.settings.tagComplete.chantsJson.contains(chantsJson.toString))
+      check("wiki link enabled and saved")(services.settings.tagComplete.showWikiLinks)
       fx { area.requestFocus() }
       eventually("prompt focus") { fx { area.isFocused } }
       fx {
@@ -216,7 +218,11 @@ object RealTagAutocompleteExtrasCheck:
             }.get
             val expected = if label == "blue_hair" then javafx.scene.paint.Color.RED
               else if label == "Basic-HighQuality" then javafx.scene.paint.Color.GOLD else javafx.scene.paint.Color.LIME
-            check(s"$label uses the correct source colour")(cell.getGraphic.asInstanceOf[javafx.scene.shape.Circle].getFill == expected)
+            val circle = cell.getGraphic match
+              case c: javafx.scene.shape.Circle => c
+              case h: javafx.scene.layout.HBox => h.getChildren.asScala.collectFirst { case c: javafx.scene.shape.Circle => c }.get
+            check(s"$label uses the correct source colour")(circle.getFill == expected)
+            if label == "blue_hair" then check("wiki link appears next to ordinary tag")(cell.lookup("#tac-wiki-link").isInstanceOf[Button])
           if expectPreview then check(s"preview window shown for '$typed'")(editor.previewVisible)
         }
         if expectPreview then

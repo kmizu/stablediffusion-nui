@@ -151,8 +151,12 @@ class CompletionEngineSuite extends FunSuite:
     val old = sdfx.core.config.Settings.load(file)
     assertEquals(old.tagComplete, TagCompleteSettings())
     assertEquals(old.tagAutocompleteCsv, Some("tags.csv"))
+    Files.writeString(file, """{"tag_complete": {"completion_delay_ms": 350}}""")
+    val previous = sdfx.core.config.Settings.load(file)
+    assertEquals(previous.tagComplete.completionDelayMs, 350)
+    assertEquals(previous.tagComplete.showWikiLinks, false)
     val changed = old.copy(tagComplete = TagCompleteSettings(translationCsv = Some("t.csv"), maxResults = 7, appendComma = true, extraAfter = false,
-      categoryColorMap = """{"danbooru":{"4":["red","blue"]}}""", wildcardPathMode = "next-folder", completionDelayMs = 350))
+      categoryColorMap = """{"danbooru":{"4":["red","blue"]}}""", wildcardPathMode = "next-folder", completionDelayMs = 350, showWikiLinks = true))
     sdfx.core.config.Settings.save(file, changed)
     assertEquals(sdfx.core.config.Settings.load(file).tagComplete, changed.tagComplete)
   }

@@ -18,7 +18,8 @@ enum SuggestionKind(val title: String):
 
 /** One popup row. `insert` produces the replacement text lazily (trigger words are read from disk only on accept). */
 final case class Suggestion(kind: SuggestionKind, label: String, detail: String, insert: () => String,
-                            preview: () => Option[Path] = () => None, category: Option[Int] = None)
+                            preview: () => Option[Path] = () => None, category: Option[Int] = None,
+                            wikiTag: Option[String] = None)
 
 /** The popup rows for the text range [start, end). */
 final case class CompletionResult(start: Int, end: Int, items: Vector[Suggestion], wildcardPrefix: Option[String] = None)
@@ -170,7 +171,7 @@ object CompletionEngine:
             case None => name
         val categoryLabel = category.map(c => s"category $c")
         val extra = Seq(translation, detail, categoryLabel).flatten.mkString("  ")
-        Some(Suggestion(kind, label, extra, () => formatTag(name, cfg) + tail, category = category))
+        Some(Suggestion(kind, label, extra, () => formatTag(name, cfg) + tail, category = category, wikiTag = Some(name)))
     val main = data.tags.iterator.flatMap(tag => matchTag(tag.name, tag.aliases, Some(tag.count.toString), SuggestionKind.Tag, tag.category)).take(limit).toVector
     val extra = data.extra.iterator.flatMap(e => matchTag(e.name, e.aliases, Some(if e.meta.isEmpty then "Custom tag" else e.meta), SuggestionKind.Extra, e.category)).take(limit).toVector
     (if cfg.extraAfter then main ++ extra else extra ++ main).take(limit)

@@ -1,10 +1,11 @@
 # Native tag autocomplete (#24)
 
 Stable Diffusion NUI suggests tags, wildcards, extra networks and chants in both prompt editors.
-Everything comes from local files or the model lists of the app; nothing is downloaded and no
+Suggestions come from local files or the model lists of the app; nothing is downloaded and no
 tag data ships with the app. Behaviour reference: DominikDoom/a1111-sd-webui-tagcomplete README at
 `4170882f90b47be130a0ff9314f663c230b9153d` (MIT). Independent native implementation; no upstream code,
-tag lists or translation files were copied.
+tag lists or translation files were copied. The wiki link host and merged-category rule were also checked
+against the upstream JavaScript at the same revision.
 https://github.com/DominikDoom/a1111-sd-webui-tagcomplete/tree/4170882f90b47be130a0ff9314f663c230b9153d
 
 ## Use
@@ -61,6 +62,12 @@ non-empty lines; the popup warns when later lines are omitted.
 
 A failed file is reported and the other sources keep working; no replacement is downloaded.
 
+**Show external tag wiki links** is off by default. When enabled, a `?` appears on ordinary tags
+from CSV files whose names start with `danbooru` or `e621`. Clicking it opens the tag's page in
+the browser without inserting it into the prompt; F1 opens the selected tag's page too. A `danbooru_e621_merged` file uses e621 for
+category 6 or higher and Danbooru otherwise. These sites may show adult images. No link is shown
+for other file names or other suggestion types.
+
 ## Options
 
 Maximum results (1-50), replace `_` with a space, escape parentheses, append `, ` after a completion (not after
@@ -89,6 +96,6 @@ file is reported and the default markers are used; the invalid value is not rewr
 Provided: everything above plus the v0.03 behaviour (positive and negative prompt, keyboard and mouse insertion,
 IME composition guards). Not provided: hypernetworks (`<h:` offers nothing, the app has no hypernetwork loader),
 embedding v1/v2 filter, the model-keyword trigger lists, the upstream next-folder and always-full Tab modes,
-Umi AI wildcards, live translation preview, wiki links, remappable hotkeys,
+Umi AI wildcards, live translation preview, remappable hotkeys,
 per-model black/whitelist, built-in danbooru/e621 lists. A physical Japanese IME was not
 exercised (synthetic composition events only). See [tag-autocomplete-verification.md](tag-autocomplete-verification.md).

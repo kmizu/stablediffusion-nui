@@ -8,7 +8,7 @@ import javafx.scene.input.{InputMethodEvent, KeyCode, KeyEvent}
 import javafx.scene.layout.{GridPane, HBox, StackPane, VBox}
 import javafx.stage.{FileChooser, Popup}
 import sdfx.core.config.TagCompleteSettings
-import sdfx.ui.vm.{CompletionData, CompletionEngine, CompletionResult, CompletionTag, NetFile, Suggestion, SuggestionKind, TagCategoryColors, TagCompletion}
+import sdfx.ui.vm.{CompletionData, CompletionEngine, CompletionResult, CompletionTag, NetFile, Suggestion, SuggestionKind, TagCategoryColors, TagCompletion, TagWiki}
 import java.nio.file.{Path, Paths}
 import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
@@ -29,6 +29,11 @@ final class TagDictionary(ctx: UiContext):
 
   def tags: Vector[CompletionTag] = loaded.tags
   def config: TagCompleteSettings = ctx.services.settings.tagComplete
+  def wikiUri(item: Suggestion): Option[java.net.URI] =
+    TagWiki.uri(config.showWikiLinks, ctx.services.settings.tagAutocompleteCsv, item.kind, item.wikiTag.getOrElse(""), item.category)
+  def openWiki(uri: java.net.URI): Unit =
+    try java.awt.Desktop.getDesktop.browse(uri)
+    catch case NonFatal(e) => ctx.error(s"Cannot open tag wiki: ${sdfx.ui.Fx.message(e)}")
 
   private def key: Key =
     val c = config
@@ -183,6 +188,7 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
   private val chantsBox = box("tac-chants", "Complete chants (<c:...>)", cfg.chants)
   private val trigger = box("tac-trigger", "Insert LoRA trigger words from the model's .json file", cfg.loraTriggerWords)
   private val preview = box("tac-preview", "Show extra network preview images", cfg.extraNetworkPreview)
+  private val wiki = box("tac-wiki", "Show external tag wiki links (F1; may contain adult content)", cfg.showWikiLinks)
   private val max = new Spinner[Integer](1, 50, cfg.maxResults)
   max.setId("tac-max"); max.setEditable(true)
   private val delay = new Spinner[Integer](0, 5000, cfg.completionDelayMs.max(0).min(5000), 50)
@@ -216,7 +222,7 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
     val csv = new FileChooser.ExtensionFilter("CSV", "*.csv")
     val options = new GridPane()
     options.setHgap(16); options.setVgap(4)
-    Seq(underscores, escape, comma, alias, onlyAlias, wildcards, networks, chantsBox, trigger, preview, legacy, extraAfter)
+    Seq(underscores, escape, comma, alias, onlyAlias, wildcards, networks, chantsBox, trigger, preview, legacy, extraAfter, wiki)
       .zipWithIndex.foreach((c, i) => options.add(c, i % 2, i / 2))
     val maxRow = new HBox(6, new Label("Maximum results"), max)
     val help = new Label("Up/Down: select · Enter/Tab: insert · Escape: close · __ wildcards · < extra networks")
@@ -242,7 +248,8 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
       appendComma = comma.isSelected, searchByAlias = alias.isSelected, onlyShowAlias = onlyAlias.isSelected,
       wildcards = wildcards.isSelected, extraNetworks = networks.isSelected, chants = chantsBox.isSelected,
       loraTriggerWords = trigger.isSelected, extraNetworkPreview = preview.isSelected, categoryColorMap = colors.getText,
-      wildcardPathMode = pathModes.lift(pathMode.getSelectionModel.getSelectedIndex).getOrElse(cfg.wildcardPathMode), completionDelayMs = ms))
+      wildcardPathMode = pathModes.lift(pathMode.getSelectionModel.getSelectedIndex).getOrElse(cfg.wildcardPathMode), completionDelayMs = ms,
+      showWikiLinks = wiki.isSelected))
 
 /** What the popup needs from its owner. */
 trait CompletionSource:
@@ -257,6 +264,8 @@ trait CompletionSource:
   def maxResults: Int = 12
   def wildcardPathMode: String = "first-difference"
   def completionDelayMs: Int = 0
+  def wikiUri(item: Suggestion): Option[java.net.URI] = None
+  def openWiki(uri: java.net.URI): Unit = ()
 
 /** Popup does not take focus, so native text editing and IME stay in the TextArea. */
 final class TagAutocomplete(area: TextArea, source: CompletionSource):
@@ -277,7 +286,9 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
       override def wildcardError(error: Throwable): Unit = dictionary.wildcardError(error)
       override def maxResults: Int = dictionary.config.maxResults
       override def wildcardPathMode: String = dictionary.config.wildcardPathMode
-      override def completionDelayMs: Int = dictionary.config.completionDelayMs)
+      override def completionDelayMs: Int = dictionary.config.completionDelayMs
+      override def wikiUri(item: Suggestion): Option[java.net.URI] = dictionary.wikiUri(item)
+      override def openWiki(uri: java.net.URI): Unit = dictionary.openWiki(uri))
   private val popup = new Popup()
   private val list = new ListView[Suggestion]()
   private val linePrevious = new Button("Previous")
@@ -295,7 +306,12 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
   list.setPrefWidth(420)
   list.setCellFactory(_ => new ListCell[Suggestion]():
     setOnMousePressed(e =>
-      if getItem != null then
+      def isWikiButton(node: javafx.scene.Node): Boolean =
+        node != null && (node.getId == "tac-wiki-link" || isWikiButton(node.getParent))
+      val onLink = e.getTarget match
+        case node: javafx.scene.Node => isWikiButton(node)
+        case _ => false
+      if getItem != null && !onLink then
         list.getSelectionModel.select(getItem)
         accept()
         e.consume()
@@ -308,6 +324,7 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
       setGraphic(null)
       setAccessibleText(null)
       if !empty && item != null then
+        var marker: Option[javafx.scene.Node] = None
         item.category.foreach { category =>
           setAccessibleText(s"${item.label}, ${item.detail}, category $category")
           val light = Option(area.getScene).exists(_.getStylesheets.asScala.exists(_.endsWith("light.css")))
@@ -316,9 +333,22 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
             dot.setStroke(javafx.scene.paint.Color.web("#343b46"))
             dot.setStrokeWidth(0.8)
             dot.setAccessibleText(s"category $category")
-            setGraphic(dot)
+            marker = Some(dot)
           }
         }
+        source.wikiUri(item) match
+          case None => marker.foreach(setGraphic)
+          case Some(uri) =>
+            val link = new Button("?")
+            link.setId("tac-wiki-link")
+            link.setFocusTraversable(false)
+            link.setAccessibleText("Open external tag wiki")
+            link.setTooltip(new javafx.scene.control.Tooltip("Open external tag wiki (F1)"))
+            link.setOnAction(_ => source.openWiki(uri))
+            val box = new HBox(4)
+            marker.foreach(box.getChildren.add)
+            box.getChildren.add(link)
+            setGraphic(box)
   )
   popup.getContent.add(new VBox(list, lineNavigation))
   previewView.setFitWidth(160); previewView.setFitHeight(160); previewView.setPreserveRatio(true)
@@ -508,6 +538,10 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
         case KeyCode.UP => selectedByKeyboard = true; list.getSelectionModel.select((list.getSelectionModel.getSelectedIndex - 1).max(0)); e.consume()
         case KeyCode.ENTER => accept(); e.consume()
         case KeyCode.TAB => if !partialWildcard() then accept(); e.consume()
+        case KeyCode.F1 =>
+          Option(list.getSelectionModel.getSelectedItem).flatMap(source.wikiUri).foreach { uri =>
+            source.openWiki(uri); e.consume()
+          }
         case KeyCode.PAGE_DOWN if lineItems.nonEmpty =>
           if (linePage + 1) * source.maxResults.max(1) < lineItems.size then { linePage += 1; showLinePage() }
           e.consume()
