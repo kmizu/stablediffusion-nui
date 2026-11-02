@@ -32,6 +32,7 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
   private val hiresRestoreTemplate = new SimpleBooleanProperty(initial.hiresFixTweaks.restoreTemplate)
   private val hiresCheckpointLabels = new SimpleStringProperty(initial.hiresFixTweaks.checkpointLabels)
   private val pythonExe = new SimpleStringProperty(initial.pythonExe.getOrElse(""))
+  private val engineBackend = new SimpleStringProperty(initial.engineBackend)
   private val dtype = new SimpleStringProperty(initial.dtype)
   private val vramIndex = new SimpleIntegerProperty(VramModes.index(initial.vramMode).max(0))
   private val vaeTiling = new SimpleBooleanProperty(initial.vaeTiling)
@@ -127,6 +128,8 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
     "Engine",
     page(
       W.form()
+        .add("Inference backend", W.combo(FXCollections.observableArrayList("auto", "python", "scala-torch"), engineBackend),
+          "Python remains automatic unless selected; scala-torch requires its worker classpath, model and scheduler environment variables")
         .add("Python", browseRow(pythonExe, false, "Choose python executable"), "Python interpreter for the engine (empty = app venv, then system Python)")
         .add("Precision", W.combo(FXCollections.observableArrayList("fp16", "bf16", "fp32"), dtype), "Model weight precision (fp16 for most GPUs)")
         .add("VRAM mode", W.indexCombo(VramModes.Modes.map(_._2), vramIndex), "GPU: everything stays on the GPU · Model offload: whole models move to the GPU when used · Sequential offload: layer by layer, slowest but lowest VRAM")
@@ -213,8 +216,9 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
             showStyles = hiresShowStyles.get, promptModeRadio = hiresRadio.get, checkpointLabels = hiresCheckpointLabels.get,
             saveTemplate = hiresSaveTemplate.get, restoreTemplate = hiresRestoreTemplate.get),
           pythonExe = Option(pythonExe.get).map(_.trim).filter(_.nonEmpty),
-          dtype = dtype.get,
-          vramMode = VramModes.Modes(vramIndex.get.max(0).min(VramModes.Modes.size - 1))._1,
+          engineBackend = engineBackend.get,
+          dtype = if engineBackend.get=="scala-torch" then "fp32" else dtype.get,
+          vramMode = if engineBackend.get=="scala-torch" then "cpu" else VramModes.Modes(vramIndex.get.max(0).min(VramModes.Modes.size - 1))._1,
           vaeTiling = vaeTiling.get,
           previewEvery = previewEvery.get,
           previewMethod = previewMethod.get,

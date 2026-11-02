@@ -17,6 +17,23 @@ class ScalaTorchLaunchSuite extends munit.FunSuite:
       val files=Files.walk(home.root)
       try files.sorted(java.util.Comparator.reverseOrder[Path]()).forEach(Files.delete(_)) finally files.close()
   }
+  test("saved engine backend preference selects scala-torch without environment selector") {
+    val temp=Files.createTempDirectory("saved backend")
+    try
+      val cp=temp.resolve("worker classpath.txt");val scheduler=temp.resolve("scheduler.json")
+      Files.writeString(cp,temp.toString);Files.writeString(scheduler,"{}")
+      val env=Map("SDFX_SCALATORCH_CLASSPATH_FILE"->cp.toString,
+        "SDFX_SCALATORCH_MODEL"->temp.toString,"SDFX_SCALATORCH_SCHEDULER"->scheduler.toString)
+      val launch=EngineBackend.launch(sdfx.core.config.AppHome(temp),
+        sdfx.core.config.Settings(engineBackend="scala-torch"),false,env)
+      assertEquals(launch.command.last,scheduler.toString)
+      intercept[IllegalArgumentException](EngineBackend.launch(sdfx.core.config.AppHome(temp),
+        sdfx.core.config.Settings(engineBackend="invalid"),false,env))
+    finally
+      val files=Files.list(temp)
+      try files.forEach(p => { Files.delete(p);() }) finally files.close()
+      Files.delete(temp)
+  }
   test("native selection is explicit and incomplete configuration never falls back") {
     assert(!ScalaTorchLaunch.requested(Map.empty))
     assertEquals(ScalaTorchLaunch.fromEnvironment(Map.empty),None)

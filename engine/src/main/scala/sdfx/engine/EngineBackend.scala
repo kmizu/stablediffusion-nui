@@ -30,4 +30,6 @@ private[engine] object EngineBackend:
       case None => if ScalaTorchLaunch.requested(environment) then ScalaTorch else Python
 
   def launch(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]=sys.env): EngineLaunch =
-    select(home,settings,dryRun,environment).launch(home,settings,dryRun,environment)
+    val configured=if environment.contains("SDFX_ENGINE_BACKEND") || settings.engineBackend=="auto" then environment
+      else environment.updated("SDFX_ENGINE_BACKEND",settings.engineBackend)
+    select(home,settings,dryRun,configured).launch(home,settings,dryRun,configured)

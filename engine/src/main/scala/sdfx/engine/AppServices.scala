@@ -27,7 +27,10 @@ final class AppServices(
     initialRecovery: Option[SettingsRecovery] = None,
     settingsWriter: (Path, Settings) => Unit = Settings.save
 ):
-  @volatile private var _settings = initialSettings
+  private val nativeLaunchSelected=launchOverride.isEmpty &&
+    (initialSettings.engineBackend=="scala-torch" || ScalaTorchLaunch.requested() ||
+      sys.env.get("SDFX_ENGINE_BACKEND").contains("scala-torch"))
+  @volatile private var _settings = if nativeLaunchSelected then initialSettings.copy(dtype="fp32",vramMode="cpu") else initialSettings
   @volatile private var _settingsRecovery = initialRecovery
   private var holdLogged = false
   private val logListeners = new CopyOnWriteArrayList[String => Unit]()

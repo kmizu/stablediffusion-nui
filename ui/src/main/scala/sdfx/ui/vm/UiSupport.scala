@@ -137,6 +137,7 @@ object SettingsMerge:
       hiresFixTweaks = edited.hiresFixTweaks,
       localization = edited.localization,
       pythonExe = edited.pythonExe,
+      engineBackend = edited.engineBackend,
       dtype = edited.dtype,
       vramMode = edited.vramMode,
       vaeTiling = edited.vaeTiling,
@@ -206,7 +207,7 @@ object VramModes:
     case _                            => "gpu"
   def index(v: String): Int = Modes.indexWhere(_._1 == normalize(v))
   def normalizeSettings(s: Settings, nativeEngine: Boolean = false): Settings =
-    s.copy(vramMode = if nativeEngine && Option(s.vramMode).exists(_.trim.equalsIgnoreCase("cpu")) then "cpu" else normalize(s.vramMode))
+    if nativeEngine then s.copy(dtype="fp32",vramMode="cpu") else s.copy(vramMode=normalize(s.vramMode))
 
 /** Idempotent cleanup which attempts every owned resource even when one release fails. */
 private[ui] final class UiCleanup:

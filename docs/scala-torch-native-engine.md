@@ -237,6 +237,12 @@ explicit native choice validation, old environment opt-in, and no silent fallbac
 Python's PyTorch wheels remain separately pinned in `python/requirements-torch.txt`;
 the desktop/application modules do not acquire a PyTorch dependency.
 
+Settings now exposes `Inference backend` (`auto`, `python`, `scala-torch`).
+Choosing scala-torch skips the first-run Python bootstrap and normalizes native
+weight loading to Float32/CPU; the actual U-Net/VAE compute device remains
+controlled by their `SDFX_SCALATORCH_*_DEVICE` settings. Native selection still
+requires the worker classpath, model and scheduler environment values.
+
 ## SDXL through Generator and PNG replay (2026-11-03)
 
 `NativeGeneratorSuite` now selects the replaceable backend boundary explicitly,

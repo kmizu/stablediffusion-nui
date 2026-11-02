@@ -950,7 +950,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
             services.resetGallery()
             reloadGallery()
             imageBrowser.build()
-          val engineChanged = s.pythonExe != before.pythonExe || s.dtype != before.dtype || s.vramMode != before.vramMode ||
+          val engineChanged = s.engineBackend != before.engineBackend || s.pythonExe != before.pythonExe || s.dtype != before.dtype || s.vramMode != before.vramMode ||
             s.vaeTiling != before.vaeTiling || s.hfOffline != before.hfOffline ||
             WdSettingsState.restartRequired(before, s)
           if engineChanged then

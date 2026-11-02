@@ -72,6 +72,7 @@ case class Settings(
     mcpHttpEnabled: Boolean = false,
     mcpHttpPort: Int = 7861,
     mcpToken: Option[String] = None,
+    engineBackend: String = "auto",
     disabledPlugins: Seq[String] = Nil,
     pluginValues: Map[String, Map[String, String]] = Map.empty,
     hfOffline: Boolean = false,
@@ -118,6 +119,7 @@ object Settings:
   /** Admission before producing a second JSON representation of the preview maps. */
   def validatePreviewConfiguration(s: Settings): Either[String, Unit] =
     try
+      require(Set("auto","python","scala-torch").contains(s.engineBackend),"unsupported engine backend setting")
       val budget = new PreviewBudget
       require(s.modelPreviewOverrides != null && s.modelPreviewFolders != null, "preview map is null")
       require(s.modelPreviewOverrides.size <= 10000 && s.modelPreviewFolders.size <= 64, "preview map entry limit exceeded")

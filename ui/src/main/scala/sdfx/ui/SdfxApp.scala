@@ -40,10 +40,12 @@ final class SdfxApp extends Application:
     val home = opts.home.map(h => AppHome(Paths.get(h).toAbsolutePath.normalize())).getOrElse(AppHome.detect())
     // legacy VRAM modes (medvram / lowvram / cpu) are mapped to the engine's values
     val loaded = sdfx.core.config.Settings.loadResult(home.settingsFile)
-    val normalized = loaded.copy(settings = VramModes.normalizeSettings(loaded.settings, nativeEngine = ScalaTorchLaunch.requested()))
+    val nativeSelected=ScalaTorchLaunch.requested() || loaded.settings.engineBackend=="scala-torch" ||
+      sys.env.get("SDFX_ENGINE_BACKEND").contains("scala-torch")
+    val normalized = loaded.copy(settings = VramModes.normalizeSettings(loaded.settings, nativeEngine = nativeSelected))
     val settings = normalized.settings
     Platform.setImplicitExit(true)
-    val needsSetup = !ScalaTorchLaunch.requested() && !opts.dryRun && settings.pythonExe.forall(_.trim.isEmpty) &&
+    val needsSetup = !nativeSelected && !ScalaTorchLaunch.requested() && !opts.dryRun && settings.pythonExe.forall(_.trim.isEmpty) &&
       (try PythonEnv.needsBootstrap(home) catch case NonFatal(_) => true)
     if needsSetup then
       val dlg = new BootstrapDialog(home, settings, Theme.stylesheets(settings.theme), Theme.themeClass(settings.theme))
