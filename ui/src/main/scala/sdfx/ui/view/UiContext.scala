@@ -65,6 +65,8 @@ final class UiContext(val services: AppServices, val catalog: CatalogVM, val sta
   var sendPrompt: (Mode, String, Boolean) => Unit = (_, _, _) => ()
   /** Wired by the main window: put an image into the Extras tab input and show that tab. */
   var sendToExtras: Path => Unit = _ => ()
+  /** Wired by the main window: open an image in the Panorama tab and show that tab. */
+  var sendToPanorama: Path => Unit = _ => ()
   /** Wired by the main window: show an image in the big preview. */
   var showImage: Path => Unit = _ => ()
   /** Read-only comparison routes, wired by MainWindow. */

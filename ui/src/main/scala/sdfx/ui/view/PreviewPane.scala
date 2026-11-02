@@ -97,6 +97,7 @@ final class PreviewPane(ctx: UiContext, actions: ImageActions):
     6, compareButton,
     W.button("⇢ img2img", "Send this image and its parameters to img2img")(withCurrent((p, t) => actions.sendTo(Mode.Img2Img, p, t))),
     W.button("⇢ Inpaint", "Send this image and its parameters to Inpaint")(withCurrent((p, t) => actions.sendTo(Mode.Inpaint, p, t))),
+    W.button("Pano", "View this image as a 360° panorama in the Panorama tab")(withCurrent((p, _) => ctx.sendToPanorama(p))),
     W.button("↺ Restore", "Restore the generation parameters of this image into the current tab")(withCurrent((_, t) =>
       t match
         case Some(text) => actions.restore(text)

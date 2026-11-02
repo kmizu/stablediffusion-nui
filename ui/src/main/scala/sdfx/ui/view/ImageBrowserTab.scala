@@ -424,12 +424,13 @@ final class ImageBrowserTab(ctx: UiContext, env: BrowserEnv):
     private val toImg = W.button("Send to img2img", "Use as the img2img input image with its parameters")(sendImage(Mode.Img2Img)); toImg.setId(spec.id + "-to-img2img")
     private val toInp = W.button("Send to inpaint", "Use as the inpaint input image with its parameters")(sendImage(Mode.Inpaint)); toInp.setId(spec.id + "-to-inpaint")
     private val toExtras = W.button("Send to extras", "Use as the Extras input image")(sendExtras()); toExtras.setId(spec.id + "-to-extras")
+    private val toPano = W.button("Send to panorama", "Open in the Panorama tab")(sendPanorama()); toPano.setId(spec.id + "-to-panorama")
     private val cnNumber = new ComboBox[String](FXCollections.observableArrayList("0", "1", "2")); cnNumber.setValue("0"); cnNumber.setId(spec.id + "-cn-number")
     W.tip(cnNumber, "ControlNet unit number (0 = first unit)")
     private val cnTxt = W.button("Send to txt2img ControlNet", "Set the image of the chosen ControlNet unit in txt2img")(sendControlNet(Mode.Txt2Img)); cnTxt.setId(spec.id + "-cn-txt2img")
     private val cnImg = W.button("Send to img2img ControlNet", "Set the image of the chosen ControlNet unit in img2img")(sendControlNet(Mode.Img2Img)); cnImg.setId(spec.id + "-cn-img2img")
     private val sendBar = hideIfConfigured("Send to buttons", W.vbox(6,
-      W.hbox(6, (if spec.isFavorites then Seq.empty[Node] else Seq[Node](favBtn)) ++ Seq[Node](toTxt, toImg, toInp, toExtras)*),
+      W.hbox(6, (if spec.isFavorites then Seq.empty[Node] else Seq[Node](favBtn)) ++ Seq[Node](toTxt, toImg, toInp, toExtras, toPano)*),
       W.hbox(6, cnTxt, cnImg, W.label("ControlNet number"), cnNumber)))
 
     private val toDirPath = new TextField(); toDirPath.setPromptText("Directory path"); toDirPath.setId(spec.id + "-todir-path")
@@ -519,7 +520,7 @@ final class ImageBrowserTab(ctx: UiContext, env: BrowserEnv):
     private def renderInfo(): Unit =
       val rec = tvm.selectedRecord
       val has = rec.isDefined
-      Seq[Node](favBtn, toTxt, toImg, toInp, toExtras, cnTxt, cnImg, cnNumber, toDirBtn, toDirPath, toDirSaved, deleteBtn).foreach(_.setDisable(!has))
+      Seq[Node](favBtn, toTxt, toImg, toInp, toExtras, toPano, cnTxt, cnImg, cnNumber, toDirBtn, toDirPath, toDirSaved, deleteBtn).foreach(_.setDisable(!has))
       rankButtons.foreach(_.setDisable(!has))
       updating = true
       rankToggle.selectToggle(null)
@@ -594,6 +595,9 @@ final class ImageBrowserTab(ctx: UiContext, env: BrowserEnv):
     private def sendImage(mode: Mode): Unit =
       tvm.selectedRecord.foreach { r => if r.isVideo then say("Videos cannot be used as an input image", ok = false) else
         ctx.sendToTab(mode, r.path, r.meta.parameters); say(s"Sent to ${mode.label}") }
+    private def sendPanorama(): Unit =
+      tvm.selectedRecord.foreach { r => if r.isVideo then say("Videos cannot be shown as a panorama", ok = false) else
+        ctx.sendToPanorama(r.path); say("Sent to Panorama") }
     private def sendExtras(): Unit =
       tvm.selectedRecord.foreach { r => if r.isVideo then say("Videos cannot be sent to Extras", ok = false) else
         ctx.sendToExtras(r.path); say("Sent to Extras") }

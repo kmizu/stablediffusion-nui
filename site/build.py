@@ -22,7 +22,7 @@ RELEASES = REPO + "/releases/latest"
 # Page order and sidebar groups. Slugs are shared by both languages.
 NAV = [
     ("start", ["index", "install", "first-image"]),
-    ("guide", ["generate", "controlnet", "lora-embeddings", "extensions", "tools", "image-browser", "character-searcher"]),
+    ("guide", ["generate", "controlnet", "lora-embeddings", "extensions", "tools", "image-browser", "character-searcher", "panorama"]),
     ("advanced", ["mcp", "settings", "localization", "troubleshooting", "releases"]),
 ]
 GROUPS = {

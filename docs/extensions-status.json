@@ -657,7 +657,7 @@
 "index": 109,
 "name": "Panorama Viewer",
 "url": "https://github.com/GeorgLegato/sd-webui-panorama-viewer.git",
-"status": "todo:core:panorama-viewer"
+"status": "done:core:panorama-viewer"
 },
 {
 "index": 110,

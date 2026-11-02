@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 172, todo 130, na 51.
+Totals: done 173, todo 129, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -115,7 +115,7 @@ Totals: done 172, todo 130, na 51.
 | 106 | [TiledDiffusion with Tiled VAE](https://github.com/pkuliyi2015/multidiffusion-upscaler-for-automatic1111.git) | 4991 | todo | `tiled_diffusion` |  |
 | 107 | [3D Model&Pose Loader](https://github.com/jtydhr88/sd-3dmodel-loader.git) | 247 | todo | `openpose_editor` |  |
 | 108 | [Corridor Crawler Outpainting](https://github.com/brick2face/corridor-crawler-outpainting.git) | 35 | todo | `corridor_crawler` |  |
-| 109 | [Panorama Viewer](https://github.com/GeorgLegato/sd-webui-panorama-viewer.git) | 179 | todo | `core:panorama-viewer` |  |
+| 109 | [Panorama Viewer](https://github.com/GeorgLegato/sd-webui-panorama-viewer.git) | 179 | done | `core:panorama-viewer` | Dedicated Panorama tab for index 109 (GeorgLegato/sd-webui-panorama-viewer, GPL-3.0, pinned aa2a238), written from the README and from reading the extension's button/gallery integration and its documented 2:1 equirectangular and 4:3 cubemap (polyhedron net) shapes; no upstream code was copied and the projection maths and the cube layout were derived independently (the extension's e2c.js is itself marked as based on third-party LGPL code, which was not used). Provided: interactive equirectangular and cubemap-net viewing (drag, wheel, arrow keys, +/-, Home, double-click reset, Yaw/Pitch/FOV fields, auto-rotate, fullscreen window), automatic projection detection with the 2:1 / 4:3 aspect-ratio hints, equirectangular to cubemap conversion (the extension's gallery conversion) and the reverse, saving the current view, previous/next picture in the folder, open dialog and drag-and-drop, 'Pano' buttons on the preview pane, the gallery context menu and the Image Browser, and sending the picture on to img2img, Inpaint and Extras (the extension's send to openOutpaint is not applicable); password-protected PNGs are decoded in memory and converted pictures are saved scrambled during a protected session. Not provided: the video panorama (the extension's Equi Video tab / uploaded movie / Infinite Zoom video) and any in-gallery overlay (the viewer is a tab); other cube layouts than the 4x3 cross; panoramas wider than 16384 px. Equirectangular to cubemap and back is lossy (resampled twice, mean difference 2.9/255 on the real SD1.5 picture). Verified by PanoramaSuite (14), the real MainWindow driven over 21 control groups with real SD1.5 (1024x512) and SDXL (1536x768) pictures and screenshots inspected; see panorama-viewer-verification.md. SD models are not applicable to a viewer: they only supplied the pictures; a general model does not make seamless panoramas and the viewer shows the seam as generated. |
 | 110 | [db-storage1111](https://github.com/takoyaro/db-storage1111.git) | 49 | na | `account` | needs a third-party account / paid API key and posts data to that service |
 | 111 | [stable-diffusion-webui-rembg](https://github.com/AUTOMATIC1111/stable-diffusion-webui-rembg.git) | 1366 | done | `remove_background` |  |
 | 112 | [sd-webui-tunnels](https://github.com/Bing-su/sd-webui-tunnels.git) | 87 | na | `server-ops` | operating a shared web server (tunnels, TLS, multi-instance, kill buttons) |
