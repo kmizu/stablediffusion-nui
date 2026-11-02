@@ -86,10 +86,7 @@ final class AppServices(
     )
 
   val supervisor: EngineSupervisor = new EngineSupervisor(
-    launchOverride.getOrElse(() => {
-      require(!dryRun || !ScalaTorchLaunch.requested(),"Scala native engine does not implement dry-run mode")
-      ScalaTorchLaunch.fromEnvironment().getOrElse(PythonEnv.engineLaunch(home, _settings, dryRun))
-    }),
+    launchOverride.getOrElse(() => EngineBackend.launch(home,_settings,dryRun)),
     log
   )
   val client: EngineClient = new EngineClient(supervisor)

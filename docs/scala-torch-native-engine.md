@@ -218,3 +218,21 @@ the native worker.
 The NUI EngineClient tiny-SDXL txt2img/img2img integration was rerun with
 80x96 original size and crop2,4 and passed in30.581s. The native metadata unit
 test checks all six IDs and rejects partial/invalid/non-SDXL overrides.
+
+## Replaceable inference backend boundary (2026-11-03)
+
+NUI engine selection is now centralized in `engine/EngineBackend.scala`. The UI,
+Generator, MCP and core protocol continue to talk to `EngineClient`; they do not
+import or link PyTorch or scala-torch classes. `EngineBackend.Python` owns the
+existing Python launch path, while `EngineBackend.ScalaTorch` owns the Java worker
+launch path. Select explicitly with `SDFX_ENGINE_BACKEND=python` or
+`SDFX_ENGINE_BACKEND=scala-torch`; Python remains the default. The existing
+`SDFX_SCALATORCH_*` opt-in still selects scala-torch for compatibility. An
+incomplete native configuration or native dry-run fails without falling back to
+Python. This keeps changing inference implementations inside the NUI `engine`
+module and the EngineLaunch/JSON-lines boundary.
+
+`ScalaTorchLaunchSuite` passed3 tests covering default and explicit Python choice,
+explicit native choice validation, old environment opt-in, and no silent fallback.
+Python's PyTorch wheels remain separately pinned in `python/requirements-torch.txt`;
+the desktop/application modules do not acquire a PyTorch dependency.

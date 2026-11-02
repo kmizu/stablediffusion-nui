@@ -3,6 +3,20 @@ package sdfx.engine
 import java.nio.file.{Files,Path}
 
 class ScalaTorchLaunchSuite extends munit.FunSuite:
+  test("engine selection is isolated behind one backend and preserves Python default/legacy opt-in") {
+    val home=sdfx.core.config.AppHome(Files.createTempDirectory("engine backend"))
+    try
+      val settings=sdfx.core.config.Settings()
+      assertEquals(EngineBackend.select(home,settings,false,Map.empty).name,"python")
+      assertEquals(EngineBackend.select(home,settings,false,Map("SDFX_ENGINE_BACKEND"->" PYTHON ")).name,"python")
+      intercept[IllegalArgumentException](EngineBackend.launch(home,settings,false,Map("SDFX_ENGINE_BACKEND"->"mystery")))
+      intercept[IllegalArgumentException](EngineBackend.launch(home,settings,true,Map("SDFX_ENGINE_BACKEND"->"scala-torch")))
+      intercept[IllegalArgumentException](EngineBackend.launch(home,settings,false,Map("SDFX_ENGINE_BACKEND"->"scala-torch")))
+      intercept[IllegalArgumentException](EngineBackend.launch(home,settings,false,Map("SDFX_SCALATORCH_MODEL"->"")))
+    finally
+      val files=Files.walk(home.root)
+      try files.sorted(java.util.Comparator.reverseOrder[Path]()).forEach(Files.delete(_)) finally files.close()
+  }
   test("native selection is explicit and incomplete configuration never falls back") {
     assert(!ScalaTorchLaunch.requested(Map.empty))
     assertEquals(ScalaTorchLaunch.fromEnvironment(Map.empty),None)
