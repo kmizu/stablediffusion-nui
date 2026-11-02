@@ -1,7 +1,7 @@
 package sdfx.engine
 
 import sdfx.core.protocol.*
-import sdfx.core.model.GenerationParams
+import sdfx.core.model.{GenerationParams,Img2ImgParams}
 import java.nio.file.{Files,Path}
 import java.util.concurrent.ConcurrentLinkedQueue
 import scala.concurrent.Await
@@ -75,6 +75,16 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       assertEquals(events.asScala.collect { case p: EngineEvent.Progress => p.step }.toVector,Vector(1,2,3))
       assert(events.asScala.exists(_.isInstanceOf[EngineEvent.Preview]))
       assertEquals(result.images.head.effectivePrompt,Some("a red cat"))
+      events.clear()
+      val edit=request.copy(params=request.params.copy(steps=4,
+        img2img=Some(Img2ImgParams(result.images.head.path,denoisingStrength=0.5,resizeMode=2))))
+      val edited=Await.result(client.generate(edit,GenerationMode.Img2Img,event => {events.add(event);()}).result,45.seconds)
+      assertEquals(edited.images.size,1)
+      assertEquals(edited.images.head.seed,42L)
+      assertEquals(edited.images.head.effectivePrompt,Some("a red cat"))
+      val editedImage=javax.imageio.ImageIO.read(Path.of(edited.images.head.path).toFile)
+      assertEquals(editedImage.getWidth,64);assertEquals(editedImage.getHeight,64)
+      assertEquals(events.asScala.collect {case p: EngineEvent.Progress => p.step}.toVector,Vector(1,2))
       assert(mapping("delete")("deleted").bool)
       assertEquals(mapping("check")("source").str,"no match")
       Await.result(client.unload(),10.seconds)

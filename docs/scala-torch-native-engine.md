@@ -1,3 +1,20 @@
+## Native img2img request integration (2026-11-03)
+
+NativeScalaEngineSuite now submits GenerationMode.Img2Img with the actual
+Img2ImgParams serializer, using the preceding native txt2img PNG as input.
+The Java worker accepts default inpainting fields, denoisingStrength0.5 and
+resizeMode2. Tiny-model CPU integration passed: 64x64 output, seed42,
+two active steps from four scheduled steps, and model keyword effective prompt.
+This uses the same EngineClient/Supervisor and does not launch Python.
+The full test passed in29.912s. No production NUI routing change was needed.
+
+scala-torch's worker now implements file decoding, EXIF/RGB conversion,
+NUI resize modes0/1/2 and CPU VAE encoding for img2img. Mask/inpainting options
+remain unsupported and reject when active. This test establishes request and
+result transport, not full desktop PNG metadata/replay, SD1.5/SDXL quality,
+GPU img2img throughput or support for every extension. Those gates remain open.
+Changes stay on feat/scala-torch-native-engine as requested.
+
 ## Native CUDA weight offload (2026-11-03)
 
 Set SDFX_SCALATORCH_UNET_OFFLOAD_WEIGHTS=true and
