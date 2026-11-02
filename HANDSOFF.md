@@ -1,3 +1,5 @@
+> **最新の引き継ぎ(Codex 向け)は `HANDOFF-CODEX.md`。** 以下は過去の記録。
+
 # Stable Diffusion NUI 引継ぎ — 2026-10-31（2026-11-01 Claude追記）
 
 ## 最新状態（2026-11-01 夜、Claude。これが最優先）
