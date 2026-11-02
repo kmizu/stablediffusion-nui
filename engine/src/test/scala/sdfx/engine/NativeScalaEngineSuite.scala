@@ -121,7 +121,9 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       val loaded=Await.result(client.loadModel(LoadModelRequest(root.toString,dtype="fp32",vramMode="cpu")),45.seconds)
       assertEquals(loaded.path,root.toRealPath().toString)
       assert(loaded.hash.matches("[0-9a-f]{64}"))
-      val params=GenerationParams(prompt="a red apple",negativePrompt="blurry",width=64,height=64,steps=3,seed=42)
+      val params=GenerationParams(prompt="a red apple",negativePrompt="blurry",width=64,height=64,steps=3,seed=42,
+        extra=Map("sdfx_sdxl_original_height"->"80","sdfx_sdxl_original_width"->"96",
+          "sdfx_sdxl_crop_top"->"2","sdfx_sdxl_crop_left"->"4"))
       val request=GenerationRequest(params,temp.toString)
       val generated=Await.result(client.generate(request,GenerationMode.Txt2Img).result,60.seconds)
       assertEquals(generated.images.size,1)

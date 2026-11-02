@@ -202,3 +202,19 @@ its temporary output home. One initial run exposed that img2img's optional
 `effectivePrompt` is absent for an ordinary request; the assertion now checks
 that protocol behavior. This confirms the NUI client serialization/transport
 path for tiny SDXL, not GUI interaction, normal SDXL quality, or packaging.
+
+## SDXL size and crop IDs from NUI `extra` (2026-11-03)
+
+Native callers can pass `sdfx_sdxl_original_height`,
+`sdfx_sdxl_original_width`, and optional `sdfx_sdxl_crop_top` /
+`sdfx_sdxl_crop_left` strings in `GenerationParams.extra`. The worker turns
+these into SDXL's six time IDs, appending the requested target height and width.
+Both original dimensions are required; invalid integers, dimensions and crops
+are rejected. Use only with an SDXL checkpoint. With no overrides, original and
+target dimensions match the generated image and crop is zero. The Python engine
+continues receiving its existing `extra` map; these names are interpreted by
+the native worker.
+
+The NUI EngineClient tiny-SDXL txt2img/img2img integration was rerun with
+80x96 original size and crop2,4 and passed in30.581s. The native metadata unit
+test checks all six IDs and rejects partial/invalid/non-SDXL overrides.
