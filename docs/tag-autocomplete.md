@@ -65,7 +65,16 @@ The numeric `type` / `category` field in tag and extra-tag CSV files and the `co
 chant are shown as category numbers. Categories 0, 1, 3, 4 and 5 also have coloured markers;
 other numbers remain visible without a marker. These colours identify numbers only: category
 meanings vary by data source. A missing or non-numeric category has no marker. The upstream
-extension's per-file custom colour settings are not supported.
+extension's source-keyed JSON colour maps can be entered in **Tags…** as, for example,
+`{"danbooru":{"4":["lightgreen","darkgreen"]}}`. The source key is the CSV file name
+without its extension; the pair is the dark-theme and light-theme colour. CSS colour names and
+hex values are accepted. Main tags and chants use the main CSV's map; extra tags use the extra
+CSV's map. Two files with the same stem share a map. If a source has a map but a category is
+absent, the category has no coloured marker. Sources without a map keep the fixed defaults.
+For example, `{"danbooru":{"4":["lightgreen","darkgreen"]}}` leaves category 0 uncoloured
+for `danbooru`, while an unlisted source keeps the defaults. Invalid JSON or colour names are
+rejected without replacing the saved settings. An invalid map introduced by editing the settings
+file is reported and the default markers are used; the invalid value is not rewritten.
 
 ## Scope
 
@@ -73,5 +82,5 @@ Provided: everything above plus the v0.03 behaviour (positive and negative promp
 IME composition guards). Not provided: hypernetworks (`<h:` offers nothing, the app has no hypernetwork loader),
 embedding v1/v2 filter, the model-keyword trigger lists, the upstream next-folder and always-full Tab modes,
 Umi AI wildcards, live translation preview, wiki links, completion delay, remappable hotkeys,
-custom category colours, per-model black/whitelist, built-in danbooru/e621 lists. A physical Japanese IME was not
+per-model black/whitelist, built-in danbooru/e621 lists. A physical Japanese IME was not
 exercised (synthetic composition events only). See [tag-autocomplete-verification.md](tag-autocomplete-verification.md).

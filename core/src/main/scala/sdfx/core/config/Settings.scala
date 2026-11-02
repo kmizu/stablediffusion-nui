@@ -52,7 +52,8 @@ case class TagCompleteSettings(translationCsv: Option[String] = None, translatio
     maxResults: Int = 12, replaceUnderscores: Boolean = true, escapeParens: Boolean = true,
     appendComma: Boolean = false, searchByAlias: Boolean = true, onlyShowAlias: Boolean = false,
     wildcards: Boolean = true, extraNetworks: Boolean = true, chants: Boolean = true,
-    loraTriggerWords: Boolean = true, extraNetworkPreview: Boolean = true) derives RW
+    loraTriggerWords: Boolean = true, extraNetworkPreview: Boolean = true,
+    categoryColorMap: String = "") derives RW
 
 /** Interface language. `pack` is a language pack id (empty = English, no translation); see sdfx.core.i18n. */
 case class LocalizationPreferences(pack: String = "", fallbackPack: String = "", style: String = "Translation only",

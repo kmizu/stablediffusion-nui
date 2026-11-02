@@ -46,7 +46,7 @@ work as in A1111.
 
   When several wildcard paths match, Tab extends their common prefix. After choosing a file, select a line to insert it directly, or press Escape to keep the `__name__` reference. Use Previous/Next or PageUp/PageDown to browse more lines.
 
-  Tags and chants with numeric categories show their number and, for some numbers, a coloured marker. The meaning of each number depends on the data source; marker colours distinguish numbers rather than assign a universal meaning. Custom colours are not supported.
+  Tags and chants with numeric categories show their number and, for some numbers, a coloured marker. The meaning of each number depends on the data source. In **Tags…**, set custom colours with JSON such as `{"danbooru":{"4":["lightgreen","darkgreen"]}}`: the key is the CSV filename without its extension, and the colours are for dark and light themes. Main tags and chants use the tag CSV's map; extra tags use the extra CSV's map. Files with the same stem share a map.
 
 For **✚ LoRA** and **Networks…** in the toolbar, see [LoRA and embeddings](lora-embeddings.html).
 

@@ -1,5 +1,8 @@
 # Tag category markers: partial #24 verification
 
+This is the historical verification of the fixed-marker implementation. Subsequent configurable
+per-source colours and their separate verification are described in `tag24-colormap-verification.md`.
+
 Numeric `type` / `category` from tag and extra-tag CSVs and numeric chant `color` are retained in
 suggestions. Categories 0, 1, 3, 4 and 5 use fixed coloured markers; other numbers remain visible
 without a marker. These colours identify numbers only: their meanings depend on the source data.

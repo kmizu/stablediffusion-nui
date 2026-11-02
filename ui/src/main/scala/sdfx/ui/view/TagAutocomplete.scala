@@ -8,8 +8,10 @@ import javafx.scene.input.{InputMethodEvent, KeyCode, KeyEvent}
 import javafx.scene.layout.{GridPane, HBox, StackPane, VBox}
 import javafx.stage.{FileChooser, Popup}
 import sdfx.core.config.TagCompleteSettings
-import sdfx.ui.vm.{CompletionData, CompletionEngine, CompletionResult, CompletionTag, NetFile, Suggestion, TagCompletion}
+import sdfx.ui.vm.{CompletionData, CompletionEngine, CompletionResult, CompletionTag, NetFile, Suggestion, SuggestionKind, TagCategoryColors, TagCompletion}
 import java.nio.file.{Path, Paths}
+import scala.jdk.CollectionConverters.*
+import scala.util.control.NonFatal
 
 /** One dictionary per window; file loading never blocks the FX thread. Tags, translations, the extra file and chants
   * are read together; wildcard names are rescanned in the background; LoRA/embedding names come from the model catalog. */
@@ -20,6 +22,9 @@ final class TagDictionary(ctx: UiContext):
   private var wildcards = Vector.empty[String]
   private var wildcardsAt: Option[Long] = None
   private var scanning = false
+  private var wildcardErrorKey: Option[String] = None
+  private var colorsKey: Option[String] = None
+  private var colors: TagCategoryColors.Palette = Map.empty
   private final case class Key(tags: Option[String], translation: Option[String], legacy: Boolean, extra: Option[String], chants: Option[String])
 
   def tags: Vector[CompletionTag] = loaded.tags
@@ -51,22 +56,50 @@ final class TagDictionary(ctx: UiContext):
   def complete(text: String, caret: Int, selStart: Int, selEnd: Int): Option[CompletionResult] =
     CompletionEngine.complete(data, config, text, caret, selStart, selEnd)
 
+  def categoryColor(item: Suggestion, light: Boolean): Option[javafx.scene.paint.Color] =
+    val raw = config.categoryColorMap
+    if !colorsKey.contains(raw) then
+      colors = scala.util.Try(TagCategoryColors.parse(raw)).recover { case _ =>
+        ctx.error("Saved category colours are invalid; using default markers.")
+        Map.empty
+      }.get
+      colorsKey = Some(raw)
+    val path = item.kind match
+      case SuggestionKind.Tag | SuggestionKind.Chant => ctx.services.settings.tagAutocompleteCsv
+      case SuggestionKind.Extra => config.extraCsv
+      case _ => None
+    item.category.flatMap(c => TagCategoryColors.color(colors, TagCategoryColors.stem(path), c, light))
+
   def wildcardLines(name: String)(done: Either[Throwable, Vector[String]] => Unit): Unit =
-    val roots = wildcardDirs
-    sdfx.ui.Fx.async(sdfx.ui.vm.WildcardLines.read(roots, name))(v => done(Right(v)))(e => done(Left(e)))
-  def wildcardContext: Any = (wildcardDirs.map(_.toString), config)
+    try
+      val roots = wildcardDirs
+      sdfx.ui.Fx.async(sdfx.ui.vm.WildcardLines.read(roots, name))(v => done(Right(v)))(e => done(Left(e)))
+    catch case NonFatal(e) => done(Left(e))
+  def wildcardContext: Any = (ctx.services.home.root.toString, config,
+    ctx.services.settings.pluginValues.get("dynamic_prompts").flatMap(_.get("wildcard_dirs")))
   def wildcardError(e: Throwable): Unit = ctx.error(s"Cannot read wildcard: ${e.getMessage}")
 
   private def scanWildcards(): Unit =
     if !scanning then
-      scanning = true
       val dirs = wildcardDirs
+      scanning = true
       sdfx.ui.Fx.async(new sdfx.plugins.prompt.DynamicPrompt.Wildcards(dirs).names)(names =>
         wildcards = names; wildcardsAt = Some(System.nanoTime()); scanning = false
       )(_ => { wildcardsAt = Some(System.nanoTime()); scanning = false })
 
   def ensureLoaded(): Unit =
-    if wildcardsAt.forall(t => System.nanoTime() - t > 5000000000L) then scanWildcards()
+    try
+      ensureLoadedChecked()
+      wildcardErrorKey = None
+    catch case NonFatal(e) =>
+      val message = sdfx.ui.Fx.message(e)
+      if !wildcardErrorKey.contains(message) then ctx.error(s"Cannot load wildcard folders: $message")
+      wildcardErrorKey = Some(message)
+
+  private def ensureLoadedChecked(): Unit =
+    val scanFailure = scala.util.Try {
+      if wildcardsAt.forall(t => System.nanoTime() - t > 5000000000L) then scanWildcards()
+    }.failed.toOption
     val wanted = key
     if !loadedKey.contains(wanted) then
       loadedKey = Some(wanted)
@@ -83,16 +116,19 @@ final class TagDictionary(ctx: UiContext):
           chants = part(wanted.chants, "Chants file")(CompletionEngine.loadChants).getOrElse(Vector.empty))
       }(result => if ticket == version then loaded = result)(
         e => if ticket == version then ctx.error(s"Cannot load tag completion data: ${e.getMessage}"))
+    scanFailure.foreach(throw _)
 
   def reload(): Unit =
     loadedKey = None
     wildcardsAt = None
-    ensureLoaded()
+    ensureLoadedChecked()
 
   /** Persist the form's values and reload; used by the dialog's Save button. */
-  def apply(csv: Option[String], cfg: TagCompleteSettings): Unit =
-    ctx.services.updateSettings(_.copy(tagAutocompleteCsv = csv, tagComplete = cfg))
-    reload()
+  def apply(csv: Option[String], cfg: TagCompleteSettings): Either[String, Option[String]] =
+    ctx.services.updateSettingsChecked(_.copy(tagAutocompleteCsv = csv, tagComplete = cfg)).map { _ =>
+      try { reload(); None }
+      catch case NonFatal(e) => Some(s"Saved tag settings, but reload failed: ${sdfx.ui.Fx.message(e)}")
+    }
 
   def configure(): Unit =
     val dialog = new Dialog[ButtonType]()
@@ -105,14 +141,23 @@ final class TagDictionary(ctx: UiContext):
     val pane = new TagSettingsPane(ctx.services.settings.tagAutocompleteCsv, config, ctx.stage)
     dialog.getDialogPane.setContent(pane.node)
     dialog.getDialogPane.getStylesheets.setAll(ctx.stage.getScene.getStylesheets)
+    dialog.getDialogPane.lookupButton(save).addEventFilter(javafx.event.ActionEvent.ACTION, (event: javafx.event.ActionEvent) =>
+      scala.util.Try(pane.read()) match
+        case scala.util.Failure(_) => pane.showError("Invalid category colours. Check the JSON and colour names."); event.consume()
+        case scala.util.Success((csv, cfg)) =>
+          apply(csv, cfg) match
+            case Right(warning) => pane.showError(""); warning.foreach(ctx.error)
+            case Left(error) => pane.showError(s"Could not save tag settings: $error"); event.consume())
+    dialog.getDialogPane.lookupButton(disable).addEventFilter(javafx.event.ActionEvent.ACTION, (event: javafx.event.ActionEvent) =>
+      ctx.services.updateSettingsChecked(_.copy(tagAutocompleteCsv = None)) match
+        case Right(_) =>
+          try ensureLoadedChecked()
+          catch case NonFatal(e) => ctx.error(s"Saved tag settings, but reload failed: ${sdfx.ui.Fx.message(e)}")
+        case Left(error) => pane.showError(s"Could not save tag settings: $error"); event.consume())
     val result = dialog.showAndWait().orElse(ButtonType.CANCEL)
-    if result == save then
-      val (csv, cfg) = pane.read()
-      apply(csv, cfg)
-    else if result == disable then
-      ctx.services.updateSettings(_.copy(tagAutocompleteCsv = None))
-      ensureLoaded()
-    else if result == reloadButton then reload()
+    if result == reloadButton then
+      try reload()
+      catch case NonFatal(e) => ctx.error(s"Cannot reload tag suggestions: ${sdfx.ui.Fx.message(e)}")
 
 /** Settings form: local files (typed or browsed; empty = unused) and the completion options. */
 final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, owner: javafx.stage.Window):
@@ -140,6 +185,12 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
   private val preview = box("tac-preview", "Show extra network preview images", cfg.extraNetworkPreview)
   private val max = new Spinner[Integer](1, 50, cfg.maxResults)
   max.setId("tac-max"); max.setEditable(true)
+  private val colors = new TextArea(cfg.categoryColorMap)
+  colors.setId("tac-colormap"); colors.setPrefRowCount(3); colors.setWrapText(true)
+  colors.setPromptText("{\"danbooru\": {\"4\": [\"lightgreen\", \"darkgreen\"]}}")
+  private val colorError = new Label()
+  colorError.setWrapText(true); colorError.getStyleClass.add("error")
+  def showError(message: String): Unit = colorError.setText(message)
 
   private def row(label: String, field: TextField, filter: FileChooser.ExtensionFilter): HBox =
     val browse = new javafx.scene.control.Button("Browse…")
@@ -160,29 +211,35 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
       .zipWithIndex.foreach((c, i) => options.add(c, i % 2, i / 2))
     val maxRow = new HBox(6, new Label("Maximum results"), max)
     val help = new Label("Up/Down: select · Enter/Tab: insert · Escape: close · __ wildcards · < extra networks")
+    val missingHelp = new Label("A listed source uses only its listed categories; omitted categories have no coloured marker.")
+    missingHelp.setWrapText(true)
     val v = new VBox(8,
       new Label("Local files only; nothing is downloaded. Leave a path empty to turn that source off."),
       row("Tag CSV", tags, csv), row("Translation CSV", translation, csv), row("Extra tag CSV", extra, csv),
       row("Chants JSON", chantsField, new FileChooser.ExtensionFilter("JSON", "*.json")),
-      options, maxRow, help)
+      options, maxRow, new Label("Category colours JSON (source: category: [dark, light])"),
+      missingHelp, colors, colorError, help)
     v.setPadding(new Insets(4))
     v
 
   private def opt(f: TextField): Option[String] = Option(f.getText).map(_.trim).filter(_.nonEmpty)
   def read(): (Option[String], TagCompleteSettings) =
+    TagCategoryColors.parse(colors.getText)
     val n = try max.getEditor.getText.trim.toInt.max(1).min(50) catch case _: NumberFormatException => cfg.maxResults
     (opt(tags), TagCompleteSettings(
       translationCsv = opt(translation), translationLegacy = legacy.isSelected, extraCsv = opt(extra), extraAfter = extraAfter.isSelected,
       chantsJson = opt(chantsField), maxResults = n, replaceUnderscores = underscores.isSelected, escapeParens = escape.isSelected,
       appendComma = comma.isSelected, searchByAlias = alias.isSelected, onlyShowAlias = onlyAlias.isSelected,
       wildcards = wildcards.isSelected, extraNetworks = networks.isSelected, chants = chantsBox.isSelected,
-      loraTriggerWords = trigger.isSelected, extraNetworkPreview = preview.isSelected))
+      loraTriggerWords = trigger.isSelected, extraNetworkPreview = preview.isSelected, categoryColorMap = colors.getText))
 
 /** What the popup needs from its owner. */
 trait CompletionSource:
   def ensureLoaded(): Unit
   def complete(text: String, caret: Int, selStart: Int, selEnd: Int): Option[CompletionResult]
   def previews: Boolean
+  def categoryColor(item: Suggestion, light: Boolean): Option[javafx.scene.paint.Color] =
+    item.category.flatMap(c => TagCategoryColors.color(Map.empty, None, c, light))
   def wildcardLines(name: String)(done: Either[Throwable, Vector[String]] => Unit): Unit = done(Right(Vector.empty))
   def wildcardContext: Any = ()
   def wildcardError(error: Throwable): Unit = ()
@@ -201,6 +258,7 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
       def ensureLoaded(): Unit = dictionary.ensureLoaded()
       def complete(text: String, caret: Int, selStart: Int, selEnd: Int): Option[CompletionResult] = dictionary.complete(text, caret, selStart, selEnd)
       def previews: Boolean = dictionary.config.extraNetworkPreview
+      override def categoryColor(item: Suggestion, light: Boolean): Option[javafx.scene.paint.Color] = dictionary.categoryColor(item, light)
       override def wildcardLines(name: String)(done: Either[Throwable, Vector[String]] => Unit): Unit = dictionary.wildcardLines(name)(done)
       override def wildcardContext: Any = dictionary.wildcardContext
       override def wildcardError(error: Throwable): Unit = dictionary.wildcardError(error)
@@ -221,7 +279,6 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
   list.setFocusTraversable(false)
   list.setPrefWidth(420)
   list.setCellFactory(_ => new ListCell[Suggestion]():
-    private val categoryColors = Map(0 -> "#59a8ee", 1 -> "#ee7777", 3 -> "#bd8df1", 4 -> "#73c98b", 5 -> "#e9b45f")
     setOnMousePressed(e =>
       if getItem != null then
         list.getSelectionModel.select(getItem)
@@ -238,8 +295,9 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
       if !empty && item != null then
         item.category.foreach { category =>
           setAccessibleText(s"${item.label}, ${item.detail}, category $category")
-          categoryColors.get(category).foreach { color =>
-            val dot = new javafx.scene.shape.Circle(4, javafx.scene.paint.Color.web(color))
+          val light = Option(area.getScene).exists(_.getStylesheets.asScala.exists(_.endsWith("light.css")))
+          source.categoryColor(item, light).foreach { color =>
+            val dot = new javafx.scene.shape.Circle(4, color)
             dot.setStroke(javafx.scene.paint.Color.web("#343b46"))
             dot.setStrokeWidth(0.8)
             dot.setAccessibleText(s"category $category")

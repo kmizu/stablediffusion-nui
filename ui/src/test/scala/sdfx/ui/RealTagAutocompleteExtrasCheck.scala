@@ -123,6 +123,7 @@ object RealTagAutocompleteExtrasCheck:
         def field(id: String) = root.lookup("#" + id).asInstanceOf[TextField]
         field("tac-tags").setText(tagCsv.toString); field("tac-translation").setText(translationCsv.toString)
         field("tac-extra").setText(extraCsv.toString); field("tac-chants-file").setText(chantsJson.toString)
+        root.lookup("#tac-colormap").asInstanceOf[TextArea].setText("""{"tags":{"4":["red","blue"],"1":["gold","purple"]},"extra":{"0":["lime","orange"]}}""")
         check("dialog exposes the new options")(Seq("tac-underscores", "tac-escape", "tac-comma", "tac-alias", "tac-wildcards",
           "tac-networks", "tac-chants", "tac-trigger", "tac-preview", "tac-legacy", "tac-extra-after").forall(id => root.lookup("#" + id).isInstanceOf[CheckBox]))
         ImageIO.write(SwingFXUtils.fromFXImage(dialog.getScene.snapshot(null), null), "png", run.resolve("01-dialog.png").toFile)
@@ -190,6 +191,16 @@ object RealTagAutocompleteExtrasCheck:
           check(s"first row of '$typed' is '$label'")(editor.completionItems(down).label == label)
           if label == "blue_hair" then check("translated tag retains category 4")(editor.completionItems(down).category.contains(4))
           if label == "Basic-HighQuality" then check("chant retains category 1")(editor.completionItems(down).category.contains(1))
+          if Set("blue_hair", "Basic-HighQuality", "masterpiece")(label) then
+            val popup = Window.getWindows.asScala.collectFirst { case p: PopupWindow if p.isShowing => p }.get
+            popup.getScene.getRoot.applyCss(); popup.getScene.getRoot.layout()
+            val cell = popup.getScene.getRoot.lookupAll(".list-cell").asScala.collectFirst {
+              case c: javafx.scene.control.ListCell[?] if Option(c.getItem).exists(_.isInstanceOf[sdfx.ui.vm.Suggestion]) &&
+                  c.getItem.asInstanceOf[sdfx.ui.vm.Suggestion].label == label => c
+            }.get
+            val expected = if label == "blue_hair" then javafx.scene.paint.Color.RED
+              else if label == "Basic-HighQuality" then javafx.scene.paint.Color.GOLD else javafx.scene.paint.Color.LIME
+            check(s"$label uses the correct source colour")(cell.getGraphic.asInstanceOf[javafx.scene.shape.Circle].getFill == expected)
           if expectPreview then check(s"preview window shown for '$typed'")(editor.previewVisible)
         }
         if expectPreview then
