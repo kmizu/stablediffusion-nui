@@ -13,7 +13,7 @@ import sdfx.core.plugins.api.Control.*
   */
 object BatchFaceSwapPlugin:
   val InfotextKey = "Batch Face Swap"
-  val Detectors: Seq[String] = Seq("face_yolov8n.pt", "face_yolov8s.pt", "face_yolov8m.pt", "face_yolov9c.pt", "opencv_face")
+  val Detectors: Seq[String] = Seq("face_yolov8n.pt", "face_yolov8s.pt", "face_yolov8m.pt", "face_yolov9c.pt", "opencv_face", "mediapipe_face")
   val Shapes: Seq[String] = Seq("ellipse", "box")
 
   /** Engine default of each hook field, in hook order. */
@@ -78,7 +78,8 @@ class BatchFaceSwapPlugin extends HookPlugin:
       "resolution (the magnification of the redrawn crop) and an elliptical or rectangular mask scaled around each " +
       "face. [PROMPT] in the face prompt inserts the main prompt and [SEP] gives each face (left to right) its own. " +
       "YOLO face models download from Bingsu/adetailer on first use; opencv_face needs no download but finds few " +
-      "anime faces. Not provided: a different checkpoint for the face pass, the img2img folder input."
+      "anime faces. mediapipe_face needs the optional MediaPipe package and downloads the short-range BlazeFace model " +
+      "on first use. Not provided: a different checkpoint for the face pass, the img2img folder input."
 
   override def controls: Seq[Control] = Seq(
     Check("enabled", "Enabled"),

@@ -59,7 +59,7 @@ def normalize_units(cfg: dict) -> list[dict]:
 
 # ----------------------------------------------------------------------------------------------------- detection
 def resolve_model(name: str, model_dirs: Optional[list] = None) -> str:
-    if name == "opencv_face" or os.path.isfile(name):
+    if name in ("opencv_face", "mediapipe_face") or os.path.isfile(name):
         return name
     for d in model_dirs or []:
         p = os.path.join(d, name)
@@ -82,6 +82,9 @@ def _box_mask(size, boxes) -> list:
 
 
 def detect(image, model: str, confidence: float, device: str = "cuda") -> Detection:
+    if model == "mediapipe_face":
+        from . import mediapipe_face
+        return mediapipe_face.detect(image, confidence)
     if model == "opencv_face":
         from .extras import face_boxes
         boxes = [(x, y, x + w, y + h) for x, y, w, h in face_boxes(image)]
@@ -219,4 +222,7 @@ __all__ = ["match_colors", "UNIT_DEFAULTS", "HF_MODELS", "normalize_units", "res
 
 def loaded_snapshot(model):
     """Identity captured before loading the cached detector weights."""
+    if model == 'mediapipe_face':
+        from .mediapipe_face import _last_snapshot
+        return _last_snapshot
     return getattr(_yolo_cache.get(model), '_sdfx_resource_snapshot', None)

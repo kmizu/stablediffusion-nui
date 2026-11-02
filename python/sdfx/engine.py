@@ -2148,11 +2148,14 @@ class Engine(BaseEngine):
                         masks = adm.unit_masks(im, {**u, 'model': resolved}, dev, cfg.get("model_dirs"))
                         if resolved != 'opencv_face':
                             from .resource_hashes import record_file
-                            record_file(ctx.resource_hashes, 'adetailer', resolved, ctx.warn, adm.loaded_snapshot(resolved))
+                            resource = adm.loaded_snapshot(resolved)
+                            resource_path = str(resource.path) if resolved == 'mediapipe_face' and resource else resolved
+                            record_file(ctx.resource_hashes, 'adetailer', resource_path, ctx.warn, resource)
                     else:
                         masks = adm.unit_masks(im, u, dev, cfg.get("model_dirs"))
                 except ImportError as e:
-                    raise EngineError(UNSUPPORTED, f"ADetailer model '{u['model']}' needs the ultralytics package: {e}")
+                    package = 'mediapipe' if u['model'] == 'mediapipe_face' else 'ultralytics'
+                    raise EngineError(UNSUPPORTED, f"ADetailer model '{u['model']}' needs the {package} package: {e}")
                 except FileNotFoundError as e:
                     raise EngineError(INVALID_PARAMS, str(e))
                 if not masks:

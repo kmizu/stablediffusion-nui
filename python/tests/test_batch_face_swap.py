@@ -1,5 +1,6 @@
 """Batch Face Swap: settings, face-shaped masks and the face pass inside generation (stubbed model calls)."""
 import io
+import sys
 from types import SimpleNamespace
 
 import numpy as np
@@ -172,6 +173,19 @@ def test_bad_settings_fail_before_any_image_is_drawn(harness):
     with pytest.raises(EngineError):
         engine.txt2img(request, context())
     assert not [c for c in calls if c[0] == "run"]
+
+
+def test_missing_mediapipe_reports_the_optional_package(harness, monkeypatch):
+    from sdfx import mediapipe_face
+    from sdfx.protocol import UNSUPPORTED
+    engine, request, _ = harness
+    monkeypatch.setattr(mediapipe_face, "model_path", lambda: "unused.tflite")
+    monkeypatch.setitem(sys.modules, "mediapipe", None)
+    request["params"]["hooks"]["batch_face_swap"] = dict(detector="mediapipe_face")
+    with pytest.raises(EngineError) as error:
+        engine.txt2img(request, context())
+    assert error.value.code == UNSUPPORTED
+    assert "needs the mediapipe package" in str(error.value)
 
 
 def test_feature_is_advertised_and_known():

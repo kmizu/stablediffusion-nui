@@ -222,6 +222,7 @@ BASE = [
     ("onnx/onnx", "dependency", "Optional local WD v3 model structure inspection"),
     ("microsoft/onnxruntime", "dependency", "WD14 tagger and optional local WD v3 batch inference"),
     ("ultralytics/ultralytics", "dependency", "YOLO detectors for ADetailer (optional Python package)"),
+    ("google-ai-edge/mediapipe", "dependency", "Optional MediaPipe Tasks face detector for Batch Face Swap; BlazeFace short-range v1 is downloaded on first use from Google and verified by size and SHA-256. Its model card states Apache-2.0; neither model nor package is bundled."),
     ("danielgatis/rembg", "dependency", "background removal models (optional Python package)"),
     ("FFmpeg/FFmpeg", "dependency", "Optional external ffmpeg executable for Save Intermediate, Steps Animation and AnimateDiff (MP4 / WEBM) video export; "
      "no FFmpeg binary is bundled or installed by this app. Upstream LICENSE.md explains build-dependent licensing: "
@@ -258,6 +259,7 @@ BASE = [
 # Keep these source-pinned original LICENSE bytes; do not normalize newlines.
 # (commit, license path, SHA-256, SPDX)
 PINNED_LICENSES = {
+    "google-ai-edge/mediapipe": ("f9967ed5df2009941084393d99abcbdd0e1c0bcd", "LICENSE", "8707eef0533987efc5b155d64761eeb6e20793f50b9bd1a68dad1cf4719d0ed8", "Apache-2.0"),
     "pharmapsychotic/clip-interrogator": ("bc07ce62c179d3aab3053a623d96a071101d11cb", "LICENSE", "7e1e37e5be417bda424b5c834169653b31353f1d10640c7f1dd62bf56a5c677b", "MIT"),
     "pharmapsychotic/clip-interrogator-ext": ("0f1a4591f82b93859a1b854afb79494f39384662", "LICENSE", "882ca262c9f5da6be4f93fb52394b8a7525d41b68594afa8e7ef5de2bed2a6f4", "MIT"),
     "tritant/sd-webui-creaprompt": ("31fe03143206399c704cee7939de9dbf80c9a84e", "LICENSE", "24117be216b3220c64f30b68a96160a73247a3b371086d1d273807b4634ae0fa", "MIT"),

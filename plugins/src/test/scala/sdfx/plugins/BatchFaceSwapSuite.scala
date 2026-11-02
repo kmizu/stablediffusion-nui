@@ -58,6 +58,13 @@ class BatchFaceSwapSuite extends munit.FunSuite:
     assertEquals(restored.str("custom_detector"), "/m/anime_face.pt")
     assertEquals(plugin.process(GenerationParams(), restored).hooks(plugin.id)("detector").str, "/m/anime_face.pt")
 
+  test("MediaPipe selection is retained through infotext replay"):
+    val params = plugin.process(GenerationParams(), enabled("detector" -> "mediapipe_face"))
+    val restored = BatchFaceSwapPlugin.replay(params.extra).get
+    assertEquals(restored.str("detector"), "mediapipe_face")
+    assertEquals(restored.str("custom_detector"), "")
+    assertEquals(plugin.process(GenerationParams(), restored).hooks(plugin.id)("detector").str, "mediapipe_face")
+
   test("replay disables the plugin for other PNGs and rejects what the engine would reject"):
     assertEquals(BatchFaceSwapPlugin.replay(Map.empty).get.str("enabled"), "false")
     assertEquals(BatchFaceSwapPlugin.replay(Map("Batch Face Swap" -> "{}")).get.str("enabled"), "true")
