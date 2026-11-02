@@ -273,16 +273,17 @@ It does not establish full-size SDXL quality or fit/performance on 4GB hardware.
 
 ## Dependency boundary and native basic inpainting (2026-11-03)
 
-The inference implementation boundary lives in the NUI `engine` module. The UI
+The inference implementation boundary lives in the NUI `engine` module. All
+PyTorch imports and runtime requirements stay in the Python engine there; NUI's
+JVM/SBT build has no PyTorch dependency. The native `scala-torch` adapter also
+lives only in `engine` and starts its worker as a separate Java process. The UI
 uses `EngineSelection` for startup policy and the shared `EngineClient` protocol
-for generation; it does not inspect `ScalaTorchLaunch` or link scala-torch model
-classes. `EngineBackend` owns Python and scala-torch launch selection, while
-`ScalaTorchLaunch` starts the worker as a separate Java process. The PyTorch
-runtime itself remains in the Python environment (`python/requirements-torch.txt`)
-and is not a JVM or SBT dependency. Replacing either inference implementation
-therefore does not require changes to Generator, plugins, MCP, or the common
-request/response protocol. Backend-specific settings remain serialized in core
-configuration, but no inference library types cross that boundary.
+for generation; it does not inspect either launch adapter or link scala-torch
+model classes. Replacing an inference implementation therefore does not require
+changes to Generator, plugins, MCP, or the common request/response protocol.
+Backend-specific settings remain serialized in core configuration, but no
+inference library types cross that boundary. Keep future PyTorch/runtime-specific
+code inside this engine boundary so another implementation can replace it cleanly.
 
 The opt-in `NativeGeneratorSuite` SDXL Generator test now sends a local mask
 through the real `AppServices` and `Generator` path, with U-Net/VAE CUDA placement
@@ -339,3 +340,9 @@ PNG path; semantic color editing at this strength is not accepted. It also
 shows that 512px masked generation on this 4 GiB setup is slow with FP32 weight
 offload. These measurements do not establish speed on a 6 GiB GPU without
 offload.
+
+The same test also ran at strength 1.0 (20 active steps) and passed in
+1232.3 seconds on the same GPU. The black half stayed pixel-identical and the
+white half changed, but the apple remained red. Increasing strength alone did
+not solve the semantic color edit. The generated image and source are saved in
+`.superpowers/native-sd15-nui-inpaint-strength1/` for comparison.

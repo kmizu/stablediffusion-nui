@@ -12,15 +12,17 @@ import scala.concurrent.duration.*
 
 /** Repaints a real 512px SD1.5 image through NUI Generator with no Python process. */
 class NativeRealInpaintSuite extends munit.FunSuite:
-  override val munitTimeout: Duration=15.minutes
+  override val munitTimeout: Duration=25.minutes
 
   test("NUI Generator inpaints a real 512px SD1.5 image through the native CUDA worker") {
     val cpFile=sys.env.get("SCALATORCH_WORKER_CLASSPATH_FILE")
     val model=sys.env.get("SCALATORCH_SD15_MODEL")
     val sourcePath=sys.env.get("SCALATORCH_SD15_SOURCE_IMAGE")
     val outputDir=sys.env.get("SCALATORCH_SAMPLE_OUTPUT_DIR")
+    val strength=sys.env.get("SCALATORCH_INPAINT_STRENGTH").fold(0.5)(_.toDouble)
     assume(cpFile.nonEmpty && model.nonEmpty && sourcePath.nonEmpty && outputDir.nonEmpty,
       "worker classpath, SD1.5 model, source image and output directory required")
+    require(strength.isFinite && strength>=0 && strength<=1,"inpaint strength must be in 0..1")
 
     val root=Path.of(model.get).toAbsolutePath.normalize()
     val source=Path.of(sourcePath.get).toAbsolutePath.normalize()
@@ -58,7 +60,7 @@ class NativeRealInpaintSuite extends munit.FunSuite:
         seed=42,samplerName="DPM++ 2M",scheduler="Karras",steps=20,cfgScale=7.5,
         width=512,height=512,
         img2img=Some(Img2ImgParams(source.toString,mask=Some(maskPath.toString),
-          denoisingStrength=0.5,resizeMode=0,maskBlur=0)))
+          denoisingStrength=strength,resizeMode=0,maskBlur=0)))
       val generated=services.generator.generate(params).head
       val result=PngMetadata.readImage(generated.path)
       assertEquals(result.getWidth,512)
@@ -71,7 +73,7 @@ class NativeRealInpaintSuite extends munit.FunSuite:
       val parsed=Infotext.parse(recorded)
       assertEquals(parsed.prompt,params.prompt)
       assertEquals(parsed.get("Seed"),Some("42"))
-      assertEquals(parsed.get("Denoising strength"),Some("0.5"))
+      assert(parsed.get("Denoising strength").nonEmpty)
       assert(!Files.exists(home.pythonDir))
       assert(services.supervisor.isRunning)
 
