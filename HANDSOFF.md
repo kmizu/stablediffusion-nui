@@ -12,6 +12,9 @@
 - #18 ControlNet 前処理: main `0f9ff4a` に選択ファイル一括処理を部分統合。保護セッション切替時の公開を staging とロックで守り、実 engine の複数選択・失敗・cancel と保護 PNG 入出力も確認した。detector の許諾と実機、OS chooser 手操作などが残るため issue は open。`docs/controlnet-selected-batch-verification.md` を参照。
 - 追加調査: #2 の元拡張の固定 revision には正規 `.pt` fixture が見つからず、参照先の研究用 `.pt` が元拡張の出力と同一かは不明。詳細は `docs/aesthetic-gradients-verification.md`。#18 の配布版 chooser は隔離環境で起動したが、ウィンドウの入力座標を取得できず操作・検証できなかった。
 - ControlNet `inpaint` 前処理のマスク未反映は `_controlnets` を使う単体再現で確認した。通常の inpaint 自体のマスクとは別の問題。詳細と再現範囲は `docs/controlnet-fastload-verification.md`。修正・実モデル検証は未了。
+- ControlNet inpaint の WIP は `C:/Users/Mizushima/.codex/worktrees/controlnet-inpaint-mask/stablediffusion-nui`、branch `codex/controlnet-inpaint-mask`、`eba998b`（先行 commit 含む）。CPU 回帰と実 SD1.5 Engine の通常・only-masked crop・反転を確認し画像目視済み。GUI/MCP、複数 unit、SDXL、配布版、hook の組合せと暫定拒否の解消は未了。詳細は同 worktree の `docs/controlnet-inpaint-prototype.md`。main へ未統合。
+- #23 の単一設定復元は `C:/Users/Mizushima/.codex/worktrees/state-manager23/stablediffusion-nui` の `9f53430`、実モデル記録は `bd956f7`。offline 実 GUI・単体テストに加え、SD1.5/SDXL 実 GUI で復元後に生成し画像を目視。独立レビューで選択外の spinner/seed の未確定値まで commit されうる問題が見つかり修正中。#23 は open、main 未統合。
+- #24 の Wiki リンクは `C:/Users/Mizushima/.codex/worktrees/tag24-wiki/stablediffusion-nui`、branch `codex/tag24-wiki`、WIP `aed7da8`。途中版の単体18件は通過、最終の F1／特殊タグ対策は未検証。GUI テストの成功証跡がなく原因調査中。詳細は同 worktree の `docs/tag24-wiki-wip.md`。main 未統合、#24 open。
 - 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
 - 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 
