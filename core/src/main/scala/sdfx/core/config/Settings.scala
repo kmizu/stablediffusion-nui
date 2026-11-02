@@ -94,7 +94,11 @@ case class Settings(
     tagAutocompleteCsv: Option[String] = None,
     tagComplete: TagCompleteSettings = TagCompleteSettings(),
     hiresFixTweaks: HiresFixTweaksPreferences = HiresFixTweaksPreferences(),
-    localization: LocalizationPreferences = LocalizationPreferences()
+    localization: LocalizationPreferences = LocalizationPreferences(),
+    scalaTorchClasspath: Option[String] = None,
+    scalaTorchModel: Option[String] = None,
+    scalaTorchScheduler: Option[String] = None,
+    scalaTorchJava: Option[String] = None
 ) derives RW
 
 case class SettingsRecovery(reason: String, originalSha256: Option[String])

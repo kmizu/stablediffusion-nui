@@ -27,6 +27,10 @@ class ScalaTorchLaunchSuite extends munit.FunSuite:
       val launch=EngineBackend.launch(sdfx.core.config.AppHome(temp),
         sdfx.core.config.Settings(engineBackend="scala-torch"),false,env)
       assertEquals(launch.command.last,scheduler.toString)
+      val fromSaved=EngineBackend.launch(sdfx.core.config.AppHome(temp),sdfx.core.config.Settings(
+        engineBackend="scala-torch",scalaTorchClasspath=Some(cp.toString),scalaTorchModel=Some(temp.toString),
+        scalaTorchScheduler=Some(scheduler.toString)),false,Map.empty)
+      assertEquals(fromSaved.command.last,scheduler.toString)
       intercept[IllegalArgumentException](EngineBackend.launch(sdfx.core.config.AppHome(temp),
         sdfx.core.config.Settings(engineBackend="invalid"),false,env))
     finally

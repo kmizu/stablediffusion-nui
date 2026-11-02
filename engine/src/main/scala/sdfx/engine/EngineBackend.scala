@@ -30,6 +30,14 @@ private[engine] object EngineBackend:
       case None => if ScalaTorchLaunch.requested(environment) then ScalaTorch else Python
 
   def launch(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]=sys.env): EngineLaunch =
-    val configured=if environment.contains("SDFX_ENGINE_BACKEND") || settings.engineBackend=="auto" then environment
+    val configured0=if environment.contains("SDFX_ENGINE_BACKEND") || settings.engineBackend=="auto" then environment
       else environment.updated("SDFX_ENGINE_BACKEND",settings.engineBackend)
+    val saved=Seq(
+      "SDFX_SCALATORCH_CLASSPATH_FILE"->settings.scalaTorchClasspath,
+      "SDFX_SCALATORCH_MODEL"->settings.scalaTorchModel,
+      "SDFX_SCALATORCH_SCHEDULER"->settings.scalaTorchScheduler,
+      "SDFX_SCALATORCH_JAVA"->settings.scalaTorchJava)
+    val configured=saved.foldLeft(configured0) { case (env,(key,value)) =>
+      if env.contains(key) then env else value.map(v => env.updated(key,v)).getOrElse(env)
+    }
     select(home,settings,dryRun,configured).launch(home,settings,dryRun,configured)

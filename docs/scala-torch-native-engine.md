@@ -237,11 +237,15 @@ explicit native choice validation, old environment opt-in, and no silent fallbac
 Python's PyTorch wheels remain separately pinned in `python/requirements-torch.txt`;
 the desktop/application modules do not acquire a PyTorch dependency.
 
-Settings now exposes `Inference backend` (`auto`, `python`, `scala-torch`).
+Settings now exposes `Inference backend` (`auto`, `python`, `scala-torch`) and
+file/folder pickers for the scala-torch worker classpath, Diffusers model folder,
+scheduler JSON and optional Java executable.
 Choosing scala-torch skips the first-run Python bootstrap and normalizes native
 weight loading to Float32/CPU; the actual U-Net/VAE compute device remains
-controlled by their `SDFX_SCALATORCH_*_DEVICE` settings. Native selection still
-requires the worker classpath, model and scheduler environment values.
+controlled by their `SDFX_SCALATORCH_*_DEVICE` settings. The picker values are
+saved in NUI settings and used directly; matching `SDFX_SCALATORCH_*` variables
+override them. The default Java executable is the current runtime and must be
+Java25 or newer for scala-torch.
 
 ## SDXL through Generator and PNG replay (2026-11-03)
 
