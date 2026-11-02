@@ -342,6 +342,7 @@ def test_actual_pipeline_call_routes_photomaker_both_prompts_without_mutating_ra
     from sdfx.conditioning_highres_fix import conditioning_scope
     scope = {'__package__': 'sdfx', 'torch': SimpleNamespace(inference_mode=nullcontext), 'nullcontext': nullcontext,
              'conditioning_scope': conditioning_scope, 'conditioning_weight': None, 'latent_source': None,
+             'vae_scope': lambda *args: nullcontext(), 'w': 64, 'h': 64, 'seeds': [1],
              'recovery': nullcontext(), 'prepare_noise': lambda *args: nullcontext(),
              'pipe': Pipeline(), 'noise_factory': None, 'kw': raw, 'photo_capture': None, 'nh': None, 'negative_runtime': None, 'forward_wrappers': [],
              'self': SimpleNamespace(pipe=object(), device='cuda'), 'xplan': SimpleNamespace(photomaker={'enabled': True}),
@@ -394,6 +395,7 @@ def test_actual_pipeline_call_merges_heterogeneous_photo_prompts_before_batch_br
     from sdfx.conditioning_highres_fix import conditioning_scope
     scope = {'__package__': 'sdfx', 'torch': SimpleNamespace(inference_mode=nullcontext), 'nullcontext': nullcontext,
              'conditioning_scope': conditioning_scope, 'conditioning_weight': None, 'latent_source': None,
+             'vae_scope': lambda *args: nullcontext(), 'w': 64, 'h': 64, 'seeds': [1],
              'recovery': nullcontext(), 'prepare_noise': lambda *args: nullcontext(), 'pipe': pipe,
              'noise_factory': None, 'kw': raw, 'photo_capture': None, 'nh': None, 'negative_runtime': None, 'forward_wrappers': [],
              'self': SimpleNamespace(pipe=object(), device='cuda'), 'xplan': SimpleNamespace(photomaker={'enabled': True}),

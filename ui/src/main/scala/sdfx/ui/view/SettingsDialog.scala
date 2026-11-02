@@ -35,6 +35,10 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
   private val dtype = new SimpleStringProperty(initial.dtype)
   private val vramIndex = new SimpleIntegerProperty(VramModes.index(initial.vramMode).max(0))
   private val vaeTiling = new SimpleBooleanProperty(initial.vaeTiling)
+  private val vaeSlicing = new SimpleBooleanProperty(initial.vaeSlicing)
+  private val fp8Storage = new SimpleBooleanProperty(initial.fp8Storage)
+  private val vaeAuto = new SimpleBooleanProperty(initial.vaeAuto)
+  private val vaeFp16 = new SimpleBooleanProperty(initial.vaeFp16)
   private val previewEvery = new SimpleIntegerProperty(initial.previewEvery)
   private val previewMethod = new SimpleStringProperty(initial.previewMethod)
   private val hfOffline = new SimpleBooleanProperty(initial.hfOffline)
@@ -129,8 +133,12 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
       W.form()
         .add("Python", browseRow(pythonExe, false, "Choose python executable"), "Python interpreter for the engine (empty = app venv, then system Python)")
         .add("Precision", W.combo(FXCollections.observableArrayList("fp16", "bf16", "fp32"), dtype), "Model weight precision (fp16 for most GPUs)")
-        .add("VRAM mode", W.indexCombo(VramModes.Modes.map(_._2), vramIndex), "GPU: everything stays on the GPU · Model offload: whole models move to the GPU when used · Sequential offload: layer by layer, slowest but lowest VRAM")
+        .add("VRAM mode", W.indexCombo(VramModes.Modes.map(_._2), vramIndex), "GPU: everything stays on the GPU · Model offload: whole models move to the GPU when used · Sequential offload: layer by layer, slowest but lowest VRAM · Auto: choose from the free VRAM at model load")
         .full(W.check("VAE tiling (decode large images in tiles to save VRAM)", vaeTiling))
+        .full(W.check("VAE slicing (decode a batch one image at a time to save VRAM)", vaeSlicing))
+        .full(W.check("Automatic VAE slicing / tiling when the decode would not fit the free VRAM", vaeAuto))
+        .full(W.check("fp16 VAE decode for SDXL (saves ~2.5 GB at 832x1216; falls back to fp32 on bad output)", vaeFp16))
+        .full(W.check("fp8 U-Net weights (half the U-Net VRAM, upcast per layer; GPU VRAM mode only)", fp8Storage))
         .full(W.check("Offline mode (never download from Hugging Face)", hfOffline))
         .full(W.check("Allow custom code (the Custom code script runs Python in the engine; like A1111 --allow-code)", allowCode))
         .full(W.label("Python, precision and VRAM changes apply after an engine restart.", "hint"))
@@ -216,6 +224,10 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
           dtype = dtype.get,
           vramMode = VramModes.Modes(vramIndex.get.max(0).min(VramModes.Modes.size - 1))._1,
           vaeTiling = vaeTiling.get,
+          vaeSlicing = vaeSlicing.get,
+          fp8Storage = fp8Storage.get,
+          vaeAuto = vaeAuto.get,
+          vaeFp16 = vaeFp16.get,
           previewEvery = previewEvery.get,
           previewMethod = previewMethod.get,
           hfOffline = hfOffline.get,

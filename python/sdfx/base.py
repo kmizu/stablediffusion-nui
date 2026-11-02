@@ -650,8 +650,8 @@ class BaseEngine:
             raise EngineError(MODEL_LOAD_FAILED, f"model file not found: {req.path}")
         if req.dtype not in ("fp16", "bf16", "fp32"):
             raise EngineError(INVALID_PARAMS, f"dtype must be fp16|bf16|fp32 (got {req.dtype})")
-        if req.vram_mode not in ("gpu", "model_offload", "sequential_offload"):
-            raise EngineError(INVALID_PARAMS, f"vram_mode must be gpu|model_offload|sequential_offload (got {req.vram_mode})")
+        from . import perf
+        perf.validate_load(req)
         if req.vae_path and not os.path.exists(req.vae_path):
             raise EngineError(MODEL_LOAD_FAILED, f"VAE file not found: {req.vae_path}")
         return req
@@ -777,8 +777,10 @@ class BaseEngine:
             if self.model is None or os.path.normcase(os.path.abspath(self.model["path"])) != os.path.normcase(os.path.abspath(ck)):
                 ctx.log("info", f"loading checkpoint {os.path.basename(ck)}")
                 opts = self.load_opts
-                self.load_model({"path": ck, "dtype": opts.dtype, "vram_mode": opts.vram_mode,
-                                 "vae_path": opts.vae_path, "vae_tiling": opts.vae_tiling}, ctx)
+                self.load_model({"path": ck, "dtype": opts.dtype, "vram_mode": getattr(self, "vram_requested", opts.vram_mode),
+                                 "vae_path": opts.vae_path, "vae_tiling": opts.vae_tiling, "vae_slicing": opts.vae_slicing,
+                                 "fp8_storage": opts.fp8_storage,
+                                 "vae_auto": opts.vae_auto, "vae_fp16": opts.vae_fp16}, ctx)
         if self.model is None:
             raise EngineError(NO_MODEL, "no model loaded (send load_model first)")
 

@@ -212,7 +212,8 @@ class ProtocolSuite extends munit.FunSuite:
       assertEquals(Json.fromJs[T](js), t)
     rt(ModelEntry("m", "p", "sdxl", 6617.5), "size_mb")
     rt(FileEntry("f", "p"), "size_mb")
-    rt(LoadModelRequest("p", vaePath = Some("v"), vaeTiling = true), "vae_path", "vae_tiling", "vram_mode")
+    rt(LoadModelRequest("p", vaePath = Some("v"), vaeTiling = true, vaeSlicing = true,
+      fp8Storage = true, vaeAuto = false, vaeFp16 = true), "vae_path", "vae_tiling", "vram_mode", "vae_slicing", "fp8_storage", "vae_auto", "vae_fp16")
     rt(LoadedModel("n", "p", "sdxl", "h", 1234, Some("vae"), Some("vh")), "loaded_ms", "vae_name", "vae_hash")
     rt(SamplerList(Seq(SamplerInfo("Euler a"), SamplerInfo("DDIM", false, "Uniform")), Seq("Automatic", "Karras")), "samplers", "schedulers")
     rt(SamplerInfo("x"), "default_scheduler")

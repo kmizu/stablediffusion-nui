@@ -199,6 +199,8 @@ def test_engine_run_wires_composable_photo_capture_and_cleans_up(monkeypatch, ca
             branch_value['_photo_raw_negative'] = 'bad'
     plan = Plan(parse('red person img AND blue person img'), branches)
     pipe, engine = Pipe(), Engine.__new__(Engine)
+    from sdfx.params import LoadModelRequest
+    engine.load_opts = LoadModelRequest()
     engine.sdxl = True; engine._composable_job = job; engine.pipe = pipe; engine.device = 'cpu'; engine.cuda = False; engine.dtype = torch.float32
     scheduler = diffusers.DDIMScheduler(clip_sample=False); scheduler.set_timesteps(2)
     engine._scheduler = lambda *a: (scheduler, None)

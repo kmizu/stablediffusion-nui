@@ -511,7 +511,7 @@ final class Generator(
         .getOrElse(throw EngineError(Protocol.ErrorCodes.InvalidParams, s"checkpoint not found: $name"))
       if !client.supervisor.loadedModel.exists(m => samePath(m.path, path)) then
         listener.onLog(s"loading checkpoint $name")
-        val m = await(client.loadModelOwned(LoadModelRequest(path, s.dtype, s.vramMode, None, s.vaeTiling), listener.interruptionOwner), timeouts.load, "load_model")
+        val m = await(client.loadModelOwned(LoadModelRequest(path, s.dtype, s.vramMode, None, s.vaeTiling, s.vaeSlicing, s.fp8Storage, s.vaeAuto, s.vaeFp16), listener.interruptionOwner), timeouts.load, "load_model")
         catalog.rememberHash(m)
     }
     p.vae.map(_.trim).filter(_.nonEmpty).foreach { v =>

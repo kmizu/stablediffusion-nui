@@ -214,6 +214,11 @@ class LoadModelRequest:
     vram_mode: str = "gpu"
     vae_path: Optional[str] = None
     vae_tiling: bool = False
+    # Low-VRAM / speed options (sdfx.perf); every one defaults to off. vram_mode may also be "auto".
+    vae_slicing: bool = False
+    fp8_storage: bool = False
+    vae_auto: bool = True      # slice / tile the VAE decode only when it would not fit the free VRAM
+    vae_fp16: bool = False     # decode force-upcast VAEs (SDXL) in fp16, falling back to fp32 on non-finite output
 
 
 @dataclass

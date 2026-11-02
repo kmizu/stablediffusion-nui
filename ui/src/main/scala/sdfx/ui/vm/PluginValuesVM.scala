@@ -138,6 +138,7 @@ final class PluginsVM(val mode: Mode, scripts: Seq[Plugin], alwaysOnPlugins: Seq
     sdfx.plugins.AestheticScorePlugin.replay(fields).foreach(values => form("aesthetic_score").foreach(_.load(values)))
     sdfx.plugins.ClipIoPlugin.replay(fields).foreach(values => form("clip_io").foreach(_.load(values)))
     sdfx.plugins.CompilePlugin.replay(fields).foreach(values => form("compile").foreach(_.load(values)))
+    sdfx.plugins.DeepCachePlugin.replay(fields).foreach(values => form("deepcache").foreach(_.load(values)))
     def flag(key: String): Option[Boolean] = fields.get(key).flatMap { v =>
       v.trim.toLowerCase(java.util.Locale.ROOT) match
         case "true" => Some(true)

@@ -1017,7 +1017,8 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
             reloadGallery()
             imageBrowser.build()
           val engineChanged = s.pythonExe != before.pythonExe || s.dtype != before.dtype || s.vramMode != before.vramMode ||
-            s.vaeTiling != before.vaeTiling || s.hfOffline != before.hfOffline ||
+            s.vaeTiling != before.vaeTiling || s.vaeSlicing != before.vaeSlicing || s.fp8Storage != before.fp8Storage ||
+            s.vaeAuto != before.vaeAuto || s.vaeFp16 != before.vaeFp16 || s.hfOffline != before.hfOffline ||
             WdSettingsState.restartRequired(before, s)
           if engineChanged then
             val a = new Alert(Alert.AlertType.CONFIRMATION, "Engine settings changed. Restart the engine now?", ButtonType.NO, ButtonType.YES)

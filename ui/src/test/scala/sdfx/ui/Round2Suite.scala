@@ -29,7 +29,7 @@ class Round2Suite extends munit.FunSuite:
   }
 
   test("VRAM modes: engine values only, legacy values mapped") {
-    assertEquals(VramModes.Modes.map(_._1), Seq("gpu", "model_offload", "sequential_offload"))
+    assertEquals(VramModes.Modes.map(_._1), Seq("gpu", "model_offload", "sequential_offload", "auto"))
     assertEquals(VramModes.normalize("medvram"), "model_offload")
     assertEquals(VramModes.normalize("lowvram"), "sequential_offload")
     assertEquals(VramModes.normalize("cpu"), "sequential_offload")
