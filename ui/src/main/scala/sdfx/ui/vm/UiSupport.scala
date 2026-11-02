@@ -135,6 +135,7 @@ object SettingsMerge:
       modelDirs = edited.modelDirs,
       outputDir = edited.outputDir,
       hiresFixTweaks = edited.hiresFixTweaks,
+      localization = edited.localization,
       pythonExe = edited.pythonExe,
       dtype = edited.dtype,
       vramMode = edited.vramMode,

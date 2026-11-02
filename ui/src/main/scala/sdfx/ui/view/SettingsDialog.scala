@@ -12,7 +12,8 @@ import sdfx.ui.vm.{VramModes, WdSettingsState}
 import scala.jdk.CollectionConverters.*
 
 /** Settings editor. Returns the edited settings; the caller applies them. */
-final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0, wdWorkerReported: Option[Boolean] = None):
+final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0, wdWorkerReported: Option[Boolean] = None,
+    localization: Option[sdfx.ui.i18n.LocalizationController] = None):
   private val kinds = Seq("Checkpoints", "VAE", "LoRA", "ControlNet", "Embeddings", "Upscalers", "Face restore", "SVD",
     "Zero123", "PhotoMaker")
   private val dirs: Map[String, ObservableList[String]] =
@@ -180,7 +181,10 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
     .full(W.check("Restore matching Hires prompt templates from image metadata", hiresRestoreTemplate))
     .add("Checkpoint labels", W.combo(FXCollections.observableArrayList(sdfx.ui.vm.CheckpointLabels.modes*), hiresCheckpointLabels),
       "Changes displayed names only. Hires uses the first-pass checkpoint; duplicate filenames retain an identifier.")))
-  private val tabs = new TabPane(modelsTab, generalTab, engineTab, mcpTab, wdTab, hiresTab)
+  private val languagePane = new LanguageSettingsPane(owner, initial.localization, localization)
+  private val languageTab = new Tab("Language", languagePane.node)
+  languageTab.setId("settings-language-tab")
+  private val tabs = new TabPane(modelsTab, generalTab, engineTab, mcpTab, wdTab, hiresTab, languageTab)
   tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE)
   tabs.setPrefSize(720, 440)
   tabs.getSelectionModel.select(initialTab.max(0).min(tabs.getTabs.size - 1))
@@ -201,6 +205,7 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
       Some(
         initial.copy(
           modelDirs = currentDirs,
+          localization = languagePane.current,
           outputDir = Option(outputDir.get).map(_.trim).filter(_.nonEmpty).getOrElse("outputs"),
           hiresFixTweaks = initial.hiresFixTweaks.copy(outputDir = Option(hiresOutputDir.get).fold("")(_.trim),
             showCfg = hiresShowCfg.get, showBatchSeed = hiresShowBatchSeed.get,
@@ -224,4 +229,6 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
           wdV3Tags = Option(wdTags.get).map(_.trim).filter(_.nonEmpty)
         )
       )
-    else None
+    else
+      localization.foreach(_.setExtraDirs(initial.localization.extraDirs)) // folders added in the Language tab were not saved
+      None

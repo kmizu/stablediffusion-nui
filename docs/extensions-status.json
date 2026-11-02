@@ -15,7 +15,7 @@
 "index": 2,
 "name": "ua_UA Localization",
 "url": "https://github.com/razorback456/webui-localization-ua_UA",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 3,
@@ -225,7 +225,7 @@
 "index": 37,
 "name": "Bilingual Localization",
 "url": "https://github.com/journey-ad/sd-webui-bilingual-localization.git",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 38,
@@ -783,91 +783,91 @@
 "index": 130,
 "name": "zh_CN Localization",
 "url": "https://github.com/dtlnor/stable-diffusion-webui-localization-zh_CN",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 131,
 "name": "zh_TW Localization",
 "url": "https://github.com/harukaxxxx/stable-diffusion-webui-localization-zh_TW.git",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 132,
 "name": "ko_KR Localization",
 "url": "https://github.com/36DB/stable-diffusion-webui-localization-ko_KR",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 133,
 "name": "th_TH Localization",
 "url": "https://github.com/econDS/thai-localization-for-Automatic-stable-diffusion-webui",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 134,
 "name": "es_ES Localization",
 "url": "https://github.com/innovaciones/stable-diffusion-webui-localization-es_ES",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 135,
 "name": "it_IT Localization",
 "url": "https://github.com/Harvester62/stable-diffusion-webui-localization-it_IT",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 136,
 "name": "de_DE Localization",
 "url": "https://github.com/Strothis/stable-diffusion-webui-de_DE",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 137,
 "name": "ja_JP Localization",
 "url": "https://github.com/AI-Creators-Society/stable-diffusion-webui-localization-ja_JP",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 138,
 "name": "pt_BR Localization",
 "url": "https://github.com/M-art-ucci/stable-diffusion-webui-localization-pt_BR",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 139,
 "name": "tr_TR Localization",
 "url": "https://github.com/camenduru/stable-diffusion-webui-localization-tr_TR",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 140,
 "name": "no_NO Localization",
 "url": "https://github.com/Cyanz83/stable-diffusion-webui-localization-no_NO",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 141,
 "name": "ru_RU Localization",
 "url": "https://github.com/ProfaneServitor/stable-diffusion-webui-localization-ru_RU",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 142,
 "name": "fi_FI Localization",
 "url": "https://github.com/otsoniemi/stable-diffusion-webui-localization-fi_FI",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 143,
 "name": "zh_Hans Localization",
 "url": "https://github.com/hanamizuki-ai/stable-diffusion-webui-localization-zh_Hans.git",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 144,
 "name": "old localizations",
 "url": "https://github.com/AUTOMATIC1111/stable-diffusion-webui-old-localizations.git",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 145,
@@ -1257,7 +1257,7 @@
 "index": 209,
 "name": "zh_Hant Localization",
 "url": "https://github.com/bluelovers/stable-diffusion-webui-localization-zh_Hant.git",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 210,
@@ -1887,7 +1887,7 @@
 "index": 314,
 "name": "Bilingual Localization Refactored Fork",
 "url": "https://github.com/bluelovers/sd-webui-bilingual-localization.git",
-"status": "todo:core:localization"
+"status": "done:core:localization"
 },
 {
 "index": 315,

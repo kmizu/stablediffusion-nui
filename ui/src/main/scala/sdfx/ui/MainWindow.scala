@@ -891,13 +891,14 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   def openSettings(tab: Int = 0): Unit =
     val before = services.settings
     val wdReported = services.supervisor.hello.map(_.features.contains("batch_interrogate_wd_v3_partial"))
-    new SettingsDialog(stage, before, tab, wdReported).showAndWait().foreach { edited =>
+    new SettingsDialog(stage, before, tab, wdReported, Some(localization)).showAndWait().foreach { edited =>
       services.updateSettingsChecked(cur => SettingsMerge(cur, edited)) match
         case Left(reason) => ctx.error(reason)
         case Right(s) =>
           ctx.hiresPreferences.set(s.hiresFixTweaks)
           if s.mcpHttpEnabled != before.mcpHttpEnabled || s.mcpHttpPort != before.mcpHttpPort || s.mcpToken != before.mcpToken then applyMcp(s)
           if s.theme != before.theme then Theme.apply(scene, s.theme)
+          if s.localization != before.localization then applyLocalization()
           if s.modelDirs != before.modelDirs then refreshCatalog()
           if s.outputDir != before.outputDir || s.hiresFixTweaks.outputDir != before.hiresFixTweaks.outputDir then
             services.resetGallery()
@@ -955,6 +956,12 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   ))
   vramPoll.setCycleCount(javafx.animation.Animation.INDEFINITE)
 
+  // ---- interface language ------------------------------------------------------------------------------
+  val localization = new sdfx.ui.i18n.LocalizationController(services.home.root, services.settings.localization.extraDirs)
+  private def applyLocalization(): Unit =
+    localization.apply(services.settings.localization).foreach(problem => ctx.error("Language pack: " + problem))
+    localization.localizer.sweepRoot(scene.getRoot)
+
   // ---- window state ------------------------------------------------------------------------------------
   def show(): Unit =
     stage.setTitle(s"Stable Diffusion NUI${if services.dryRun then " (dry run)" else ""}")
@@ -970,7 +977,9 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     stage.setWidth(w.width.max(1280))
     stage.setHeight(w.height.max(800))
     stage.setMaximized(w.maximized)
+    applyLocalization()
     stage.show()
+    localization.localizer.sweepNow()
     // Divider positions are re-applied while the window settles (the first heights can be pre-layout ones),
     // then left alone so user drags stick.
     def applyDividers(): Unit =
@@ -999,7 +1008,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       if t == "vae_tools" then tabs.getSelectionModel.select(vaeToolsTab)
       // Dev flag --tab also accepts any tab id or title (documentation screenshots).
       if opts.tab.contains(t) then
-        tabs.getTabs.asScala.find(tab => tab.getId == t || tab.getText == t).foreach(tabs.getSelectionModel.select)
+        tabs.getTabs.asScala.find(tab => tab.getId == t || tab.getText == t || sdfx.ui.i18n.Localizer.original(tab) == t).foreach(tabs.getSelectionModel.select)
     }
     statusBar.logToggle.setSelected(initial.logVisible)
     reloadGallery()
@@ -1098,6 +1107,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       "controlnet fastload" -> (() => controlNetFastload.dispose()),
       "controlnet fastload gallery" -> (() => controlNetFastloadGallery.dispose()),
       "image browser" -> (() => imageBrowser.dispose()),
+      "localizer" -> (() => localization.localizer.stop()),
       "character searcher" -> (() => charaSearcher.dispose()),
       "VRAM timer" -> (() => vramPoll.stop()),
       "MCP controller" -> (() => mcpExec.execute(() => mcp.close())),

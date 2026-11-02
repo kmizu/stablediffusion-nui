@@ -72,7 +72,7 @@ final class ImageBrowserTab(ctx: UiContext, env: BrowserEnv):
     shownOnce = true
     pages.lift(inner.getSelectionModel.getSelectedIndex).foreach(_.activate())
 
-  def selectInner(name: String): Unit = inner.getTabs.asScala.find(_.getText == name).foreach(inner.getSelectionModel.select)
+  def selectInner(name: String): Unit = inner.getTabs.asScala.find(t => sdfx.ui.i18n.Localizer.original(t) == name).foreach(inner.getSelectionModel.select)
   def page(name: String): Option[BrowserPage] = pages.collectFirst { case p: BrowserPage if p.spec.name == name => p }
   def dispose(): Unit = { disposed = true; pages.foreach(_.dispose()); env.cache.persist() }
 

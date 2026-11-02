@@ -23,7 +23,7 @@ RELEASES = REPO + "/releases/latest"
 NAV = [
     ("start", ["index", "install", "first-image"]),
     ("guide", ["generate", "controlnet", "lora-embeddings", "extensions", "tools", "image-browser", "character-searcher"]),
-    ("advanced", ["mcp", "settings", "troubleshooting", "releases"]),
+    ("advanced", ["mcp", "settings", "localization", "troubleshooting", "releases"]),
 ]
 GROUPS = {
     "ja": {"start": "はじめに", "guide": "使い方", "advanced": "さらに"},

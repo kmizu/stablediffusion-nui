@@ -18,6 +18,7 @@ description: Stable Diffusion NUI の設定画面、設定ファイルのキー�
 | **MCP** | GUI に内蔵された MCP HTTP サーバー |
 | **WD v3 (partial)** | img2img の WD v3 バッチで使うモデルとタグのファイル |
 | **Hires** | Hires. fix のセクションに表示する項目 |
+| **Language** | 表示言語、英語の併記、言語パック。[表示言語](localization.html)を参照 |
 
 ### Model folders
 

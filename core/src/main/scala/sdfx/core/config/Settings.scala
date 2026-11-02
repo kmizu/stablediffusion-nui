@@ -46,6 +46,10 @@ case class HiresFixTweaksPreferences(outputDir: String = "", showCfg: Boolean = 
     showStyles: Boolean = true, promptModeRadio: Boolean = true, checkpointLabels: String = "Default",
     saveTemplate: Boolean = true, restoreTemplate: Boolean = true) derives RW
 
+/** Interface language. `pack` is a language pack id (empty = English, no translation); see sdfx.core.i18n. */
+case class LocalizationPreferences(pack: String = "", fallbackPack: String = "", style: String = "Translation only",
+    order: String = "Translation first", tooltips: Boolean = true, items: Boolean = true, extraDirs: Seq[String] = Nil) derives RW
+
 case class Settings(
     modelDirs: ModelDirs = ModelDirs(),
     outputDir: String = "outputs",
@@ -79,7 +83,8 @@ case class Settings(
     wdV3Model: Option[String] = None,
     wdV3Tags: Option[String] = None,
     tagAutocompleteCsv: Option[String] = None,
-    hiresFixTweaks: HiresFixTweaksPreferences = HiresFixTweaksPreferences()
+    hiresFixTweaks: HiresFixTweaksPreferences = HiresFixTweaksPreferences(),
+    localization: LocalizationPreferences = LocalizationPreferences()
 ) derives RW
 
 case class SettingsRecovery(reason: String, originalSha256: Option[String])

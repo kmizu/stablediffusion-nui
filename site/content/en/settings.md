@@ -18,6 +18,7 @@ Press **⚙** at the top right to open Settings. Changes are saved when you pres
 | **MCP** | The MCP HTTP server built into the GUI |
 | **WD v3 (partial)** | Model and tag files for the WD v3 batch in img2img |
 | **Hires** | Which controls the Hires. fix section shows |
+| **Language** | Interface language, bilingual display and language packs; see [Interface language](localization.html) |
 
 ### Model folders
 

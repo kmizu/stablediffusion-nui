@@ -1,0 +1,2 @@
+# Built-in language packs (one file stem per line)
+ja_JP
