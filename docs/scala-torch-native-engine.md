@@ -301,3 +301,22 @@ match Pillow byte-for-byte. Nine-channel inpaint U-Nets, full-resolution crop,
 fill modes other than original pixels, and plugin inpaint integrations remain
 unsupported and fail explicitly. Normal-size model quality and the rest of NUI's
 Python feature set are still migration work.
+
+## Real SD1.5 CUDA smoke result (2026-11-03)
+
+The opt-in `NativeRealCheckpointSuite` runs the local Diffusers SD1.5 checkpoint
+through `AppServices` and `Generator` with saved CUDA placement and U-Net/VAE
+weight offload. At 256x256, it completed 12-step txt2img plus masked img2img
+(denoising strength 0.7) in 473.5s on the local GTX 1650 SUPER (4 GiB). The worker
+reported `cuda:0` and an empty Python executable. The test verified the source
+pixels on the black half, repaint changes on the white half, and no Python
+directory. It exports `sd15-source.png` and `sd15-masked-inpaint.png` to the
+caller-specified sample directory for visual inspection.
+
+The generated images are visibly poor and do not pass a quality gate; the test
+proves execution and mask ownership only. A separate 512x512, 16-step SD1.5 run
+with FP32 weight offload was stopped after about 35 minutes without completing.
+It did not hit the configured CUDA allocation limit or exceed about 1 GiB VRAM,
+so the measured problem was throughput rather than VRAM capacity. Normal-size
+quality, a practical high-resolution offload path, and performance with weights
+resident on a 6 GiB GPU remain open.
