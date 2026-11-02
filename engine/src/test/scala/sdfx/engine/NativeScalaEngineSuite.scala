@@ -102,3 +102,52 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       catch case cleanup: Throwable =>
         if failure!=null then failure.addSuppressed(cleanup) else throw cleanup
   }
+
+  test("NUI EngineClient sends SDXL txt2img and img2img through the Python-free worker") {
+    val cpFile=sys.env.get("SCALATORCH_WORKER_CLASSPATH_FILE")
+    val model=sys.env.get("SCALATORCH_TINY_SDXL_MODEL")
+    assume(cpFile.nonEmpty && model.nonEmpty,"native worker classpath and tiny SDXL model required")
+    val root=Path.of(model.get).toAbsolutePath
+    val temp=Files.createTempDirectory("nui-native-sdxl")
+    val config=temp.resolve("euler.json")
+    Files.writeString(config,"""{"num_train_timesteps":1000,"beta_start":0.00085,"beta_end":0.012,"beta_schedule":"scaled_linear"}""")
+    val launch=ScalaTorchLaunch.fromEnvironment(Map("SDFX_SCALATORCH_CLASSPATH_FILE"->cpFile.get,
+      "SDFX_SCALATORCH_MODEL"->root.toString,"SDFX_SCALATORCH_SCHEDULER"->config.toString)).get
+    val supervisor=new EngineSupervisor(() => launch,maxRestarts=0)
+    val client=new EngineClient(supervisor)
+    var failure: Throwable=null
+    try
+      assertEquals(supervisor.start().python,"")
+      val loaded=Await.result(client.loadModel(LoadModelRequest(root.toString,dtype="fp32",vramMode="cpu")),45.seconds)
+      assertEquals(loaded.path,root.toRealPath().toString)
+      assert(loaded.hash.matches("[0-9a-f]{64}"))
+      val params=GenerationParams(prompt="a red apple",negativePrompt="blurry",width=64,height=64,steps=3,seed=42)
+      val request=GenerationRequest(params,temp.toString)
+      val generated=Await.result(client.generate(request,GenerationMode.Txt2Img).result,60.seconds)
+      assertEquals(generated.images.size,1)
+      assertEquals(generated.images.head.seed,42L)
+      val image=javax.imageio.ImageIO.read(Path.of(generated.images.head.path).toFile)
+      assertEquals(image.getWidth,64);assertEquals(image.getHeight,64)
+      val edit=request.copy(params=params.copy(steps=4,
+        img2img=Some(Img2ImgParams(generated.images.head.path,denoisingStrength=0.5,resizeMode=2))))
+      val edited=Await.result(client.generate(edit,GenerationMode.Img2Img).result,60.seconds)
+      val result=javax.imageio.ImageIO.read(Path.of(edited.images.head.path).toFile)
+      assertEquals(result.getWidth,64);assertEquals(result.getHeight,64)
+      assertEquals(edited.images.head.seed,42L)
+      assertEquals(edited.images.head.effectivePrompt,Some("a red apple"))
+      Await.result(client.unload(),15.seconds)
+      assert(!Files.exists(temp.resolve("python")))
+    catch case error: Throwable =>
+      failure=error
+      throw error
+    finally
+      try
+        supervisor.close()
+        val files=Files.walk(temp)
+        try files.sorted(java.util.Comparator.reverseOrder[Path]()).forEach(p => {
+          require(p.toAbsolutePath.normalize().startsWith(temp.toAbsolutePath.normalize()))
+          Files.delete(p);()
+        }) finally files.close()
+      catch case cleanup: Throwable =>
+        if failure!=null then failure.addSuppressed(cleanup) else throw cleanup
+  }

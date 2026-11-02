@@ -174,3 +174,17 @@ normal SD checkpoints, GPU CLIP/scheduler execution, FP16/offload, SDXL, batchin
 Hires and the existing extension feature set still need native implementation
 and verification. Unsupported active generation settings currently return errors.
 Keep changes on `feat/scala-torch-native-engine` until integration is ready for review.
+
+## SDXL EngineClient integration probe (2026-11-03)
+
+`NativeScalaEngineSuite` now has an opt-in tiny SDXL case that starts the same
+Java worker through `EngineSupervisor` and `EngineClient`, loads the configured
+SDXL model, sends typed NUI txt2img and img2img requests, checks the 64x64 PNG
+outputs/seed/effective prompt, then unloads. Set `SCALATORCH_TINY_SDXL_MODEL`
+to the local tiny SDXL Diffusers directory alongside the existing worker classpath
+variable. The test source compiled with `engine/testOnly ... -z compile`; MUnit
+skipped both integration cases because the optional worker/model environment
+variables were not set. This is a test hook, not yet evidence of an executed
+NUI SDXL generation. NUI GenerationParams still has no custom original-size/crop
+fields; worker defaults those SDXL time IDs to requested output dimensions and
+zero crop.
