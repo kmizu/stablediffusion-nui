@@ -3,12 +3,12 @@
 ## 2026-11-03 作業中の追記
 
 - ユーザーの方針: issue を速く解決し、10件ごとにリリース。MCP から AI が使えることを重視。日本語マニュアルで十分、必要な画面はキャプチャする。次のリリース番号は未決定なので推測しない。
-- main `bd767273cdebbfe236815296be717803dafbd4c9` は push 済み（作業時に remote と一致を確認）。`.claude/` は未追跡の既存 worktrees なので消さない。
+- main `56a9411aec517b85a5787a3356cf7c844f7f92f8` は push 済み（作業時に remote と一致を確認）。`.claude/` は未追跡の既存 worktrees なので消さない。
 - ネガティブ候補 `c484556`: 画質・人体・文字のセットと個別調整、日本語説明。実 GUI と SD1.5/SDXL、展開版 MCP を確認。詳細は `docs/negative-suggestions-verification.md`。抽出版 GUI 自体の実生成は未確認。
 - #2 Aesthetic Gradients `c4abab3`: GUI/MCP の embedding 作成、PNG 復元の SHA 照合、日本語マニュアル。実 GUI と展開版 MCP で SD1.5/SDXL を確認。Scala 全体と Python CPU 全体も通過。`674cb79` で SDXL の強い重みについて日英の案内を追加、明示値は変えない。元拡張との互換性、OS chooser の手操作、配布 EXE の GUI など未確認があるため issue は open、台帳は todo のまま。詳細は `docs/aesthetic-gradients-verification.md` と `docs/aesthetic-embeddings.md`。新しい main と合わせた後の配布物そのものはまだ実モデルで検証していない。
 - #26 CreaPrompt: main `2284f49` に統合・push し、GitHub issue closed を確認。実 GUI と配布版 MCP で SD1.5・SDXL を検証し画像を目視。main の `sbt test ui/assembly` は exit 0、テストの一部はキャッシュでスキップされた。生成した JAR は配布版実測時の JAR と SHA-256 が一致。抽出版 GUI 自体の実生成などの限界は `docs/creaprompt-verification.md` に記載。新リリースへの issue 件数は 1/10。
-- #24 タグ補完: main `9876bda` に wildcard の部分 Tab 補完と行選択、`ffcf80e` にカテゴリ番号と色マーカーを部分統合。実 GUI と SD1.5・SDXL を確認したが、上流の未実装機能や配布 GUI の検証が残り issue は open。`docs/tag-autocomplete-acceptance-24.md` と `docs/tag24-wildcard-verification.md` を参照。
-- #143 VRAM/最適化: main `341dc29` に部分統合。実 SD1.5・SDXL と展開版 MCP の検証、Python 全体、Scala の回帰を実施。SD1.5 の fp8 実効 dtype と ControlNet、両モデルの実 GUI での DeepCache 切替も確認。fp32 fallback の NaN と VRAM 制限は試験で再現したもの。物理低 VRAM 端末、物理マウス操作、SDXL ControlNet などは未検証のため issue は open。`docs/optimization-handoff.md` と `docs/optimization-verification.md` を参照。
+- #24 タグ補完: main `9876bda` に wildcard の部分 Tab 補完と行選択、`ffcf80e` にカテゴリ番号と色マーカー、`56a9411` にデータ元別のカスタム配色を部分統合。保存失敗・不正なパスの復旧、実 GUI と SD1.5・SDXL を確認したが、上流の未実装機能や配布 GUI の検証が残り issue は open。`docs/tag-autocomplete-acceptance-24.md` と `docs/tag24-colormap-verification.md` を参照。
+- #143 VRAM/最適化: main `341dc29` に部分統合、`ffdb2e6` で fp8-auto 拒否後の GUI 表示・生成を修正。実 SD1.5・SDXL と展開版 MCP の検証、Python 全体、Scala の回帰を実施。SD1.5 の fp8 実効 dtype と ControlNet、両モデルの実 GUI での DeepCache 切替も確認。fp32 fallback の NaN と VRAM 制限は試験で再現したもの。物理低 VRAM 端末、物理マウス操作、SDXL ControlNet、Style と後続モデル/VAE 選択の非同期順序などは未検証・未解決のため issue は open。`docs/optimization-handoff.md` と `docs/optimization-verification.md` を参照。
 - 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
 - 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 
