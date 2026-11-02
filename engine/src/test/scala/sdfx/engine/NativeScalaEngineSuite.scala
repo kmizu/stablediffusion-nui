@@ -19,9 +19,8 @@ class NativeScalaEngineSuite extends munit.FunSuite:
     val temp=Files.createTempDirectory("nui-native-engine")
     val config=temp.resolve("euler.json")
     Files.writeString(config,"""{"num_train_timesteps":1000,"beta_start":0.00085,"beta_end":0.012,"beta_schedule":"scaled_linear"}""")
-    val javaExe=Path.of(sys.props("java.home"),"bin",if sys.props("os.name").startsWith("Windows") then "java.exe" else "java")
-    val launch=EngineLaunch(Seq(javaExe.toString,"-cp",Files.readString(Path.of(cpFile.get)).trim,
-      "scalatorch.models.worker.NativeWorkerMain",root.toString,config.toString),temp,helloTimeout=20.seconds)
+    val launch=ScalaTorchLaunch.fromEnvironment(Map("SDFX_SCALATORCH_CLASSPATH_FILE"->cpFile.get,
+      "SDFX_SCALATORCH_MODEL"->root.toString,"SDFX_SCALATORCH_SCHEDULER"->config.toString)).get
     val supervisor=new EngineSupervisor(() => launch,maxRestarts=0)
     val client=new EngineClient(supervisor)
     try

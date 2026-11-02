@@ -6,7 +6,7 @@ import javafx.embed.swing.SwingFXUtils
 import javafx.stage.Stage
 import javafx.util.Duration
 import sdfx.core.config.{AppHome, SettingsLoadResult}
-import sdfx.engine.{AppServices, PythonEnv}
+import sdfx.engine.{AppServices, PythonEnv, ScalaTorchLaunch}
 import sdfx.plugins.StandardPlugins
 import sdfx.ui.view.{BootstrapDialog, PreviewImageLoader, Theme}
 import sdfx.ui.vm.{FinalAppCleanup, UiState, VramModes}
@@ -43,7 +43,7 @@ final class SdfxApp extends Application:
     val normalized = loaded.copy(settings = VramModes.normalizeSettings(loaded.settings))
     val settings = normalized.settings
     Platform.setImplicitExit(true)
-    val needsSetup = !opts.dryRun && settings.pythonExe.forall(_.trim.isEmpty) &&
+    val needsSetup = !ScalaTorchLaunch.requested() && !opts.dryRun && settings.pythonExe.forall(_.trim.isEmpty) &&
       (try PythonEnv.needsBootstrap(home) catch case NonFatal(_) => true)
     if needsSetup then
       val dlg = new BootstrapDialog(home, settings, Theme.stylesheets(settings.theme), Theme.themeClass(settings.theme))
