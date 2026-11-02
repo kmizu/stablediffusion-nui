@@ -15,7 +15,7 @@ Claude Code の週間上限が近いため、作業を Codex に引き継ぐ。�
 |---|---|
 | close 済み | #3, #5, #8, #10, #13 |
 | 部分実装、push 済み、issue は open のまま(コメントで未対応を記載) | #2, #6, #12, #14, #18, #19, #20, #21, #22, #23, #24, #25(最後が `89a0936`) |
-| **作業中 (worktree に未コミットの作業)** | #26, #27, #143 |
+| **ブランチにコミット済み・main 未マージ(§3)** | #27, #143(#26 は報告待ち) |
 | 未着手 | #28 |
 
 部分実装の中身は、各 `docs/*-verification.md` と `scripts/extensions_matrix.py` の `SCOPE_NOTES` にある。主な既知の弱点:
@@ -32,7 +32,7 @@ Claude Code の週間上限が近いため、作業を Codex に引き継ぐ。�
 | issue | id | 状況 |
 |---|---|---|
 | #26 | `afb99384e42e1188b` | 実装中 |
-| #27 | `a40abe8e29871d4c8` | 実装中 |
+| #27 | `a40abe8e29871d4c8` | **コミット済み `9024c7e`(部分実装、`Refs #27`、main には未マージ)**。ブランチ `worktree-agent-a40abe8e29871d4c8`。エンジンの `cross_attention_viz` リクエスト、Cross-Attention タブ、MCP ツール `visualize_cross_attention`。上流にライセンスが無いので README のみから再実装。確認済み: 小さな U-Net での Python 16 テスト(diffusers 自身の attention スコアと一致)、`CrossAttentionVizCancellationSuite` と `McpToolsSuite`、`ui/assembly`。**未実施: 実モデル(SD1.5・SDXL)での確認が一度もない(`scripts/dev/check_cross_attention_viz_real.py` と UI の `RealCrossAttentionVizCheck` は未実行で、後者は未コンパイル)。Python と Scala の全件も未実行。** 台帳 index 99 は `todo` のまま |
 | #143 | `ab7508137bf41c07e` | **コミット済み `7696734`(部分実装、`Refs #143`、main には未マージ)**。ブランチ `worktree-agent-ab7508137bf41c07e`。計測済み(`docs/optimization-verification.md`): `vae_auto`(既定 on。小さい GPU で復号の OOM を解消、1792x2304 で 9 倍速)、`vae_fp16`(SDXL のピークが 11.8→9.1 GB、画像差 0.0002)、`vae_slicing`(バッチでピークが下がる)、`vram_mode=auto`、`fp8_storage`(VRAM は減るが遅く画像も変わる)、DeepCache(1.4–2.0 倍速、画像差あり)。`channels_last` / TF32 / `cudnn_benchmark` は効果なしで落とした。**未実施: Scala の `sbt test` は途中で止めたまま、`ui/assembly` と Python 全件は未実行(Scala の変更は未コンパイル)。実アプリ・MCP の確認と、実機の小さい GPU での確認もなし。** マージ手順の 4 を通してから main に入れる |
 
 終わらせる気がなければ worktree ごと捨ててよい(`git worktree remove`)。issue #26、#27 の中身は `gh issue view` で確認する。
