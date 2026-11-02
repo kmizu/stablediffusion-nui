@@ -18,7 +18,7 @@
 - #24 の Wiki リンクは main に部分統合。選択候補から `?` または F1 で開き、既定オフ。固定 HTTPS host・URL・互換性の単体18件、実 GUI の Robot 押下と候補保持、実 SD1.5/SDXL MainWindow を確認。main でも単体18件・GUI 2件・assembly を再実行。実ブラウザとスクロール後セル、配布 GUI は未検証。`docs/tag24-wiki-wip.md` に証拠と制約。#24 は open、リリース件数には数えない。
 - #12 OpenCLIP の試作は `C:/Users/Mizushima/.codex/worktrees/interrogator-openclip/stablediffusion-nui`、branch `codex/interrogator-openclip`、`12027da` 以降の更新を確認すること。ConvNeXt と BLIP-base で SD1.5/SDXL 由来画像を実 MCP SDK で解析。安全な重み読込は固定版の内部 API に依存し、GUI・配布版・他の多数モデル・offline と重み読込の監査は未了。新 backend の disk cache は暫定無効。詳細は同 worktree の `docs/clip-interrogator-openclip-wip.md`。main 未統合。
 - #6 MediaPipe 顔検出は main に部分統合。モデル公開競合・差替え対策を含む最新版について、分離 worktree の SD1.5/SDXL 実 MCP、SD1.5 実 GUI と replay／cancel 復旧を確認。main でも Python 関連41件成功。SDXL GUI、配布版や #6 の別 checkpoint／フォルダ入力は未了。`docs/batch-face-mediapipe-wip.md` 参照。#6 は open、リリース件数には数えない。
-- #23 お気に入りは `C:/Users/Mizushima/.codex/worktrees/state-manager23-favourites/stablediffusion-nui` で進行中。複数登録・解除と履歴消去時の保護を実 GUI で確認、実モデル検証の結果・未 commit 差分を確認してから再開する。
+- #23 お気に入りは main に部分統合。複数登録・解除、履歴消去時の保護、保存とサムネイルの競合対策、共通 PresetStore の保存成功後の誤報修正を実装。SD1.5/SDXL 実 GUI と、main の保存・履歴テスト計36件、実 GUI、assembly を確認。非協調プロセスや配布版 GUI などの限界は `docs/state-manager-verification.md`。上流 storage import 等が残り #23 は open、リリース件数には数えない。
 - 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
 - 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 

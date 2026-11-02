@@ -1,5 +1,25 @@
 # State Manager history and category restore (#23, partial)
 
+## 2026-11-03: お気に入りと複数選択（部分統合）
+
+main 統合時に `PresetStoreSuite` 18件、`NamedGenerationStatesSuite` と `GenerationHistorySuite` 計18件、`RealNamedGenerationStatesCheck`、`ui/assembly` が exit 0。JAR SHA-256 は `58cc4ac59ec7abbfa98b1c63c12d83cc731c0e001f394f375b22847db3d407ba`。下記の実モデル検証は分離 worktree の source-class GUI によるもので、main JAR や配布 EXE GUI の実測ではない。
+
+上流 MIT 固定版 `2af62ecd5287438bbc309f7e840d34aa5c8e3cb6` の README と TypeScript を確認。複数選択時に上流が提供するのは一括お気に入り／解除と一括削除で、複数エントリの設定を一括適用する機能は見つからない。以前の「bulk apply が未対応」という記述は誤りだった。NUI では History と Favourites の両タブから複数選択し、お気に入りの一括追加・解除と明示削除ができる。お気に入りは履歴の上限から外れても、また Clear History 後も残り、履歴とお気に入りの双方から削除したときにだけ対応するサムネイルを削除する。消えた選択項目を使う更新はエラーとして拒否する。
+
+履歴は `<home>/config/generation-history/library-v1.json` の同一トランザクション内に最大3モード分の favourites collection を追加して保存する（読取上限は既存の3から6 collection に拡張、従来の3 collection の履歴も読み取れる）。JSON 全体の容量・件数制限に達すると保存はエラーになり、それまでのデータは維持される。上流 IndexedDB / 共有ファイルとの互換性はない。
+
+競合対策は、この版の NUI 同士が同じ `.history-operations.lock` を使い、操作中にロックファイルやディレクトリが置換されないことを前提とする。外部ツールや旧版が JSON やサムネイルを直接変更する場合の整合は保証しない。`thumbs` の既存 symlink / junction は拒否するが、検査後にディレクトリを入れ替える攻撃への耐性は未検証。サムネイルの生成・削除エラーは画像だけが失われ得て、利用者への通知はない。外側の操作ロックの解除や close の異常は成功済み JSON 保存を失敗扱いしないため握りつぶされる（外側の異常注入は未実施）。履歴 JSON への保存失敗は操作画面に表示し、自動記録時はエラーダイアログで通知する。
+
+共通 `PresetStore` では以前、保存やバックアップ復元の atomic replace 成功後に一時ファイル掃除が失敗すると、内容が入れ替わったにもかかわらず失敗と通知された。`outputs/preset-postcommit-red.log` の2件で再現後、replace が正常に戻った以降の掃除と library lock の release / close 異常が成功を覆さないよう修正した。`outputs/preset-postcommit-green.log` の core 18件に、save と restore の掃除失敗、および lock release 前・後／close 後の異常注入と、置換前の既存失敗テストが含まれる。同ログの UI 18件と実 MainWindow も成功。release と close がともに実際に失敗すればリソースやロックが残り、別プロセスが待機し続ける可能性がある。異常注入では release 前に失敗した場合も channel.close は成功しており、この二重失敗は試していない。atomic replace 自体が例外を返した場合に実際のファイル置換が完了していたかまでは、この試験では検証していない。
+
+同一 JVM の2 store による同時記録では当初 `OverlappingFileLockException` を再現した（`outputs/favourites-concurrent-red.log`）。修正後の `outputs/favourites-safe-green.log` は計18テストと実 MainWindow の成功を記録する。同一 JVM・Windows junction 経由の同一 root、別 JVM 同士の記録、clear とお気に入り追加、thumbnail 書き込みと削除・お気に入り解除の交差、別 JVM が操作ロックを実際に保持している間の待機、過大な入力拒否と既存 JSON の byte 不変、`thumbs` の junction による外部ファイルの読取・上書き・削除拒否を確認した。近接起動の競合試験は全ての実行順序を網羅しない。
+
+単体 RED は `outputs/favourites-red2.log`、UI RED は `outputs/favourites-ui-red.log`。`outputs/favourites-ui-green2.log` では `GenerationHistorySuite` と `NamedGenerationStatesSuite` 計12件および実 MainWindow で複数追加・解除・復元・Clear 保護・明示削除が成功。3モードの保存、再起動、履歴上限からの退避とサムネイル保持、消えた ID の拒否も確認した。`outputs/favourites-ui-green/named-states-favourites.png` を目視。これらの `outputs/` は `C:/Users/Mizushima/.codex/worktrees/state-manager23-favourites/stablediffusion-nui` にある。
+
+実 GUI + 実エンジンで履歴2件を一括お気に入り化し、Favourites の一件から prompt を復元して別 seed で生成、PNG の prompt と seed を検証。SD1.5 (`animekawa_v10`, 512×512, 8 steps) と SDXL (`waiIllustriousSDXL_v170`, 832×832, 8 steps) とも成功。ログ `outputs/favourites-real.log`、結果 `outputs/favourites-real-sd15/history-real-6651249467607331458/report.json` と `outputs/favourites-real-sdxl/history-real-627994625375117064/report.json`。生成画像は両方とも桜の下の赤い着物の人物と目視。SHA-256 はそれぞれ `720006d73e6113b03c2435a3123a4467e69a31eb6293118c54b8c1711e134533`、`c92e297e7a04cba17c2d6933696fafc08f8447176bd21019d764c205cc381803`。配布版 GUI は未検証。issue #23 の残りは下記。
+
+競合・共通保存処理の最終修正後にも両モデルで同じ MainWindow 操作と生成を再実行し成功、両画像を目視した。ログ `outputs/favourites-final-real.log`、結果 `outputs/favourites-final-sd15/history-real-9166437097752506640/report.json` と `outputs/favourites-final-sdxl/history-real-7575680490303200089/report.json`。これも source-class GUI の検証で、配布 EXE GUI の実測ではない。
+
 ## 2026-11-03: 個別設定の復元（部分統合）
 
 この節の `outputs/` は検証時の worktree `C:/Users/Mizushima/.codex/worktrees/state-manager23/stablediffusion-nui` にある。
@@ -57,6 +77,6 @@ identical on the repeat), and the History tab with thumbnail and prompt text in 
 ## NOT provided
 
 Upstream IndexedDB / shared .txt storage import and format parity, the `/version` and other HTTP API endpoints, the docked
-side-drawer / modal browser UI, ctrl/shift range multi-select driving bulk apply, a favourites flag (use Keep as named
-state), MCP exposure of the history. Individual saved settings and the six categories can be applied as described above.
+side-drawer / modal browser UI, MCP exposure of the history. Multiple selection provides bulk favourite and delete actions,
+and individual saved settings and the six categories can be applied as described above.
 Issue stays open (`Refs #23`).

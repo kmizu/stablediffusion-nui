@@ -223,6 +223,10 @@ Hires. fix セクションには **Hires Fix Tweaks** の設定も含まれま�
 
 **History** タブは、Generate / Queue を押すたびにフォームを自動で記録します(モードごとに最新 50 件。最初の画像の 100 px サムネイル付き)。**Record every generation automatically** で記録を止められ、エントリの削除、**Clear history**、**Keep as named state**(名前付き生成設定へコピー)も使えます。保存先は `<アプリのフォルダ>/config/generation-history` です。
 
+残したい履歴は選択して **Toggle favourites** を押すと、**Favourites** タブから開けます。Ctrl キーや Shift キーを使って複数選べます。選択した項目がすべてお気に入りなら解除し、それ以外はすべて追加します。お気に入りは履歴の上限から外れても残り、**Clear history** でも削除されません。**Delete selected** は確認後、履歴とお気に入りの両方から削除します。
+
+![お気に入りに追加した生成履歴と復元する設定の選択画面](shots/state-favourites.png)
+
 タブの下のチェックボックス(Prompts / Sampling, size, seed, hires / Checkpoint・VAE・clip skip / ControlNet / Script and extension controls / WD batch and layout)で、**Restore state** が戻す範囲をカテゴリ単位に絞れます。名前付き設定にも履歴にも使えます。すべてチェックなら全部を戻します。
 
 一項目だけ戻したいときは、一覧から設定を選び **Restore selected setting** を押します。確認画面に戻す項目が表示されます。選んだ項目に必要なモデルやファイルだけを確認するので、ほかの項目の不足によって復元が止まることはありません。

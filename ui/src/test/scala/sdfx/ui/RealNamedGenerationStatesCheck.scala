@@ -10,13 +10,14 @@ import javafx.stage.{Stage, Window}
 import javax.imageio.ImageIO
 import scala.jdk.CollectionConverters.*
 import sdfx.core.config.{AppHome, Settings}
-import sdfx.core.presets.{PresetJson, PresetLimits}
+import sdfx.core.presets.{FieldKey, PresetAtom, PresetError, PresetJson, PresetLimits, PresetRecord}
 import sdfx.core.protocol.ModelEntry
 import sdfx.core.plugins.api.ChoiceSource
 import sdfx.engine.{AppServices, CatalogSnapshot}
 import sdfx.plugins.StandardPlugins
 import sdfx.ui.vm.{Mode, UiState}
 import sdfx.ui.view.W
+import sdfx.ui.presets.GenerationHistoryStore
 
 /** Root-run offline acceptance of the real MainWindow and named-state buttons/dialogs.
   * No engine startup, inference, model download or clipboard access. Arg: output directory.
@@ -309,6 +310,64 @@ object RealNamedGenerationStatesCheck:
       require(deleted.collections.flatMap(_.presets).isEmpty)
       noWork()
       checked("actual Delete confirmation removes the state from visible list and disk")
+      val fixtureHistory = new GenerationHistoryStore(home.configDir.resolve("generation-history"), 50, thunk => thunk())
+      def historyRecord(prompt: String): Unit =
+        val latch = new CountDownLatch(1)
+        var result: Either[PresetError, Option[PresetRecord]] = null
+        fixtureHistory.record(mode, Map(FieldKey(Vector("generation", "prompt")) -> PresetAtom.Text(prompt)), r => {
+          result = r; latch.countDown()
+        })
+        require(latch.await(20, TimeUnit.SECONDS) && result.isRight && result.toOption.get.nonEmpty)
+      historyRecord("first favourite")
+      historyRecord("second favourite")
+      fixtureHistory.close()
+      fx { window.openGenerationStates(mode); node[TabPane]("generation-states-tabs").getSelectionModel.select(1) }
+      eventually("two history entries") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 2) }
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-history-list")
+        list.getSelectionModel.clearAndSelect(0); list.getSelectionModel.select(1)
+        node[Button]("generation-history-favourite").fire()
+      }
+      eventually("favourites stored") { fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 2
+      }}
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-favourites-list")
+        list.getSelectionModel.clearAndSelect(0)
+        node[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmButton("generation-states-restore-field")
+      fx { require(window.vms(mode).prompt.get == "second favourite") }
+      checked("multiple history entries become favourites and a favourite setting restores")
+      screenshot("named-states-favourites")
+      fx {
+        val favourites = node[ListView[PresetRecord]]("generation-favourites-list")
+        favourites.getSelectionModel.clearAndSelect(0); favourites.getSelectionModel.select(1)
+        node[Button]("generation-favourites-toggle").fire()
+      }
+      eventually("both favourites removed") { fx(node[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty) }
+      fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(1)
+        val entries = node[ListView[PresetRecord]]("generation-history-list")
+        require(entries.getItems.size == 2)
+        entries.getSelectionModel.clearAndSelect(0)
+        node[Button]("generation-history-favourite").fire()
+      }
+      eventually("one favourited") { fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 1
+      }}
+      fx { node[TabPane]("generation-states-tabs").getSelectionModel.select(1) }
+      confirmButton("generation-history-clear")
+      eventually("clear retains favourite") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 1) }
+      fx { node[ListView[PresetRecord]]("generation-history-list").getSelectionModel.clearAndSelect(0) }
+      confirmButton("generation-history-delete")
+      eventually("delete removes both groups") { fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty
+      }}
+      checked("multi-remove, clear and explicit delete respect favourite membership")
       Files.writeString(output.resolve("named-states-native-report.json"), ujson.write(ujson.Obj(
         "status" -> "passed", "home" -> home.root.toString, "library" -> library.toString,
         "checks" -> ujson.Arr.from(checks), "screenshots" -> ujson.Arr.from(screenshots)), indent = 2))

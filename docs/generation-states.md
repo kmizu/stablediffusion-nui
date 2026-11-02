@@ -33,7 +33,10 @@ A state identical to the newest entry is not recorded twice.
 
 - **Record every generation automatically** turns recording on or off (stored as `autosave.off` in the history folder;
   existing entries stay).
-- **Delete selected** (multi-select), **Clear history** (this mode only) remove entries after confirmation.
+- **Toggle favourites** adds all selected entries, or removes them all when every selection is already a favourite.
+  The Favourites tab provides restore, remove-favourite and delete actions. Favourites survive history cap eviction.
+- **Delete selected** removes selected entries from both groups; **Clear history** removes only non-favourites in
+  this mode. Both deletion actions ask for confirmation.
 - **Keep as named state** copies the selected entry into the named states under the name typed above the tabs.
 - History lives in `<app home>/config/generation-history/` (`library-v1.json`, `thumbs/`), separate from named
   states. A recording failure is reported but never blocks generation.

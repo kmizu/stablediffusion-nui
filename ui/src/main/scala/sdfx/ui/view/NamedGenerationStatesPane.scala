@@ -57,10 +57,16 @@ final class NamedGenerationStatesPane(
   historyList.setId("generation-history-list")
   historyList.setPrefHeight(150)
   historyList.getSelectionModel.setSelectionMode(SelectionMode.MULTIPLE)
+  private val favouritesList = new ListView[PresetRecord]()
+  favouritesList.setId("generation-favourites-list")
+  favouritesList.setPrefHeight(150)
+  favouritesList.getSelectionModel.setSelectionMode(SelectionMode.MULTIPLE)
   private val autosave = new CheckBox("Record every generation automatically (newest 50 per mode)")
   autosave.setId("generation-history-auto")
   autosave.setSelected(history.autosave)
   private var historyEntries = Vector.empty[PresetRecord]
+  private var favouriteEntries = Vector.empty[PresetRecord]
+  private var historyPending = false
   private val categoryBoxes = StateCategory.values.toVector.map { c =>
     val box = new CheckBox(c.label)
     box.setId("generation-states-cat-" + c.id)
@@ -70,7 +76,9 @@ final class NamedGenerationStatesPane(
   private def chosenCategories: Set[StateCategory] = categoryBoxes.filter(_._2.isSelected).map(_._1).toSet
   private val tabs = new TabPane()
   tabs.setId("generation-states-tabs")
-  private def historyActive: Boolean = tabs.getSelectionModel.getSelectedIndex == 1
+  private def historyActive: Boolean = tabs.getSelectionModel.getSelectedIndex != 0
+  private def selectedHistoryList: ListView[PresetRecord] =
+    if tabs.getSelectionModel.getSelectedIndex == 2 then favouritesList else historyList
 
   private def namedSelected: Option[PresetRecord] = for
     state <- loaded
@@ -78,7 +86,7 @@ final class NamedGenerationStatesPane(
     record <- NamedGenerationStates.collection(state.library, mode).presets.find(_.name == selectedName)
   yield record
   private def historySelected: Vector[PresetRecord] =
-    historyList.getSelectionModel.getSelectedItems.toArray.toVector.collect { case r: PresetRecord => r }
+    selectedHistoryList.getSelectionModel.getSelectedItems.toArray.toVector.collect { case r: PresetRecord => r }
   /** The record the shared Restore button and the detail view act on. */
   private def selected: Option[PresetRecord] =
     if historyActive then historySelected match
@@ -105,8 +113,11 @@ final class NamedGenerationStatesPane(
     restoreField.setDisable(pending || selected.isEmpty || fieldPicker.getValue == null)
     delete.setDisable(pending || readOnly || namedSelected.isEmpty)
     keep.setDisable(pending || readOnly || loaded.isEmpty || historySelected.size != 1)
-    historyDelete.setDisable(historySelected.isEmpty)
-    historyClear.setDisable(historyEntries.isEmpty)
+    historyDelete.setDisable(historyPending || historySelected.isEmpty)
+    favouritesDelete.setDisable(historyPending || historySelected.isEmpty)
+    historyFavourite.setDisable(historyPending || historySelected.isEmpty)
+    favouritesToggle.setDisable(historyPending || historySelected.isEmpty)
+    historyClear.setDisable(historyPending || historyEntries.isEmpty)
     reload.setDisable(pending)
     backup.setDisable(pending)
 
@@ -238,20 +249,55 @@ final class NamedGenerationStatesPane(
       case _ => status.setText("Select exactly one history entry to keep.")
   }
   keep.setId("generation-history-keep")
-  private val historyDelete = W.button("Delete selected", "Remove the selected history entries") {
+  private def deleteHistorySelection(): Unit =
     val ids = historySelected.map(_.id).toSet
-    if ids.nonEmpty && confirm("Delete history entries?", s"Delete ${ids.size} history entr${if ids.size == 1 then "y" else "ies"} from ${mode.key}?") then
-      history.delete(mode, ids) {
-        case Left(error) => failure(error)
-        case Right(_) => status.setText(s"Deleted ${ids.size} history entries.")
+    val target = mode
+    if ids.nonEmpty && confirm("Delete history entries?", s"Delete ${ids.size} entr${if ids.size == 1 then "y" else "ies"} from $target history and favourites?") then
+      historyPending = true
+      refreshButtons()
+      history.delete(target, ids) { result =>
+        historyPending = false
+        result match
+          case Left(error) => failure(error)
+          case Right(_) => status.setText(s"Deleted ${ids.size} history entries.")
+        refreshButtons()
       }
+  private val historyDelete = W.button("Delete selected", "Delete the selected entries from history and favourites") {
+    deleteHistorySelection()
   }
   historyDelete.setId("generation-history-delete")
-  private val historyClear = W.button("Clear history", "Remove every history entry of this mode") {
-    if confirm("Clear history?", s"Delete all ${historyEntries.size} ${mode.key} history entries?") then
-      history.clear(mode) {
-        case Left(error) => failure(error)
-        case Right(_) => status.setText(s"Cleared ${mode.key} history.")
+  private val favouritesDelete = W.button("Delete selected", "Delete the selected entries from history and favourites") {
+    deleteHistorySelection()
+  }
+  favouritesDelete.setId("generation-favourites-delete")
+  private def toggleSelectedFavourites(): Unit =
+    val ids = historySelected.map(_.id).toSet
+    val target = mode
+    if ids.nonEmpty then
+      historyPending = true
+      refreshButtons()
+      history.toggleFavourites(target, ids) { result =>
+        historyPending = false
+        result match
+          case Left(error) => failure(error)
+          case Right(_) => status.setText(s"Updated favourites for ${ids.size} selected entries.")
+        refreshButtons()
+      }
+  private val historyFavourite = W.button("Toggle favourites", "Add all selected entries, or remove all if already favourites") { toggleSelectedFavourites() }
+  historyFavourite.setId("generation-history-favourite")
+  private val favouritesToggle = W.button("Remove favourites", "Remove the selected entries from favourites") { toggleSelectedFavourites() }
+  favouritesToggle.setId("generation-favourites-toggle")
+  private val historyClear = W.button("Clear history", "Remove non-favourite history entries of this mode") {
+    val target = mode
+    if confirm("Clear history?", s"Delete non-favourite ${target.key} history entries? Favourites are kept.") then
+      historyPending = true
+      refreshButtons()
+      history.clear(target) { result =>
+        historyPending = false
+        result match
+          case Left(error) => failure(error)
+          case Right(_) => status.setText(s"Cleared non-favourite ${target.key} history entries.")
+        refreshButtons()
       }
   }
   historyClear.setId("generation-history-clear")
@@ -264,14 +310,18 @@ final class NamedGenerationStatesPane(
       case Right(_) => status.setText(if on then "History recording is on." else "History recording is off; existing entries stay."))
   list.getSelectionModel.selectedItemProperty.addListener((_, _, _) => showSelected())
   historyList.getSelectionModel.selectedItemProperty.addListener((_, _, _) => showSelected())
+  favouritesList.getSelectionModel.selectedItemProperty.addListener((_, _, _) => showSelected())
   historyList.getSelectionModel.getSelectedItems.addListener(
+    new javafx.collections.ListChangeListener[PresetRecord]:
+      def onChanged(c: javafx.collections.ListChangeListener.Change[? <: PresetRecord]): Unit = refreshButtons())
+  favouritesList.getSelectionModel.getSelectedItems.addListener(
     new javafx.collections.ListChangeListener[PresetRecord]:
       def onChanged(c: javafx.collections.ListChangeListener.Change[? <: PresetRecord]): Unit = refreshButtons())
   tabs.getSelectionModel.selectedItemProperty.addListener((_, _, _) => showSelected())
   categoryBoxes.foreach(_._2.selectedProperty.addListener((_, _, _) => showSelected()))
   fieldPicker.valueProperty.addListener((_, _, _) => refreshButtons())
 
-  historyList.setCellFactory(_ => new ListCell[PresetRecord]:
+  private def historyCell(): ListCell[PresetRecord] = new ListCell[PresetRecord]:
     override def updateItem(item: PresetRecord, empty: Boolean): Unit =
       super.updateItem(item, empty)
       if empty || item == null then
@@ -280,24 +330,30 @@ final class NamedGenerationStatesPane(
       else
         val prompt = item.fields.get(FieldKey(Vector("generation", "prompt"))).collect { case PresetAtom.Text(t) => t }
           .getOrElse("").replace('\n', ' ').take(70)
-        setText(s"${item.name}\n$prompt")
-        val file = history.thumbnail(item.id)
-        setGraphic(if Files.isRegularFile(file) then
-          val view = new ImageView(new Image(file.toUri.toString))
+        val heart = if favouriteEntries.exists(_.id == item.id) then "♥ " else ""
+        setText(s"$heart${item.name}\n$prompt")
+        val file = history.thumbnailIfSafe(item.id)
+        setGraphic(file.map { path =>
+          val view = new ImageView(new Image(path.toUri.toString))
           view.setFitHeight(48)
           view.setFitWidth(48)
           view.setPreserveRatio(true)
           view
-        else null))
+        }.orNull)
+  historyList.setCellFactory(_ => historyCell())
+  favouritesList.setCellFactory(_ => historyCell())
 
   private val namedTab = new Tab("Named states", new VBox(8, list))
   namedTab.setId("generation-states-tab-named")
   namedTab.setClosable(false)
   private val historyTab = new Tab("History", new VBox(8, autosave, historyList,
-    new HBox(8, keep, historyDelete, historyClear)))
+    new HBox(8, keep, historyFavourite, historyDelete, historyClear)))
   historyTab.setId("generation-states-tab-history")
   historyTab.setClosable(false)
-  tabs.getTabs.addAll(namedTab, historyTab)
+  private val favouritesTab = new Tab("Favourites", new VBox(8, favouritesList, new HBox(8, favouritesToggle, favouritesDelete)))
+  favouritesTab.setId("generation-states-tab-favourites")
+  favouritesTab.setClosable(false)
+  tabs.getTabs.addAll(namedTab, historyTab, favouritesTab)
 
   private val categories = new FlowPane(12, 4)
   categories.getChildren.addAll(categoryBoxes.map(_._2)*)
@@ -319,13 +375,17 @@ final class NamedGenerationStatesPane(
 
   private def refreshHistory(): Unit =
     val target = mode
-    history.list(target) {
+    history.listGroups(target) {
       case Left(error) => if !closed then failure(error)
-      case Right(entries) => if !closed && target == mode then
-        val old = historySelected.map(_.id).toSet
+      case Right((entries, favourites)) => if !closed && target == mode then
+        val old = historyList.getSelectionModel.getSelectedItems.toArray.toVector.collect { case r: PresetRecord => r.id }.toSet
+        val oldFav = favouritesList.getSelectionModel.getSelectedItems.toArray.toVector.collect { case r: PresetRecord => r.id }.toSet
         historyEntries = entries.reverse
+        favouriteEntries = favourites.reverse
         historyList.getItems.setAll(historyEntries*)
         historyEntries.filter(e => old(e.id)).foreach(historyList.getSelectionModel.select)
+        favouritesList.getItems.setAll(favouriteEntries*)
+        favouriteEntries.filter(e => oldFav(e.id)).foreach(favouritesList.getSelectionModel.select)
         showSelected()
     }
 

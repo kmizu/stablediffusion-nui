@@ -1,6 +1,8 @@
 package sdfx.ui.presets
 
-import java.nio.file.{Files, Path, StandardCopyOption}
+import java.nio.channels.FileChannel
+import java.nio.file.{Files, LinkOption, Path, StandardCopyOption, StandardOpenOption}
+import java.nio.file.attribute.BasicFileAttributes
 import java.time.{LocalDateTime, ZoneId}
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -34,6 +36,7 @@ object StateCategory:
 object GenerationHistory:
   val DefaultLimit = 50
   def collectionId(mode: Mode): String = s"history-${mode.key}"
+  def favouritesId(mode: Mode): String = s"favourites-${mode.key}"
   private val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
   def collection(library: PresetLibrary, mode: Mode): PresetCollection =
@@ -42,11 +45,23 @@ object GenerationHistory:
 
   /** Stored oldest first; the UI shows newest first. */
   def entries(library: PresetLibrary, mode: Mode): Vector[PresetRecord] = collection(library, mode).presets
+  def favourites(library: PresetLibrary, mode: Mode): Vector[PresetRecord] =
+    library.collections.find(_.id == favouritesId(mode)).toVector.flatMap(_.presets)
 
   private def store(library: PresetLibrary, mode: Mode, records: Vector[PresetRecord]): PresetLibrary =
     val old = collection(library, mode)
     val next = old.copy(tracked = records.flatMap(_.fields.keys).toSet, presets = records)
     library.copy(collections = library.collections.filterNot(_.id == old.id) :+ next)
+
+  private def storeFavourites(library: PresetLibrary, mode: Mode, records: Vector[PresetRecord]): PresetLibrary =
+    val id = favouritesId(mode)
+    val old = library.collections.find(_.id == id).getOrElse(PresetCollection(id, Set.empty, Vector.empty, Vector.empty, Vector.empty))
+    val next = old.copy(tracked = records.flatMap(_.fields.keys).toSet, presets = records)
+    library.copy(collections = library.collections.filterNot(_.id == id) :+ next)
+
+  private def unreferenced(library: PresetLibrary, ids: Iterable[UUID]): Vector[UUID] =
+    val live = library.collections.flatMap(_.presets.map(_.id)).toSet
+    ids.iterator.filterNot(live).toVector.distinct
 
   /** Appends one entry; a state identical to the newest entry is skipped. Returns the added record and evicted ids. */
   def append(library: PresetLibrary, mode: Mode, values: Map[FieldKey, PresetAtom], at: LocalDateTime,
@@ -55,20 +70,50 @@ object GenerationHistory:
     if current.lastOption.exists(_.fields == values) then (library, None, Vector.empty)
     else
       val base = stamp.format(at)
-      val taken = current.map(_.name).toSet
+      val taken = (current ++ favourites(library, mode)).map(_.name).toSet
       val name = Iterator.single(base).++(Iterator.from(2).map(n => s"$base ($n)")).find(!taken(_)).get
       val record = PresetRecord(UUID.randomUUID(), name, values, None, Set.empty, Vector.empty, Vector.empty)
       val keep = limit.max(1)
       val all = current :+ record
-      (store(library, mode, all.takeRight(keep)), Some(record), all.dropRight(keep).map(_.id))
+      val next = store(library, mode, all.takeRight(keep))
+      (next, Some(record), unreferenced(next, all.dropRight(keep).map(_.id)))
 
   def remove(library: PresetLibrary, mode: Mode, ids: Set[UUID]): PresetLibrary =
-    store(library, mode, entries(library, mode).filterNot(r => ids(r.id)))
+    storeFavourites(store(library, mode, entries(library, mode).filterNot(r => ids(r.id))), mode,
+      favourites(library, mode).filterNot(r => ids(r.id)))
+
+  /** Mixed selections add all; if all selected are already favourites, remove all. */
+  def toggleFavourites(library: PresetLibrary, mode: Mode, ids: Set[UUID]): (PresetLibrary, Vector[UUID]) =
+    val saved = favourites(library, mode)
+    val savedIds = saved.map(_.id).toSet
+    val candidates = (entries(library, mode) ++ saved).filter(r => ids(r.id)).distinctBy(_.id)
+    val next = if ids.nonEmpty && ids.subsetOf(savedIds) then saved.filterNot(r => ids(r.id))
+      else saved ++ candidates.filterNot(r => savedIds(r.id))
+    val result = storeFavourites(library, mode, next)
+    (result, unreferenced(result, ids))
+
+  def clearNonFavourites(library: PresetLibrary, mode: Mode): (PresetLibrary, Vector[UUID]) =
+    val fav = favourites(library, mode).map(_.id).toSet
+    val previous = entries(library, mode)
+    val next = store(library, mode, previous.filter(r => fav(r.id)))
+    (next, unreferenced(next, previous.map(_.id)))
+
+  def unreferencedAfterRemoval(library: PresetLibrary, ids: Iterable[UUID]): Vector[UUID] = unreferenced(library, ids)
+
+private object HistoryOperationLocks:
+  private val monitors = new java.util.HashMap[Path, Object]()
+  def monitor(root: Path): Object = monitors.synchronized {
+    Option(monitors.get(root)).getOrElse {
+      val created = new Object()
+      monitors.put(root, created)
+      created
+    }
+  }
 
 /** Disk side of the history: one JSON library plus 100px thumbnails, all on one I/O thread. */
 final class GenerationHistoryStore(directory: Path, limit: Int, dispatch: (() => Unit) => Unit):
   private val root = directory.toAbsolutePath.normalize()
-  private val store = new PresetStore(root, PresetLimits())
+  private val store = new PresetStore(root, PresetLimits(maxCollections = 6))
   private val thumbs = root.resolve("thumbs")
   private val flag = root.resolve("autosave.off")
   private val io = Executors.newSingleThreadExecutor((task => {
@@ -92,25 +137,68 @@ final class GenerationHistoryStore(directory: Path, limit: Int, dispatch: (() =>
     catch case NonFatal(e) => Left(PresetError(Vector(PresetIssue("io", flag.toString, Option(e.getMessage).getOrElse("io error")))))
   def thumbnail(id: UUID): Path = thumbs.resolve(id.toString + ".png")
 
+  private def isReparse(path: Path): Boolean =
+    val attrs = Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+    val dos = try Files.readAttributes(path, "dos:reparsePoint", LinkOption.NOFOLLOW_LINKS)
+      .get("reparsePoint") == java.lang.Boolean.TRUE
+    catch case NonFatal(_) => false
+    attrs.isSymbolicLink || attrs.isOther || dos
+
+  private def safeThumbDirectory(create: Boolean): Boolean =
+    if !Files.exists(thumbs, LinkOption.NOFOLLOW_LINKS) then
+      if !create then return false
+      Files.createDirectory(thumbs)
+    if isReparse(thumbs) || !Files.isDirectory(thumbs, LinkOption.NOFOLLOW_LINKS) then
+      throw new java.io.IOException("History thumbnail directory is a link or is not a directory")
+    true
+
+  def thumbnailIfSafe(id: UUID): Option[Path] =
+    try
+      val file = thumbnail(id)
+      Option.when(safeThumbDirectory(false) && Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) && !isReparse(file))(file)
+    catch case NonFatal(_) => None
+
   private def run(task: => Unit): Unit =
     if !closed then
       try io.execute(() => try task catch case NonFatal(_) => ())
       catch case _: java.util.concurrent.RejectedExecutionException => ()
 
-  private def mutate(change: PresetLibrary => (PresetLibrary, Option[PresetRecord], Vector[UUID]))
+  /** Serialize library mutations and thumbnail lifecycle across cooperating NUI processes and stores. */
+  private def exclusive[A](body: => A): Either[PresetError, A] =
+    try
+      Files.createDirectories(root)
+      val physicalRoot = root.toRealPath()
+      HistoryOperationLocks.monitor(physicalRoot).synchronized {
+        store.load().flatMap { _ =>
+          val lockPath = root.resolve(".history-operations.lock")
+          val channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)
+          try
+            val lock = channel.lock()
+            try Right(body)
+            finally try lock.release() catch case NonFatal(_) => ()
+          finally try channel.close() catch case NonFatal(_) => ()
+        }
+      }
+    catch case NonFatal(error) => Left(PresetError(Vector(PresetIssue("io", root.toString,
+      "History operation failed: " + Option(error.getMessage).getOrElse(error.getClass.getSimpleName)))))
+
+  private def mutate(change: PresetLibrary => (PresetLibrary, Option[PresetRecord], Vector[UUID]),
+      guard: PresetLibrary => Either[PresetError, Unit] = _ => Right(()))
       : Either[PresetError, Option[PresetRecord]] =
     def attempt(n: Int): Either[PresetError, Option[PresetRecord]] =
       store.load().flatMap { loaded =>
-        val (next, added, evicted) = change(loaded.library)
-        if next eq loaded.library then Right(added)
-        else store.save(loaded.revision, next).map { _ =>
-          evicted.foreach(id => try Files.deleteIfExists(thumbnail(id)) catch case NonFatal(_) => ())
-          added
+        guard(loaded.library).flatMap { _ =>
+          val (next, added, evicted) = change(loaded.library)
+          if next eq loaded.library then Right(added)
+          else store.save(loaded.revision, next).map { _ =>
+            evicted.foreach(id => try if safeThumbDirectory(false) then Files.deleteIfExists(thumbnail(id)) catch case NonFatal(_) => ())
+            added
+          }
         }
       } match
         case Left(e) if n < 2 && e.issues.exists(_.code == "conflict") => attempt(n + 1)
         case other => other
-    attempt(0)
+    exclusive(attempt(0)).flatten
 
   /** Records `values`; `done` receives the new record (None when identical to the newest entry). */
   def record(mode: Mode, values: Map[FieldKey, PresetAtom],
@@ -126,41 +214,72 @@ final class GenerationHistoryStore(directory: Path, limit: Int, dispatch: (() =>
       dispatch(() => done(result))
     }
 
+  def listFavourites(mode: Mode)(done: Either[PresetError, Vector[PresetRecord]] => Unit): Unit =
+    run {
+      val result = store.load().map(l => GenerationHistory.favourites(l.library, mode))
+      dispatch(() => done(result))
+    }
+
+  def listGroups(mode: Mode)(done: Either[PresetError, (Vector[PresetRecord], Vector[PresetRecord])] => Unit): Unit =
+    run {
+      val result = store.load().map(l => (GenerationHistory.entries(l.library, mode), GenerationHistory.favourites(l.library, mode)))
+      dispatch(() => done(result))
+    }
+
+  def toggleFavourites(mode: Mode, ids: Set[UUID])(done: Either[PresetError, Unit] => Unit): Unit =
+    run {
+      val result = mutate(lib => {
+        val (next, removed) = GenerationHistory.toggleFavourites(lib, mode, ids)
+        (next, None, removed)
+      }, lib => {
+        val available = (GenerationHistory.entries(lib, mode) ++ GenerationHistory.favourites(lib, mode)).map(_.id).toSet
+        if ids.nonEmpty && ids.subsetOf(available) then Right(())
+        else Left(PresetError(Vector(PresetIssue("stale-selection", mode.key, "Selected history entries are no longer available"))))
+      }).map(_ => ())
+      dispatch(() => { done(result); if result.isRight then listener() })
+    }
+
   def delete(mode: Mode, ids: Set[UUID])(done: Either[PresetError, Unit] => Unit): Unit =
     run {
-      val result = mutate(lib => (GenerationHistory.remove(lib, mode, ids), None, ids.toVector)).map(_ => ())
+      val result = mutate(lib => {
+        val next = GenerationHistory.remove(lib, mode, ids)
+        (next, None, GenerationHistory.unreferencedAfterRemoval(next, ids))
+      }).map(_ => ())
       dispatch(() => { done(result); listener() })
     }
 
   def clear(mode: Mode)(done: Either[PresetError, Unit] => Unit): Unit =
     run {
-      store.load().map(l => GenerationHistory.entries(l.library, mode).map(_.id).toSet) match
-        case Left(e) => dispatch(() => done(Left(e)))
-        case Right(ids) =>
-          val result = mutate(lib => (GenerationHistory.remove(lib, mode, ids), None, ids.toVector)).map(_ => ())
-          dispatch(() => { done(result); listener() })
+      val result = mutate(lib => {
+        val (next, removed) = GenerationHistory.clearNonFavourites(lib, mode)
+        (next, None, removed)
+      }).map(_ => ())
+      dispatch(() => { done(result); listener() })
     }
 
   /** Scales `source` to fit 100x100 and writes it as the entry thumbnail; failures only lose the thumbnail. */
   def writeThumbnail(id: UUID, source: Path): Unit =
     run {
-      val image = javax.imageio.ImageIO.read(source.toFile)
-      if image != null then
-        val scale = math.min(100.0 / image.getWidth, 100.0 / image.getHeight).min(1.0)
-        val w = math.max(1, (image.getWidth * scale).round.toInt)
-        val h = math.max(1, (image.getHeight * scale).round.toInt)
-        val out = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB)
-        val g = out.createGraphics()
-        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-        g.drawImage(image, 0, 0, w, h, null)
-        g.dispose()
-        Files.createDirectories(thumbs)
-        val temp = Files.createTempFile(thumbs, "t", ".tmp")
-        try
-          javax.imageio.ImageIO.write(out, "png", temp.toFile)
-          Files.move(temp, thumbnail(id), StandardCopyOption.REPLACE_EXISTING)
-        finally Files.deleteIfExists(temp)
-        dispatch(() => listener())
+      exclusive {
+        val stillReferenced = store.load().exists(_.library.collections.exists(_.presets.exists(_.id == id)))
+        val image = if stillReferenced then javax.imageio.ImageIO.read(source.toFile) else null
+        if image != null then
+          val scale = math.min(100.0 / image.getWidth, 100.0 / image.getHeight).min(1.0)
+          val w = math.max(1, (image.getWidth * scale).round.toInt)
+          val h = math.max(1, (image.getHeight * scale).round.toInt)
+          val out = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB)
+          val g = out.createGraphics()
+          g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+          g.drawImage(image, 0, 0, w, h, null)
+          g.dispose()
+          safeThumbDirectory(true)
+          val temp = Files.createTempFile(thumbs, "t", ".tmp")
+          try
+            javax.imageio.ImageIO.write(out, "png", temp.toFile)
+            Files.move(temp, thumbnail(id), StandardCopyOption.REPLACE_EXISTING)
+          finally Files.deleteIfExists(temp)
+          dispatch(() => listener())
+      }
     }
 
   def close(): Unit =

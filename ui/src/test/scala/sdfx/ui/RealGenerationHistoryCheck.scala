@@ -158,6 +158,31 @@ object RealGenerationHistoryCheck:
       eventually("second entry") { historyItems.size == 2 }
       require(historyItems.head.fields.exists((k, v) => k.render == "generation.seed" && v.toString.contains("7102")), "newest entry must be first")
       note("second Generate recorded a second entry, newest first")
+      selectHistory(0, 1)
+      fx { control[Button]("generation-history-favourite").fire() }
+      eventually("two favourites") { fx {
+        control[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        control[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 2
+      }}
+      fx {
+        control[ListView[PresetRecord]]("generation-favourites-list").getSelectionModel.clearAndSelect(1)
+        control[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmFire("generation-states-restore-field")
+      fx {
+        require(window.vms(Mode.Txt2Img).prompt.get == paramsA.prompt)
+        require(window.vms(Mode.Txt2Img).seed.get == 7102L)
+        control[CheckBox]("generation-history-auto").setSelected(false)
+      }
+      val imageFavourite = generate()
+      val favouriteMetadata = sdfx.core.png.PngMetadata.readParameters(imageFavourite).getOrElse("")
+      require(favouriteMetadata.contains(paramsA.prompt) && favouriteMetadata.contains("Seed: 7102"), favouriteMetadata)
+      fx {
+        window.vms(Mode.Txt2Img).prompt.set(paramsB.prompt)
+        control[CheckBox]("generation-history-auto").setSelected(true)
+        control[TabPane]("generation-states-tabs").getSelectionModel.select(1)
+      }
+      note(s"multiple favourites stored; restored a favourite prompt and generated image $imageFavourite")
       // 3. Identical state -> no duplicate
       generate()
       Thread.sleep(1500)

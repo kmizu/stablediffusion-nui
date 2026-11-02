@@ -176,6 +176,67 @@ class PresetStoreSuite extends munit.FunSuite with TempDir:
     assert(backup == aBytes || backup == bBytes)
   }
 
+  tmp.test("save_reports_success_when_cleanup_fails_after_atomic_replacement") { dir =>
+    val normal = new PresetStore(dir, limits)
+    val old = saved(normal, PresetRevision(None), library("A"))
+    val failingCleanup = new PresetStore(dir, limits, new PresetFileOps:
+      def writeForced(path: Path, value: Array[Byte]): Unit = PresetFileOps.nio.writeForced(path, value)
+      def atomicReplace(from: Path, to: Path): Unit =
+        PresetFileOps.nio.atomicReplace(from, to)
+        if to == normal.libraryPath then
+          Files.createDirectory(from)
+          Files.writeString(from.resolve("cleanup-failure"), "fixture")
+    )
+    val result = failingCleanup.save(old.revision, library("B"))
+    assertEquals(normal.load().toOption.get.library, library("B"))
+    assert(result.isRight, s"installed library was reported as failed: $result")
+    assertEquals(result.toOption.get.revision, normal.load().toOption.get.revision)
+  }
+
+  tmp.test("restore_reports_success_when_cleanup_fails_after_atomic_replacement") { dir =>
+    val normal = new PresetStore(dir, limits)
+    val old = saved(normal, PresetRevision(None), library("A"))
+    val latest = saved(normal, old.revision, library("B"))
+    val failingCleanup = new PresetStore(dir, limits, new PresetFileOps:
+      def writeForced(path: Path, value: Array[Byte]): Unit = PresetFileOps.nio.writeForced(path, value)
+      def atomicReplace(from: Path, to: Path): Unit =
+        PresetFileOps.nio.atomicReplace(from, to)
+        if to == normal.libraryPath then
+          Files.createDirectory(from)
+          Files.writeString(from.resolve("cleanup-failure"), "fixture")
+    )
+    val result = failingCleanup.restoreBackup(latest.revision)
+    assertEquals(normal.load().toOption.get.library, library("A"))
+    assert(result.isRight, s"installed backup was reported as failed: $result")
+    assertEquals(result.toOption.get.revision, normal.load().toOption.get.revision)
+  }
+
+  tmp.test("successful_save_and_restore_survive_lock_release_or_close_exceptions") { dir =>
+    for phase <- Vector("release-before", "release-after", "close-after") do
+      val subdir = Files.createDirectory(dir.resolve(phase))
+      val normal = new PresetStore(subdir, limits)
+      val old = saved(normal, PresetRevision(None), library("A"))
+      var injected = 0
+      val faulty = new PresetStore(subdir, limits, new PresetFileOps:
+        def writeForced(path: Path, value: Array[Byte]): Unit = PresetFileOps.nio.writeForced(path, value)
+        def atomicReplace(from: Path, to: Path): Unit = PresetFileOps.nio.atomicReplace(from, to)
+        override def releaseLock(lock: java.nio.channels.FileLock): Unit =
+          if phase == "release-before" then { injected += 1; throw new IOException("injected release failure") }
+          lock.release()
+          if phase == "release-after" then { injected += 1; throw new IOException("injected release failure") }
+        override def closeLock(channel: java.nio.channels.FileChannel): Unit =
+          channel.close()
+          if phase == "close-after" then { injected += 1; throw new IOException("injected close failure") }
+      )
+      val savedB = faulty.save(old.revision, library("B"))
+      assert(savedB.isRight, s"$phase exception hid successful save: $savedB")
+      assertEquals(normal.load().toOption.get.library, library("B"))
+      val restored = faulty.restoreBackup(savedB.toOption.get.revision)
+      assert(restored.isRight, s"$phase exception hid successful restore: $restored")
+      assertEquals(normal.load().toOption.get.library, library("A"))
+      assertEquals(injected, 2)
+  }
+
   tmp.test("failed_temp_write_preserves_original_and_backup") { dir =>
     val normal = new PresetStore(dir, limits)
     val a = saved(normal, PresetRevision(None), library("A"))
