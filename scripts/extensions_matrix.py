@@ -48,7 +48,7 @@ S = {
     94: "todo:minecraft_schematic", 95: "done:aesthetic_score", 96: "done:aesthetic_score", 97: "done:aesthetic_score",
     98: "done:core:clip_interrogator", 99: "todo:cross_attention_viz", 100: "todo:dump_unet", 101: "todo:openpose_editor",
     102: "done:llul", 103: "todo:cfg_schedule", 104: "todo:ebsynth_utility", 105: "todo:core:vram-estimator",
-    106: "todo:tiled_diffusion", 107: "todo:openpose_editor", 108: "done:corridor_crawler", 109: "done:core:panorama-viewer",
+    106: "todo:tiled_diffusion", 107: "todo:openpose_editor", 108: "done:corridor_crawler", 109: "todo:core:panorama-viewer",
     110: "na:account", 111: "todo:remove_background", 112: "na:server-ops", 113: "todo:openpose_editor", 114: "na:webui-css",
     115: "done:core:ui-state", 116: "todo:text2video", 117: "done:core:size-presets", 118: "done:core:mask-canvas",
     119: "todo:regional_prompter", 120: "todo:prompt_translate", 121: "todo:prompt_translate", 122: "todo:core:temporal-lab",
