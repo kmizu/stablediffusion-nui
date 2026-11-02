@@ -1,4 +1,15 @@
-> **最新の引き継ぎ(Codex 向け)は `HANDOFF-CODEX.md`。** 以下は過去の記録。
+> 最新の作業状況は直下の追記。過去の詳細は `HANDOFF-CODEX.md` と、この追記より下の記録を参照。
+
+## 2026-11-03 作業中の追記
+
+- ユーザーの方針: issue を速く解決し、10件ごとにリリース。MCP から AI が使えることを重視。日本語マニュアルで十分、必要な画面はキャプチャする。次のリリース番号は未決定なので推測しない。
+- main `c4abab32d3150ca979b4e440db602990fabcfd8b` は push 済み（作業時に remote と一致を確認）。`.claude/` は未追跡の既存 worktrees なので消さない。
+- ネガティブ候補 `c484556`: 画質・人体・文字のセットと個別調整、日本語説明。実 GUI と SD1.5/SDXL、展開版 MCP を確認。詳細は `docs/negative-suggestions-verification.md`。抽出版 GUI 自体の実生成は未確認。
+- #2 Aesthetic Gradients `c4abab3`: GUI/MCP の embedding 作成、PNG 復元の SHA 照合、日本語マニュアル。実 GUI と展開版 MCP で SD1.5/SDXL を確認。Scala 全体と Python CPU 全体も通過。元拡張との互換性、OS chooser の手操作、配布 EXE の GUI など未確認があるため issue は open、台帳は todo のまま。詳細は `docs/aesthetic-gradients-verification.md` と `docs/aesthetic-embeddings.md`。新しい main と合わせた後の配布物そのものはまだ実モデルで検証していない。
+- #26 CreaPrompt: `C:/Users/Mizushima/dev/stablediffusion-nui/.claude/worktrees/agent-afb99384e42e1188b`、`72b235b` に main `c4abab3` を取り込み済み。ひとつ前の main `c484556` と統合した配布版は SD1.5・SDXL とも実測成功、画像を目視した。最新統合後の focused・GUI・assembly と配布版 SD1.5 は成功し、SDXL と実 GUI 生成は進行中。詳細は同 worktree の `docs/creaprompt-verification.md`。
+- #143 VRAM/最適化: `C:/Users/Mizushima/dev/stablediffusion-nui/.claude/worktrees/agent-ab7508137bf41c07e`、`92cc0dd`。main `c4abab3` 取り込み後の CPU focused は 142 pass・1 skip。実 SDXL VAE で fp32 fallback を検証したが、NaN と VRAM 制限は試験で再現したもの。実低 VRAM 端末、MCP・配布版の同経路などは未検証。`docs/optimization-handoff.md` を参照。
+- 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
+- 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 
 # Stable Diffusion NUI 引継ぎ — 2026-10-31（2026-11-01 Claude追記）
 
