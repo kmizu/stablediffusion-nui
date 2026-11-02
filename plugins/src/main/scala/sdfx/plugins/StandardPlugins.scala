@@ -57,6 +57,7 @@ object StandardPlugins:
     new CustomCodePlugin,
     new UltimateSdUpscalePlugin,
     new LoopbackScalerPlugin,
+    new CorridorCrawlerPlugin,
     new OldSdFirstpasserPlugin,
     new AnimateDiffPlugin,
     new CnAnimationPlugin,
