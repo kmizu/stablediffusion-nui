@@ -26,7 +26,9 @@ class NativeScalaEngineSuite extends munit.FunSuite:
     try
       val hello=supervisor.start()
       assertEquals(hello.python,"")
-      assertEquals(hello.device,"cpu")
+      val requestedUnetDevice=sys.env.getOrElse("SDFX_SCALATORCH_UNET_DEVICE","cpu")
+      val expectedUnetDevice=if requestedUnetDevice=="cuda" then "cuda:0" else requestedUnetDevice
+      assertEquals(hello.device,expectedUnetDevice)
       val models=Await.result(client.listModels(Seq(root.getParent.toString)),10.seconds)
       assertEquals(models.map(_.path),Seq(root.toRealPath().toString))
       assert(models.head.sizeMb>0)
@@ -36,7 +38,8 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       val vaes=Await.result(client.listFiles("vae",Seq(root.resolve("vae").toString)),10.seconds)
       assertEquals(vaes.map(_.name),Seq("diffusion_pytorch_model"))
       assert(vaes.head.sizeMb>0)
-      assertEquals(Await.result(client.systemStatus(),10.seconds)("device")("active").str,"cpu")
+      assertEquals(Await.result(client.systemStatus(),10.seconds)("device")("active").str,expectedUnetDevice)
+      assertEquals(Await.result(client.systemStatus(),10.seconds)("runtime")("unet_device").str,expectedUnetDevice)
       val requestedVaeDevice=sys.env.getOrElse("SDFX_SCALATORCH_VAE_DEVICE","cpu")
       val expectedVaeDevice=if requestedVaeDevice=="cuda" then "cuda:0" else requestedVaeDevice
       assertEquals(Await.result(client.systemStatus(),10.seconds)("runtime")("vae_device").str,expectedVaeDevice)
@@ -46,6 +49,7 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       val swapped=Await.result(client.setVae(Some(root.resolve("vae/diffusion_pytorch_model.safetensors").toString)),20.seconds)
       assert(swapped.vaeHash.exists(_.matches("[0-9a-f]{64}")))
       assertEquals(Await.result(client.setVae(None),20.seconds).vaeName,None)
+      assertEquals(Await.result(client.systemStatus(),10.seconds)("runtime")("unet_device").str,expectedUnetDevice)
       assertEquals(Await.result(client.systemStatus(),10.seconds)("runtime")("vae_device").str,expectedVaeDevice)
       def mapping(action: String)=Await.result(client.raw("model_keyword",ujson.Obj("action"->action,
         "kind"->"checkpoint","model_path"->root.toString,"mapping_dir"->temp.toString,"keywords"->"a red")),10.seconds)
