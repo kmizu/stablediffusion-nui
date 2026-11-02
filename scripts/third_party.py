@@ -38,6 +38,8 @@ BASE = [
     ("crowsonkb/simulacra-aesthetic-models", "model dependency", "MIT simulacra linear predictors sac_public_2022_06_29_vit_l_14_linear.pth (4,135 bytes) and vit_b_16 (3,111 bytes) at pinned commit 701f7678b305acf8a0634350365a86beb95dd87d, downloaded on first use for the `aesthetic_score` plugin and size/SHA-256 checked; not bundled; the linear head is written independently"),
     ("openai/CLIP", "model dependency", "MIT CLIP project. The ViT-L/14 (openai/clip-vit-large-patch14, revision 32bd64288804d66eefd0ccbe215aa642df71cc41, model.safetensors 1,710,540,580 bytes) and ViT-B/16 (openai/clip-vit-base-patch16, revision 57c216476eefef5ab752ec549e440a49ae4ae5f3, pytorch_model.bin 598,641,023 bytes) Hugging Face conversions of its weights are downloaded on first use for the `aesthetic_score` plugin and size/SHA-256 checked; their model cards state no licence; not bundled"),
     ("continue-revolution/sd-webui-animatediff", "reimplemented", "Pinned CC BY-NC-SA 4.0 source a88e88912bcbae0531caccfc50fd639f6ea83fd0 (non-commercial, share-alike); only its README and docs/*.md were used for the behaviour (context batch size, closed loop, stride and overlap, prompt travel, Img2Vid latent blend, FreeInit, save formats), re-implemented as the `animatediff` script and engine hook on diffusers' MotionAdapter; no upstream code was read or copied. Motion module weights are downloaded by the user (guoyww/animatediff: Apache-2.0; conrevo/AnimateDiff-A1111: no licence declared) and are not redistributed"),
+    ("kex0/batch-face-swap", "reimplemented", "Unlicensed behavior reference 942ebae6937d9ad7964f285a790e7721f712b9ec (no license file; the README says the project is no longer maintained); only its README was used (detect faces automatically and replace them, override options that affect only the face pass), re-implemented as the `batch_face_swap` AlwaysOn face pass on the ADetailer inpaint path; no upstream code was read or copied"),
+    ("Bingsu/adetailer", "model dependency", "Face detector weights (face_yolov8n.pt, face_yolov8s.pt, face_yolov8m.pt, face_yolov9c.pt) downloaded from Hugging Face on first use by ADetailer and Batch Face Swap; the model card states Apache-2.0 (pinned 53cc19de382014514d9d4038601d261a7faa9b7b); running them needs the optional ultralytics package (AGPL-3.0)"),
     ("hnmr293/sd-webui-llul", "reimplemented", "Unlicensed behavior reference 6c5ac1b0aa29736e0aad3476939e4e05f25d20d7 (its LICENSE holds only the heading `MIT License`); independent local latent upscaling hooks on the diffusers U-Net; no upstream code copied"),
     ("v0xie/sd-webui-incantations", "reimplemented", "Pinned GPL-3.0 source 980d63838a2b8c8659a01b242e55551870619d6a; independent Smoothed Energy Guidance, S-CFG, PAG with SANF, CFG scheduler and Multi-Concept T2I-Zero; no upstream code copied"),
     ("scraed/CharacteristicGuidanceWebUI", "reimplemented", "Pinned GPL-3.0 source e2f9fdca460beed1366647e2eea8276a63f98484; independent characteristic guidance iteration; no upstream code copied"),
@@ -300,6 +302,10 @@ PINNED_UNLICENSED = {
         "32bd64288804d66eefd0ccbe215aa642df71cc41", "Hugging Face model card states no license (the openai/CLIP code repository is MIT)"),
     "vladmandic/sd-extension-aesthetic-scorer": (
         "b60c3c825409f9b5c1ccbbb63b1713bf8ce7f253", "no license file published at pinned source"),
+    "kex0/batch-face-swap": (
+        "942ebae6937d9ad7964f285a790e7721f712b9ec", "no license file published at pinned source"),
+    "Bingsu/adetailer": (
+        "53cc19de382014514d9d4038601d261a7faa9b7b", "Hugging Face model card states Apache-2.0"),
     "hnmr293/sd-webui-llul": (
         "6c5ac1b0aa29736e0aad3476939e4e05f25d20d7", "no usable license at pinned source (LICENSE is only the heading `MIT License`)"),
 }

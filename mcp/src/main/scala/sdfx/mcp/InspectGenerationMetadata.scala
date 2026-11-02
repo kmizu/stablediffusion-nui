@@ -5,7 +5,7 @@ import java.util.Base64
 import sdfx.core.infotext.Infotext
 import sdfx.core.plugins.api.{Control, Plugin, Values}
 import sdfx.core.png.PngMetadata
-import sdfx.plugins.{AnimateDiffPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
+import sdfx.plugins.{AnimateDiffPlugin, BatchFaceSwapPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
 import scala.util.control.NonFatal
 
 /** Inspect only: no model load, plugin execution, script execution or generation. */
@@ -159,6 +159,7 @@ object InspectGenerationMetadata:
       "llul" -> LlulPlugin.replay(f).filter(_ => f.contains(LlulPlugin.EnabledKey)),
       "aesthetic_gradients" -> AestheticGradientsPlugin.replay(f).filter(_ => f.contains(AestheticGradientsPlugin.EmbeddingKey)),
       "aesthetic_score" -> AestheticScorePlugin.replay(f).filter(_ => AestheticScorePlugin.TriggerKeys.exists(f.contains)),
+      "batch_face_swap" -> BatchFaceSwapPlugin.replay(f).filter(_ => f.contains(BatchFaceSwapPlugin.InfotextKey)),
       "model_keyword" -> Option.when(f.contains("Model keyword settings") || f.get("Model keyword replay").exists(_.equalsIgnoreCase("true")))(Values(Map("enabled" -> "false")))
     )
     val plugins = StandardPlugins.alwaysOn.map(p => p.id -> p).toMap
@@ -212,7 +213,8 @@ object InspectGenerationMetadata:
       (if on.value.contains("sonar") then SonarPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("llul") then LlulPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("aesthetic_gradients") then AestheticGradientsPlugin.InfotextKeys.toSet else Set.empty[String]) ++
-      (if on.value.contains("aesthetic_score") then AestheticScorePlugin.InfotextKeys.toSet else Set.empty[String])
+      (if on.value.contains("aesthetic_score") then AestheticScorePlugin.InfotextKeys.toSet else Set.empty[String]) ++
+      (if on.value.contains("batch_face_swap") then Set(BatchFaceSwapPlugin.InfotextKey) else Set.empty[String])
     // Script candidates: only reported, run_script is called by the agent with these values and generation_args.
     val scriptCandidates: Seq[(String, Values, Seq[String])] =
       OldSdFirstpasserPlugin.replay(f).map(v => (OldSdFirstpasserPlugin.Id, v, OldSdFirstpasserPlugin.InfotextKeys)).toSeq ++

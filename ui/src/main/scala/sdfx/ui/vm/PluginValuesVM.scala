@@ -125,6 +125,7 @@ final class PluginsVM(val mode: Mode, scripts: Seq[Plugin], alwaysOnPlugins: Seq
     sdfx.plugins.IncantationsPlugin.replay(fields).foreach(values => form("incantations").foreach(_.load(values)))
     sdfx.plugins.SonarPlugin.replay(fields).foreach(values => form("sonar").foreach(_.load(values)))
     sdfx.plugins.LlulPlugin.replay(fields).foreach(values => form("llul").foreach(_.load(values)))
+    sdfx.plugins.BatchFaceSwapPlugin.replay(fields).foreach(values => form("batch_face_swap").foreach(_.load(values)))
     sdfx.plugins.AestheticGradientsPlugin.replay(fields).foreach(values => form("aesthetic_gradients").foreach(_.load(values)))
     sdfx.plugins.AestheticScorePlugin.replay(fields).foreach(values => form("aesthetic_score").foreach(_.load(values)))
     def flag(key: String): Option[Boolean] = fields.get(key).flatMap { v =>

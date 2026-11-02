@@ -164,11 +164,27 @@ def merge_invert(masks: list, mode: str) -> list:
     return [m]
 
 
+def shaped_masks(d: Detection, size, shape: str, scale: float) -> list:
+    """Masks rebuilt from the detection boxes: an ellipse or rectangle `scale` times the box, around its centre."""
+    from PIL import Image, ImageDraw
+    out = []
+    for x1, y1, x2, y2 in d.boxes:
+        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+        hw, hh = (x2 - x1) * scale / 2, (y2 - y1) * scale / 2
+        m = Image.new("L", size, 0)
+        box = [cx - hw, cy - hh, cx + hw, cy + hh]
+        (ImageDraw.Draw(m).ellipse if shape == "ellipse" else ImageDraw.Draw(m).rectangle)(box, fill=255)
+        out.append(m)
+    return out
+
+
 def unit_masks(image, u: dict, device: str, model_dirs=None) -> list:
     d = detect(image, resolve_model(u["model"], model_dirs), u["confidence"], device)
     d = filter_by_ratio(d, u["mask_min_ratio"], u["mask_max_ratio"], image.size)
     d = filter_k_largest(d, int(u["mask_k_largest"]))
     d = sort_left_to_right(d)
+    if u.get("mask_shape") in ("ellipse", "box"):  # Batch Face Swap: face-shaped masks instead of the model's own
+        d = Detection(d.boxes, shaped_masks(d, image.size, u["mask_shape"], float(u.get("mask_scale", 1.0))), d.confidences)
     masks = [offset_dilate(m, u["x_offset"], u["y_offset"], u["dilate_erode"]) for m in d.masks]
     return [m for m in merge_invert(masks, u["mask_merge_invert"]) if m.getbbox() is not None]
 

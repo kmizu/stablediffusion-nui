@@ -219,7 +219,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")
@@ -1589,6 +1589,10 @@ class Engine(BaseEngine):
         aesthetic_cfg = aesthetic_score.job_config(gp.hooks, ctx)
         sonar_cfg = hooks_mod.hook_config(gp.hooks, "sonar", sonar.DEFAULTS)
         sonar_cfg = sonar.normalize(sonar_cfg) if sonar_cfg is not None else None
+        face_swap_cfg = hooks_mod.hook_config(gp.hooks, "batch_face_swap", {})
+        if face_swap_cfg is not None:  # reject bad settings before the first image, not after it
+            from . import batch_face_swap
+            batch_face_swap.normalize(face_swap_cfg)
         from . import img2img_hires_fix
         refine_config = hooks_mod.hook_config(gp.hooks, 'img2img_hires_fix', {})
         refine_config = img2img_hires_fix.normalize(refine_config) if refine_config is not None else None
@@ -1769,23 +1773,31 @@ class Engine(BaseEngine):
         def finish_batch(imgs, base_seeds, base_subs, seeds, idx0, it, repeat=0, hr_seeds=None, hr_subs=None, pass_gp=None):
             effective_gp = pass_gp if pass_gp is not None else gp
             ad = hooks_mod.hook_config(gp.hooks, "adetailer", {})
-            if hr_plan is None and refine_config is None and (keyword_plan is None or not ad):
+            bfs = hooks_mod.hook_config(gp.hooks, "batch_face_swap", {})
+            detail = bool(ad) or bfs is not None  # ADetailer, then the Batch Face Swap face pass
+            def face_passes(pass_gp, images, item_seeds, first):
                 if ad:
-                    imgs = self._adetailer(effective_gp, req, ctx, ad, imgs, seeds, idx0, total, pag)
+                    images = self._adetailer(pass_gp, req, ctx, ad, images, item_seeds, first, total, pag)
+                if bfs is not None:
+                    from . import batch_face_swap
+                    images = self._adetailer(pass_gp, req, ctx, batch_face_swap.to_adetailer(bfs), images,
+                                             item_seeds, first, total, pag)
+                return images
+            if hr_plan is None and refine_config is None and (keyword_plan is None or not detail):
+                if detail:
+                    imgs = face_passes(effective_gp, imgs, seeds, idx0)
                 imgs = ext_mod.post_images(self, gp, None, imgs, ctx=ctx, faces=True)
             for j, im in enumerate(imgs):
-                if hr_plan is not None or refine_config is not None or (keyword_plan is not None and ad):
+                if hr_plan is not None or refine_config is not None or (keyword_plan is not None and detail):
                     # Publish each finished item before another item's detector/inpaint can interrupt.
                     item_gp = (replace(effective_gp, prompt=keyword_plan['batches'][it]['clean_prompts'][j])
                                if keyword_plan is not None else effective_gp)
-                    if ad and keyword_plan is not None:
+                    if detail and keyword_plan is not None:
                         from .model_keyword import postprocess_keyword_items
                         item = postprocess_keyword_items([im], [item_gp.prompt], [seeds[j]],
-                            lambda image, text, item_seed, _: self._adetailer(item_gp, req, ctx, ad, [image],
-                                [item_seed], idx0 + j, total, pag)[0])
+                            lambda image, text, item_seed, _: face_passes(item_gp, [image], [item_seed], idx0 + j)[0])
                     else:
-                        item = self._adetailer(item_gp, req, ctx, ad, [im], [seeds[j]],
-                                               idx0 + j, total, pag) if ad else [im]
+                        item = face_passes(item_gp, [im], [seeds[j]], idx0 + j) if detail else [im]
                     im = ext_mod.post_images(self, gp, None, item, ctx=ctx, faces=True)[0]
                 if refine_config is not None:
                     refine_gp, refine_req = gp, req
@@ -2025,7 +2037,7 @@ class Engine(BaseEngine):
     # hooks that must not run again on ADetailer's inpainting passes (whole-image effects, or ADetailer itself)
     _ADETAILER_SKIP_HOOKS = ("steps_animation", "adetailer", "save_intermediate", "tiling", "latent_mirroring", "multidiffusion", "kohya_hrfix", "reference",
                              "revision", "ip_adapter", "controllllite", "photomaker", "img2imgalt", "soft_inpainting",
-                             "agent_attention", "incantations", "sonar", "llul", "aesthetic_gradients")
+                             "agent_attention", "incantations", "sonar", "llul", "aesthetic_gradients", "batch_face_swap")
 
     def _adetailer(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag):
         """ADetailer: detect, then inpaint every detection of every unit (in unit order) at full resolution."""

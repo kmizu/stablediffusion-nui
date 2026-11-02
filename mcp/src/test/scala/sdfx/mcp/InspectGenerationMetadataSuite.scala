@@ -255,7 +255,7 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     import sdfx.core.infotext.{Infotext, ImageFacts}
     import sdfx.core.plugins.api.Values
     val plugin = new sdfx.plugins.NsfwCheckerPlugin
-    val values = Values(Values.defaults(plugin.controls).map ++ Map("enabled" -> "true", "gen_filter_type" -> "Fill color",
+    val values = sdfx.core.plugins.api.Values(sdfx.core.plugins.api.Values.defaults(plugin.controls).map ++ Map("enabled" -> "true", "gen_filter_type" -> "Fill color",
       "save_mask" -> "true", "threshold_Face_female" -> "0.3", "horizontal_Face_female" -> "1.4", "rectangle_round_radius" -> "-6"))
     val params = plugin.process(GenerationParams(prompt = "portrait"), values)
     val dir = Files.createTempDirectory("mcp-inspect-")
@@ -285,7 +285,7 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     import sdfx.core.infotext.{Infotext, ImageFacts}
     import sdfx.core.plugins.api.Values
     val plugin = new sdfx.plugins.NsfwCheckerPlugin
-    val values = Values(Values.defaults(plugin.controls).map ++ Map("enabled" -> "true", "nudenet" -> "false",
+    val values = sdfx.core.plugins.api.Values(sdfx.core.plugins.api.Values.defaults(plugin.controls).map ++ Map("enabled" -> "true", "nudenet" -> "false",
       "safety_checker" -> "true", "nsfwjs" -> "true", "nsfwjs_safety_level" -> "questionable"))
     val params = plugin.process(GenerationParams(prompt = "portrait"), values)
     val dir = Files.createTempDirectory("mcp-inspect-")
@@ -430,6 +430,24 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!result("unapplied_fields").obj.keySet.exists(k => sdfx.plugins.AestheticGradientsPlugin.InfotextKeys.contains(k)))
     PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("aesthetic_gradients"))
+  }
+
+  test("Batch Face Swap infotext becomes a typed candidate and its key is consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("bfs.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val plugin = new sdfx.plugins.BatchFaceSwapPlugin
+    val values = sdfx.core.plugins.api.Values(sdfx.core.plugins.api.Values.defaults(plugin.controls).map ++ Map("enabled" -> "true", "denoising_strength" -> "0.65"))
+    val params = plugin.process(sdfx.core.model.GenerationParams(prompt = "girl"), values)
+    val text = sdfx.core.infotext.Infotext.write(params, sdfx.core.infotext.ImageFacts(seed = 4))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("always_on")("batch_face_swap")
+    assertEquals(candidate("enabled").bool, true)
+    assertEquals(candidate("denoising_strength").num, 0.65)
+    assert(!result("unapplied_fields").obj.keySet.contains("Batch Face Swap"))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("batch_face_swap"))
   }
 
   test("LLuL source infotext becomes a typed candidate and its keys are consumed") {
