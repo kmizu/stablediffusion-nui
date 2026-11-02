@@ -36,7 +36,11 @@ private[engine] object EngineBackend:
       "SDFX_SCALATORCH_CLASSPATH_FILE"->settings.scalaTorchClasspath,
       "SDFX_SCALATORCH_MODEL"->settings.scalaTorchModel,
       "SDFX_SCALATORCH_SCHEDULER"->settings.scalaTorchScheduler,
-      "SDFX_SCALATORCH_JAVA"->settings.scalaTorchJava)
+      "SDFX_SCALATORCH_JAVA"->settings.scalaTorchJava,
+      "SDFX_SCALATORCH_UNET_DEVICE"->Some(settings.scalaTorchUnetDevice),
+      "SDFX_SCALATORCH_VAE_DEVICE"->Some(settings.scalaTorchVaeDevice),
+      "SDFX_SCALATORCH_UNET_OFFLOAD_WEIGHTS"->Some(settings.scalaTorchUnetOffloadWeights.toString),
+      "SDFX_SCALATORCH_VAE_OFFLOAD_WEIGHTS"->Some(settings.scalaTorchVaeOffloadWeights.toString))
     val configured=saved.foldLeft(configured0) { case (env,(key,value)) =>
       if env.contains(key) then env else value.map(v => env.updated(key,v)).getOrElse(env)
     }

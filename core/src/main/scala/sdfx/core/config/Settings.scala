@@ -98,7 +98,11 @@ case class Settings(
     scalaTorchClasspath: Option[String] = None,
     scalaTorchModel: Option[String] = None,
     scalaTorchScheduler: Option[String] = None,
-    scalaTorchJava: Option[String] = None
+    scalaTorchJava: Option[String] = None,
+    scalaTorchUnetDevice: String = "cpu",
+    scalaTorchVaeDevice: String = "cpu",
+    scalaTorchUnetOffloadWeights: Boolean = false,
+    scalaTorchVaeOffloadWeights: Boolean = false
 ) derives RW
 
 case class SettingsRecovery(reason: String, originalSha256: Option[String])
@@ -124,6 +128,8 @@ object Settings:
   def validatePreviewConfiguration(s: Settings): Either[String, Unit] =
     try
       require(Set("auto","python","scala-torch").contains(s.engineBackend),"unsupported engine backend setting")
+      require(s.scalaTorchUnetDevice.matches("cpu|cuda(:[0-9]+)?"),"invalid scala-torch U-Net device")
+      require(s.scalaTorchVaeDevice.matches("cpu|cuda(:[0-9]+)?"),"invalid scala-torch VAE device")
       val budget = new PreviewBudget
       require(s.modelPreviewOverrides != null && s.modelPreviewFolders != null, "preview map is null")
       require(s.modelPreviewOverrides.size <= 10000 && s.modelPreviewFolders.size <= 64, "preview map entry limit exceeded")

@@ -239,12 +239,14 @@ the desktop/application modules do not acquire a PyTorch dependency.
 
 Settings now exposes `Inference backend` (`auto`, `python`, `scala-torch`) and
 file/folder pickers for the scala-torch worker classpath, Diffusers model folder,
-scheduler JSON and optional Java executable.
+scheduler JSON and optional Java executable, plus separate CPU/CUDA placement and
+weight-offload controls for U-Net and VAE.
 Choosing scala-torch skips the first-run Python bootstrap and normalizes native
 weight loading to Float32/CPU; the actual U-Net/VAE compute device remains
-controlled by their `SDFX_SCALATORCH_*_DEVICE` settings. The picker values are
-saved in NUI settings and used directly; matching `SDFX_SCALATORCH_*` variables
-override them. The default Java executable is the current runtime and must be
+controlled by the saved device selectors below. Matching `SDFX_SCALATORCH_*`
+variables override saved values. Runtime `SDFX_SCALATORCH_*` variables are
+forwarded to the worker, so saved CUDA placement and offload settings take effect
+in the child JVM. The default Java executable is the current runtime and must be
 Java25 or newer for scala-torch.
 
 ## SDXL through Generator and PNG replay (2026-11-03)
@@ -262,8 +264,8 @@ separate acceptance work.
 
 `NativeGeneratorSuite` now builds `AppServices` with the persisted `engineBackend`
 and scala-torch paths, without a launch override. The opt-in test ran the real
-Java worker with U-Net/VAE CUDA placement and weight offload enabled, selected
-through the process environment. On the local GeForce GTX 1650 (4GB VRAM),
+Java worker with U-Net/VAE CUDA placement and weight offload enabled from saved
+settings, without device environment overrides. On the local GeForce GTX 1650 (4GB VRAM),
 the worker reported `cuda:0` and completed tiny-SDXL txt2img, img2img and PNG
 metadata replay; the test passed in4.2s and confirmed no Python directory was
 created. This verifies the settings-to-backend-to-Generator route on this GPU.

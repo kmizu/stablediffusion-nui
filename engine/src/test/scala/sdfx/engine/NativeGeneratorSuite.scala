@@ -75,7 +75,9 @@ class NativeGeneratorSuite extends munit.FunSuite:
     Files.writeString(scheduler,"""{"num_train_timesteps":1000,"beta_start":0.00085,"beta_end":0.012,"beta_schedule":"scaled_linear"}""")
     val settings=Settings(dtype="fp32",vramMode="cpu",engineBackend="scala-torch",
       scalaTorchClasspath=Some(cpFile.get),scalaTorchModel=Some(root.toString),
-      scalaTorchScheduler=Some(scheduler.toString),lastModel=None,lastVae=None,
+      scalaTorchScheduler=Some(scheduler.toString),scalaTorchUnetDevice="cuda",
+      scalaTorchVaeDevice="cuda",scalaTorchUnetOffloadWeights=true,scalaTorchVaeOffloadWeights=true,
+      lastModel=None,lastVae=None,
       modelDirs=ModelDirs(checkpoints=Seq(root.getParent.toString)))
     val services=new AppServices(home,settings,dryRun=false,builtins=Nil,
       persistSettings=false,installShutdownHook=false)

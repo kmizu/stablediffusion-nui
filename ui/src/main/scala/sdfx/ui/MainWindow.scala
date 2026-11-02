@@ -952,7 +952,9 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
             imageBrowser.build()
           val engineChanged = s.engineBackend != before.engineBackend || s.scalaTorchClasspath != before.scalaTorchClasspath ||
             s.scalaTorchModel != before.scalaTorchModel || s.scalaTorchScheduler != before.scalaTorchScheduler ||
-            s.scalaTorchJava != before.scalaTorchJava || s.pythonExe != before.pythonExe || s.dtype != before.dtype || s.vramMode != before.vramMode ||
+            s.scalaTorchJava != before.scalaTorchJava || s.scalaTorchUnetDevice != before.scalaTorchUnetDevice ||
+            s.scalaTorchVaeDevice != before.scalaTorchVaeDevice || s.scalaTorchUnetOffloadWeights != before.scalaTorchUnetOffloadWeights ||
+            s.scalaTorchVaeOffloadWeights != before.scalaTorchVaeOffloadWeights || s.pythonExe != before.pythonExe || s.dtype != before.dtype || s.vramMode != before.vramMode ||
             s.vaeTiling != before.vaeTiling || s.hfOffline != before.hfOffline ||
             WdSettingsState.restartRequired(before, s)
           if engineChanged then

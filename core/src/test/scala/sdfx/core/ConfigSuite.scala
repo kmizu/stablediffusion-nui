@@ -24,7 +24,11 @@ class SettingsSuite extends munit.FunSuite with TempDir:
     disabledPlugins = Seq("loopback"),
     pluginValues = Map("freeU" -> Map("b1" -> "1.3", "enabled" -> "true"), "xyz_grid" -> Map.empty),
     hfOffline = true,
-    theme = "light"
+    theme = "light",
+    scalaTorchUnetDevice = "cuda:0",
+    scalaTorchVaeDevice = "cuda:1",
+    scalaTorchUnetOffloadWeights = true,
+    scalaTorchVaeOffloadWeights = true
   )
 
   tmp.test("save / load round trip") { dir =>
@@ -33,12 +37,19 @@ class SettingsSuite extends munit.FunSuite with TempDir:
     assertEquals(Settings.load(f), custom)
   }
 
+  tmp.test("scala-torch device settings are validated") { _ =>
+    assertEquals(Settings.validatePreviewConfiguration(Settings(scalaTorchUnetDevice="cuda:0")),Right(()))
+    assert(Settings.validatePreviewConfiguration(Settings(scalaTorchUnetDevice="cuda:bad")).isLeft)
+    assert(Settings.validatePreviewConfiguration(Settings(scalaTorchVaeDevice="metal")).isLeft)
+  }
+
   tmp.test("saved JSON uses snake_case keys and writes defaults, map keys verbatim") { dir =>
     val f = dir.resolve("settings.json")
     Settings.save(f, custom)
     val js = ujson.read(Files.readString(f))
     Seq("model_dirs", "output_dir", "python_exe", "vae_tiling", "preview_every", "last_vae", "mcp_http_port",
-      "mcp_token", "disabled_plugins", "plugin_values", "hf_offline").foreach(k => assert(js.obj.contains(k), k))
+      "mcp_token", "disabled_plugins", "plugin_values", "hf_offline", "scala_torch_unet_device",
+      "scala_torch_vae_device", "scala_torch_unet_offload_weights", "scala_torch_vae_offload_weights").foreach(k => assert(js.obj.contains(k), k))
     assertEquals(js("last_vae"), ujson.Null)
     assertEquals(js("plugin_values").obj.keys.toSet, Set("freeU", "xyz_grid"))
     assert(js("model_dirs").obj.contains("checkpoints"))

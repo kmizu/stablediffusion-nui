@@ -29,8 +29,18 @@ class ScalaTorchLaunchSuite extends munit.FunSuite:
       assertEquals(launch.command.last,scheduler.toString)
       val fromSaved=EngineBackend.launch(sdfx.core.config.AppHome(temp),sdfx.core.config.Settings(
         engineBackend="scala-torch",scalaTorchClasspath=Some(cp.toString),scalaTorchModel=Some(temp.toString),
-        scalaTorchScheduler=Some(scheduler.toString)),false,Map.empty)
+        scalaTorchScheduler=Some(scheduler.toString),scalaTorchUnetDevice="cuda",
+        scalaTorchVaeDevice="cuda",scalaTorchUnetOffloadWeights=true,scalaTorchVaeOffloadWeights=true),false,Map.empty)
       assertEquals(fromSaved.command.last,scheduler.toString)
+      assertEquals(fromSaved.env.get("SDFX_SCALATORCH_UNET_DEVICE"),Some("cuda"))
+      assertEquals(fromSaved.env.get("SDFX_SCALATORCH_VAE_DEVICE"),Some("cuda"))
+      assertEquals(fromSaved.env.get("SDFX_SCALATORCH_UNET_OFFLOAD_WEIGHTS"),Some("true"))
+      assertEquals(fromSaved.env.get("SDFX_SCALATORCH_VAE_OFFLOAD_WEIGHTS"),Some("true"))
+      val overrideDevice=EngineBackend.launch(sdfx.core.config.AppHome(temp),sdfx.core.config.Settings(
+        engineBackend="scala-torch",scalaTorchClasspath=Some(cp.toString),scalaTorchModel=Some(temp.toString),
+        scalaTorchScheduler=Some(scheduler.toString),scalaTorchUnetDevice="cuda"),false,
+        Map("SDFX_SCALATORCH_UNET_DEVICE"->"cpu"))
+      assertEquals(overrideDevice.env.get("SDFX_SCALATORCH_UNET_DEVICE"),Some("cpu"))
       intercept[IllegalArgumentException](EngineBackend.launch(sdfx.core.config.AppHome(temp),
         sdfx.core.config.Settings(engineBackend="invalid"),false,env))
     finally

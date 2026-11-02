@@ -37,6 +37,10 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
   private val scalaTorchModel = new SimpleStringProperty(initial.scalaTorchModel.getOrElse(""))
   private val scalaTorchScheduler = new SimpleStringProperty(initial.scalaTorchScheduler.getOrElse(""))
   private val scalaTorchJava = new SimpleStringProperty(initial.scalaTorchJava.getOrElse(""))
+  private val scalaTorchUnetDevice = new SimpleStringProperty(initial.scalaTorchUnetDevice)
+  private val scalaTorchVaeDevice = new SimpleStringProperty(initial.scalaTorchVaeDevice)
+  private val scalaTorchUnetOffloadWeights = new SimpleBooleanProperty(initial.scalaTorchUnetOffloadWeights)
+  private val scalaTorchVaeOffloadWeights = new SimpleBooleanProperty(initial.scalaTorchVaeOffloadWeights)
   private val dtype = new SimpleStringProperty(initial.dtype)
   private val vramIndex = new SimpleIntegerProperty(VramModes.index(initial.vramMode).max(0))
   private val vaeTiling = new SimpleBooleanProperty(initial.vaeTiling)
@@ -138,6 +142,10 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
         .add("scala-torch model", browseRow(scalaTorchModel, true, "Choose Diffusers model folder"), "Local Diffusers model directory")
         .add("scala-torch scheduler", browseRow(scalaTorchScheduler, false, "Choose scheduler JSON"), "Explicit Euler scheduler configuration JSON")
         .add("scala-torch Java", browseRow(scalaTorchJava, false, "Choose Java 25 executable (optional)"), "Leave empty only when NUI is running on Java 25 or newer")
+        .add("scala-torch U-Net device", W.combo(FXCollections.observableArrayList("cpu", "cuda", "cuda:0", "cuda:1"), scalaTorchUnetDevice), "U-Net compute device; cuda selects GPU 0")
+        .add("scala-torch VAE device", W.combo(FXCollections.observableArrayList("cpu", "cuda", "cuda:0", "cuda:1"), scalaTorchVaeDevice), "VAE encode/decode compute device; cuda selects GPU 0")
+        .full(W.check("Offload U-Net weights between CPU and CUDA", scalaTorchUnetOffloadWeights))
+        .full(W.check("Offload VAE weights between CPU and CUDA", scalaTorchVaeOffloadWeights))
         .add("Python", browseRow(pythonExe, false, "Choose python executable"), "Python interpreter for the engine (empty = app venv, then system Python)")
         .add("Precision", W.combo(FXCollections.observableArrayList("fp16", "bf16", "fp32"), dtype), "Model weight precision (fp16 for most GPUs)")
         .add("VRAM mode", W.indexCombo(VramModes.Modes.map(_._2), vramIndex), "GPU: everything stays on the GPU · Model offload: whole models move to the GPU when used · Sequential offload: layer by layer, slowest but lowest VRAM")
@@ -229,6 +237,10 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
           scalaTorchModel = Option(scalaTorchModel.get).map(_.trim).filter(_.nonEmpty),
           scalaTorchScheduler = Option(scalaTorchScheduler.get).map(_.trim).filter(_.nonEmpty),
           scalaTorchJava = Option(scalaTorchJava.get).map(_.trim).filter(_.nonEmpty),
+          scalaTorchUnetDevice = scalaTorchUnetDevice.get,
+          scalaTorchVaeDevice = scalaTorchVaeDevice.get,
+          scalaTorchUnetOffloadWeights = scalaTorchUnetOffloadWeights.get,
+          scalaTorchVaeOffloadWeights = scalaTorchVaeOffloadWeights.get,
           dtype = if engineBackend.get=="scala-torch" then "fp32" else dtype.get,
           vramMode = if engineBackend.get=="scala-torch" then "cpu" else VramModes.Modes(vramIndex.get.max(0).min(VramModes.Modes.size - 1))._1,
           vaeTiling = vaeTiling.get,

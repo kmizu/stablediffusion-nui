@@ -64,11 +64,16 @@ class StateAndPluginsSuite extends munit.FunSuite:
     val current = sdfx.core.config.Settings(lastModel = Some("current"))
     val edited = sdfx.core.config.Settings(hiresFixTweaks = sdfx.core.config.HiresFixTweaksPreferences(outputDir = "hires",
       showCfg = false, showBatchSeed = false, showPromptModes = false, showRemoveNetworks = false,
-      showStyles = false, promptModeRadio = false, saveTemplate = false, restoreTemplate = false))
+      showStyles = false, promptModeRadio = false, saveTemplate = false, restoreTemplate = false),
+      engineBackend = "scala-torch", scalaTorchUnetDevice = "cuda", scalaTorchVaeDevice = "cuda:1",
+      scalaTorchUnetOffloadWeights = true, scalaTorchVaeOffloadWeights = true)
     val merged = SettingsMerge(current, edited)
     assertEquals(merged.hiresFixTweaks.outputDir, "hires")
     assertEquals(merged.lastModel, Some("current"))
     assertEquals(merged.hiresFixTweaks, edited.hiresFixTweaks)
+    assertEquals(merged.scalaTorchUnetDevice, "cuda")
+    assertEquals(merged.scalaTorchVaeDevice, "cuda:1")
+    assert(merged.scalaTorchUnetOffloadWeights && merged.scalaTorchVaeOffloadWeights)
     val roundtrip = sdfx.core.json.SnakePickle.read[sdfx.core.config.Settings](sdfx.core.json.SnakePickle.write(merged))
     assertEquals(roundtrip.hiresFixTweaks, edited.hiresFixTweaks)
   }

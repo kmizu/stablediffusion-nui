@@ -30,4 +30,5 @@ object ScalaTorchLaunch:
         else Path.of(sys.props("java.home"),"bin",if sys.props("os.name").startsWith("Windows") then "java.exe" else "java")
       require(Files.isRegularFile(javaExe),"native Java executable is missing (Java 25 required)")
       Some(EngineLaunch(Seq(javaExe.toString,"--enable-native-access=ALL-UNNAMED","-cp",classpath,
-        "scalatorch.models.worker.NativeWorkerMain",model.toString,config.toString),model,helloTimeout=30.seconds))
+        "scalatorch.models.worker.NativeWorkerMain",model.toString,config.toString),model,
+        env=env.filter((key,_) => key.startsWith("SDFX_SCALATORCH_")),helloTimeout=30.seconds))
