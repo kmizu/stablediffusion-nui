@@ -6,6 +6,24 @@ description: What each release of Stable Diffusion NUI (formerly SDFX) added or 
 
 Each release can be downloaded from its GitHub release page. Every release bundles a Java runtime; Python and model files must be supplied separately.
 
+## v0.06
+
+Published 2026-11-02. [GitHub release page](https://github.com/kmizu/stablediffusion-nui/releases/tag/v0.06)
+
+### Added
+
+- **Aesthetic Score**, **AnimateDiff**, **Booru Prompt**, **Character Searcher** and **CLIP IO**.
+- **Partial** (documented gaps, the issues stay open): Aesthetic Gradients, Batch Face Swap, CLIP Interrogator, CN Animation (video-to-video only), ControlNet Preprocessor in Extras, interface Localization (built-in Japanese pack) and the native Image Browser tab. Details are on the [extensions page](extensions.html) and in the GitHub release notes.
+
+### Getting it
+
+Download **SDNUI-v0.06-windows-x64.zip**, extract it, and run **SDNUI/SDNUI.exe**. SHA-256: `e12d6a7f1e0240a8cffe90015d8bdf2cccec27550137f12ecdf00e7d64fcaa4c`
+
+### Verification
+
+- The full Scala and Torch CPU test suites were run, and each feature was checked with real SD1.5 and SDXL models over MCP with the images inspected.
+- The packaged `SDNUI.exe` was run on both models, and the downloaded ZIP's SHA-256 was checked against the build.
+
 ## v0.05
 
 Published 2026-11-02. [GitHub release page](https://github.com/kmizu/stablediffusion-nui/releases/tag/v0.05)
