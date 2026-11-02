@@ -42,7 +42,7 @@ work as in A1111.
 - A warning appears at the bottom right when brackets do not match.
 - Select text and press **Ctrl+Up** / **Ctrl+Down** to raise or lower its attention weight. With no selection, the
   word under the caret is changed.
-- **Tags…** sets up tag suggestions from a local CSV file. Press Enter or Tab to complete the tag you are typing.
+- **Tags…** sets up suggestions from local files: a tag CSV (with aliases), a translation CSV (search tags in your own language), an extra tag CSV, a chants JSON file. Press Enter or Tab to complete what you are typing. Type `__` to complete wildcard files, `<` for LoRA, embeddings and chants (`<l:` / `<lora:` / `<lyco:` for LoRA, `<e:` for embeddings, `<c:` for chants). A LoRA row shows its preview picture and adds the trigger words from its `.json` file. The dialog also sets the number of rows, underscore and parenthesis handling, a trailing comma and alias display.
 
 For **✚ LoRA** and **Networks…** in the toolbar, see [LoRA and embeddings](lora-embeddings.html).
 

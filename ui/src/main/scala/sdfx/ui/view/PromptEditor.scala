@@ -20,6 +20,10 @@ final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: Strin
   private val tagEditors = Seq(promptArea, negativeArea).map(a => new TagAutocomplete(a, ctx.tagDictionary))
   def isComposingInput: Boolean = tagEditors.exists(_.isComposing)
   def completionVisible: Boolean = tagEditors.exists(_.isShowing)
+  def previewVisible: Boolean = tagEditors.exists(_.previewShowing)
+  def previewImage: Option[javafx.scene.image.Image] = tagEditors.find(_.previewShowing).flatMap(_.previewImage)
+  /** Rows of the popup currently shown by either prompt editor (for checks). */
+  def completionItems: Vector[sdfx.ui.vm.Suggestion] = tagEditors.find(_.isShowing).map(_.suggestions).getOrElse(Vector.empty)
 
   Seq(promptArea, negativeArea).foreach(a => a.focusedProperty.addListener((_, _, f) => if f then lastFocused = a))
 
@@ -150,7 +154,7 @@ final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: Strin
     6,
     W.button("✚ LoRA", "Insert a <lora:name:1> tag at the caret (searchable list)")(loraPopup.show(loraButtonAnchor)),
     W.button("Networks…", "Browse network previews")(openNetworks()),
-    W.button("Tags…", "Configure local CSV tag suggestions")(ctx.tagDictionary.configure()),
+    W.button("Tags…", "Configure tag, wildcard, extra network and chant suggestions")(ctx.tagDictionary.configure()),
     W.spacer(),
     styleBox,
     W.iconButton("⤓", "Apply the selected style to the prompts")(applyStyle()),

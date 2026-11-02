@@ -95,9 +95,11 @@ BASE = [
      "category-selective restore -> `core:state-manager`; independent Scala/JavaFX "
      "implementation, no upstream code/assets copied; no upstream storage-format parity, HTTP API or side-drawer browser; "
      "[source 2af62ec](https://github.com/SenshiSentou/sd-webui-state-manager/tree/2af62ecd5287438bbc309f7e840d34aa5c8e3cb6)"),
-    ("DominikDoom/a1111-sd-webui-tagcomplete", "reimplemented", "Local CSV tag/alias completion with keyboard selection "
-     "in native prompt editors -> `core:tag-autocomplete`; independent Scala/JavaFX implementation, no upstream code or tag "
-     "datasets copied; no wildcard/extra-network/chant/translation parity; "
+    ("DominikDoom/a1111-sd-webui-tagcomplete", "reimplemented", "Local CSV tag/alias completion with keyboard selection, "
+     "translation and extra-file CSVs, `__wildcards__`, `<e:` `<l:` `<lora:` `<lyco:` `<c:` extra-network and chant completion, "
+     "LoRA trigger words and preview images in native prompt editors -> `core:tag-autocomplete`; independent Scala/JavaFX "
+     "implementation written from the README, no upstream code, tag datasets or translation files copied; "
+     "no hypernetworks, embedding v1/v2 filter, Umi AI, live translation preview, hotkey/colour settings or model black/whitelist; "
      "[source 4170882](https://github.com/DominikDoom/a1111-sd-webui-tagcomplete/tree/4170882f90b47be130a0ff9314f663c230b9153d)"),
     ("AUTOMATIC1111/stable-diffusion-webui", "ported", "infotext format, built-in scripts (X/Y/Z, prompt matrix, loopback, "
      "SD upscale, outpainting, img2img alternative, custom code, postprocessing), styles.csv, soft inpainting"),

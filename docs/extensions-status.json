@@ -249,7 +249,7 @@
 "index": 41,
 "name": "Booru tag autocompletion",
 "url": "https://github.com/DominikDoom/a1111-sd-webui-tagcomplete.git",
-"status": "todo:core:tag-autocomplete"
+"status": "done:core:tag-autocomplete"
 },
 {
 "index": 42,

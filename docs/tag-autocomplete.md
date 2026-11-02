@@ -1,47 +1,63 @@
 # Native tag autocomplete (#24)
 
-Stable Diffusion NUI can suggest tags from a local CSV in both positive and
-negative prompt editors. The selected file is shared by the window and its path
-is saved in Settings; tag data is loaded asynchronously, not copied into the app.
+Stable Diffusion NUI suggests tags, wildcards, extra networks and chants in both prompt editors.
+Everything comes from local files or the model lists of the app; nothing is downloaded and no
+tag data ships with the app. Behaviour reference: DominikDoom/a1111-sd-webui-tagcomplete README at
+`4170882f90b47be130a0ff9314f663c230b9153d` (MIT). Independent native implementation; no upstream code,
+tag lists or translation files were copied.
+https://github.com/DominikDoom/a1111-sd-webui-tagcomplete/tree/4170882f90b47be130a0ff9314f663c230b9153d
 
 ## Use
 
-1. Click **Tags…** beside the prompt, then **Choose CSV…** and select a local UTF-8 file.
-2. Type the beginning of a tag or alias inside a prompt. Use Up/Down to choose a
-   suggestion, then plain Enter or Tab to insert it. Clicking a suggestion also inserts it.
-3. Press Escape to dismiss the popup. Ctrl+Enter remains the generation shortcut
-   when a completion popup or IME composition is not active.
-4. After editing the CSV externally, use **Tags… → Reload**. **Disable** clears the
-   configured path and suggestions; it does not delete the CSV or change prompt text.
+Click **Tags…** beside the prompt. The dialog has four file rows (type a path or **Browse…**; an empty path
+turns that source off) and the options. **Save** applies them, **Reload** rereads the files and the wildcard
+folders, **Disable** clears the tag CSV path only (other sources stay as configured).
 
-## Supported data and editing
+Up/Down select, plain Enter or Tab inserts, a click inserts, Escape closes. Ctrl+Enter stays the generation
+shortcut when no popup or IME composition is active. Only the active token is replaced, so weights and the
+text around it stay.
 
-Behavior reference: DominikDoom/a1111-sd-webui-tagcomplete README at
-`4170882f90b47be130a0ff9314f663c230b9153d` (MIT), retrieved through GitHub API on 2026-10-27.
-https://github.com/DominikDoom/a1111-sd-webui-tagcomplete/tree/4170882f90b47be130a0ff9314f663c230b9153d
+| You type | You get |
+| --- | --- |
+| `blue h` | tags (and aliases / translations) from the tag CSV, ranked by count |
+| `__` / `__col` | wildcard files (nested folders as `colors/warm`); inserts `__colors/warm__` and replaces an existing closing `__` |
+| `<` | LoRA, embeddings and chants mixed |
+| `<l:`, `<lora:`, `<lyco:` | LoRA only (`<lyco:` inserts `<lyco:name:1.0>`); an existing `:weight` is kept |
+| `<e:` | embeddings; inserts the plain name |
+| `<c:`, `<chant:` | chants; inserts the content |
 
-Independent native implementation; no upstream code or tag data copied. CSV supports
-`name,type,count,"alias1,alias2"`, optional count/aliases, UTF-8 and quoted fields.
-Header rows containing `name` and `type` or `category` are also supported (including
-WD CSVs with `tag_id,name,category,count`); columns are selected by header name.
-Choose a local file through **Tags…** beside the prompt. No automatic downloads.
-Suggestions match tag/alias prefixes (spaces and underscores equivalent), ranked by count.
-Only the active comma/bracket-delimited token is replaced, preserving weights and surrounding text.
-Selection crossing tokens suppresses completion. Composition events suppress the popup and
-its key handling until composition is committed. Existing native undo uses replaceText.
+Wildcard folders: `wildcards/` and `models/wildcards/` of the app home, plus the Dynamic Prompts plugin's
+"Extra wildcard folders". LoRA and embedding names come from the model lists.
 
-Files up to 32 MiB / 300,000 rows are admitted. A failed load is reported rather
-than silently downloading a replacement dictionary.
+## Files
 
-## Scope and verification
+- **Tag CSV**: `name,type,count,"alias1,alias2"`, optional count/aliases, UTF-8, quoted fields, or a header row
+  (including WD CSVs with `tag_id,name,category,count`). Up to 32 MiB / 300,000 rows.
+- **Translation CSV**: `english,translation` (or the old 3-column format with the second column skipped).
+  A tag is found by the translation of its name or alias and the translation is shown in the row. The
+  insertion is always the English tag.
+- **Extra tag CSV**: same layout as the tag CSV, but column 3 is the grey meta text (default "Custom tag").
+  Shown after (default) or before the normal tags.
+- **Chants JSON**: `[{"name": ..., "terms": ..., "content": ..., "color": ...}]`. `name` and `terms` are searched,
+  `content` is inserted as written (`color` is accepted but not drawn).
+- **LoRA trigger words**: the A1111 `<model>.json` sidecar field `activation text`; inserted as
+  `<lora:name:1.0>, words`. Turn off in the dialog.
+- **Previews**: `<model>.preview.png`, `<model>.png`, `.jpg`, `.jpeg`, `.webp`, `.gif` next to the model file, shown in
+  a second popup beside the list while a LoRA or embedding row is selected.
 
-This is local tag/alias completion. Upstream extra-network names and trigger words,
-translation files, wildcards, chants, network previews and full extension settings
-parity are outside the v0.03 scope. No upstream code or datasets are bundled.
+A failed file is reported and the other sources keep working; no replacement is downloaded.
 
-The recorded native helper passed 10 checks using actual JavaFX controls with
-synthetic keyboard and IME events (`outputs/v003-tags.log`). A physical Japanese
-IME was **not** exercised; synthetic composition checks do not establish behavior
-for every installed IME. Focused Scala regression and remaining release gates are
-listed in [the v0.03 scope/evidence record](V003_RELEASE_SCOPE.md). Final integrated
-native/model/package acceptance is recorded separately by the release coordinator.
+## Options
+
+Maximum results (1-50), replace `_` with a space, escape parentheses, append `, ` after a completion (not after
+`<lora:...>` tags), search by alias, show only the alias (otherwise `alias ➝ tag`), switches for wildcards,
+extra networks, chants, trigger words and previews.
+
+## Scope
+
+Provided: everything above plus the v0.03 behaviour (positive and negative prompt, keyboard and mouse insertion,
+IME composition guards). Not provided: hypernetworks (`<h:` offers nothing, the app has no hypernetwork loader),
+embedding v1/v2 filter, the model-keyword trigger lists, choosing a line inside a wildcard file and Tab partial path
+completion, Umi AI wildcards, live translation preview, wiki links, completion delay, remappable hotkeys,
+category colours, per-model black/whitelist, built-in danbooru/e621 lists. A physical Japanese IME was not
+exercised (synthetic composition events only). See [tag-autocomplete-verification.md](tag-autocomplete-verification.md).

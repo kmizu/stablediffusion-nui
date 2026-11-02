@@ -46,6 +46,14 @@ case class HiresFixTweaksPreferences(outputDir: String = "", showCfg: Boolean = 
     showStyles: Boolean = true, promptModeRadio: Boolean = true, checkpointLabels: String = "Default",
     saveTemplate: Boolean = true, restoreTemplate: Boolean = true) derives RW
 
+/** Native tag autocomplete options beyond the main tag CSV (`Settings.tagAutocompleteCsv`); see docs/tag-autocomplete.md. */
+case class TagCompleteSettings(translationCsv: Option[String] = None, translationLegacy: Boolean = false,
+    extraCsv: Option[String] = None, extraAfter: Boolean = true, chantsJson: Option[String] = None,
+    maxResults: Int = 12, replaceUnderscores: Boolean = true, escapeParens: Boolean = true,
+    appendComma: Boolean = false, searchByAlias: Boolean = true, onlyShowAlias: Boolean = false,
+    wildcards: Boolean = true, extraNetworks: Boolean = true, chants: Boolean = true,
+    loraTriggerWords: Boolean = true, extraNetworkPreview: Boolean = true) derives RW
+
 /** Interface language. `pack` is a language pack id (empty = English, no translation); see sdfx.core.i18n. */
 case class LocalizationPreferences(pack: String = "", fallbackPack: String = "", style: String = "Translation only",
     order: String = "Translation first", tooltips: Boolean = true, items: Boolean = true, extraDirs: Seq[String] = Nil) derives RW
@@ -83,6 +91,7 @@ case class Settings(
     wdV3Model: Option[String] = None,
     wdV3Tags: Option[String] = None,
     tagAutocompleteCsv: Option[String] = None,
+    tagComplete: TagCompleteSettings = TagCompleteSettings(),
     hiresFixTweaks: HiresFixTweaksPreferences = HiresFixTweaksPreferences(),
     localization: LocalizationPreferences = LocalizationPreferences()
 ) derives RW
