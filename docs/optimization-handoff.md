@@ -71,3 +71,9 @@ Main `9876bda` merged at `61fa1a0`. JDK 21 Scala test and assembly passed; 43 te
 
 
 SD1.5 real canny ControlNet and DeepCache refusal/recovery passed through main jar and official MCP SDK, with and without fp8 requested. Test-only instrumentation counted 468 float8 and 218 fp16 U-Net parameters for fp8 vs 686 fp16 normally; images were viewed. Details and limitations in the last verification section. No SDXL ControlNet model was found in inspected locations; SDXL ControlNet, GUI real operation, SDXL app fp8 and physical low-VRAM remain unverified.
+
+
+Real JavaFX SettingsDialog/MainWindow harness now passed SD1.5 and SDXL real-model fp8-requested generation, DeepCache checkbox enable/disable and exact recovery; both cached images and settings screenshot were viewed. It fires controls programmatically: Cua could not inject a click or capture the window because monitor geometry was unavailable, so physical mouse operation is not verified. See final verification section for command/evidence and remaining limits.
+
+
+SD1.5 real MainWindow plus AppServices now also passed the auto+fp8 load-refusal and existing-model recovery scenario with a deliberately tiny planner budget; baseline and recovery were RGB-identical and the image was viewed. This is a planner simulation, not physical low-VRAM hardware, and control activation was programmatic. See the final verification section.
