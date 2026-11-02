@@ -897,7 +897,7 @@
 "index": 149,
 "name": "sd-webui-prompt-all-in-one",
 "url": "https://github.com/Physton/sd-webui-prompt-all-in-one",
-"status": "todo:core:prompt-tools"
+"status": "done:core:prompt-tools"
 },
 {
 "index": 150,
@@ -1767,7 +1767,7 @@
 "index": 294,
 "name": "Easy Tag Insert",
 "url": "https://github.com/Haoming02/sd-webui-easy-tag-insert.git",
-"status": "todo:core:prompt-tools"
+"status": "done:core:prompt-tools"
 },
 {
 "index": 295,
@@ -1845,7 +1845,7 @@
 "index": 307,
 "name": "D2 Prompt Selector",
 "url": "https://github.com/da2el-ai/sd-d2-prompt-selector.git",
-"status": "todo:core:prompt-tools"
+"status": "done:core:prompt-tools"
 },
 {
 "index": 308,
@@ -1959,7 +1959,7 @@
 "index": 326,
 "name": "Multi-Prompt Manager",
 "url": "https://github.com/camdenFletcher03/sd-webui-Multi-Prompt-Manager.git",
-"status": "todo:core:prompt-tools"
+"status": "done:core:prompt-tools"
 },
 {
 "index": 327,

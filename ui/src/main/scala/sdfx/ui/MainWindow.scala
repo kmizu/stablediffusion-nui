@@ -202,6 +202,9 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   val charaSearcher = new CharaSearcherTab(ctx, services.home.root.resolve("chara-searcher"))
   val panorama = new PanoramaTab(ctx, () => services.home.outputs(services.settings).resolve("panorama"))
   val embeddingMerge = new EmbeddingMergeTab(ctx)
+  ctx.promptFields = mode => (vms(mode).prompt, vms(mode).negativePrompt)
+  ctx.recordPrompt = (p, n) => { promptTools.vm.recordUsed(p, n); promptTools.historyChanged() }
+  val promptTools = new PromptToolsTab(ctx, services.promptTools, () => lastMode)
   val modelPresets = new ModelPresetsTab(ctx,
     () => services.supervisor.loadedModel.map(m => Path.of(m.path)),
     () => preview.currentPath.flatMap(sdfx.core.png.PngMetadata.readParameters),
@@ -297,6 +300,9 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   private val panoramaTab = new Tab("Panorama", panorama.node)
   panoramaTab.setId("panorama-tab-page")
   tabs.getTabs.add(panoramaTab)
+  private val promptToolsTab = new Tab("Prompt Tools", promptTools.node)
+  promptToolsTab.setId("prompt-tools-tab")
+  tabs.getTabs.add(promptToolsTab)
   private var comparisonDivider = initial.dividers.get("main").flatMap(_.headOption).getOrElse(.42)
   Mode.values.foreach { mode =>
     plugins(mode).form("model_keyword").flatMap(_.prop("lora")).foreach { value =>
@@ -314,6 +320,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     if t eq charaSearcherTab then charaSearcher.shown()
     if t eq panoramaTab then panorama.shown()
     if t eq clipInterrogatorTab then clipInterrogator.shown()
+    if t eq promptToolsTab then promptTools.shown()
     if (previous eq stylesTab) && (t ne stylesTab) then stylesEditor.leave()
     refreshComparisonOptions()
     if (t eq comparisonTab) || (t eq imageBrowserTab) || (t eq charaSearcherTab) || (t eq panoramaTab) then // both need the whole window width
@@ -645,6 +652,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       return
     def submit(tempFiles: Seq[Path]): Unit =
       val built = JobBuilder.build(vm, plugins(mode), sdfx.engine.CaptureOptions(services.settings.apiPayloadIncludeImageContents), imageSecret)
+      ctx.recordPrompt(vm.prompt.get, vm.negativePrompt.get)
       val ordinary = built.copy(editorPreview = editorPreview.map(EditorPreviewPayload(_)))
       if editorPreview.nonEmpty && (ordinary.script.nonEmpty || wdChoice.nonEmpty) then
         // A script can change while an asynchronous mask export is in flight.

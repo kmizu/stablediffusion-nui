@@ -90,6 +90,7 @@ final class AppServices(
     log
   )
   val client: EngineClient = new EngineClient(supervisor)
+  lazy val promptTools = new sdfx.core.prompttools.PromptToolsService(home.configDir.resolve("prompt-tools"))
   lazy val modelPresets = new sdfx.core.modelpresets.ModelPresetService(home.configDir.resolve("model-presets"))
 
   val catalog: ModelCatalog = new ModelCatalog(client, home, () => _settings)

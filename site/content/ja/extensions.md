@@ -273,7 +273,7 @@ Hires. fix 自体の使い方は [画像の生成](generate.html) を参照し�
 
 A1111 / reForge の拡張インデックス(353 件)それぞれの対応状況は、GitHub の [docs/EXTENSIONS.md](https://github.com/kmizu/stablediffusion-nui/blob/main/docs/EXTENSIONS.md) にまとめています。状態は `done`(同梱済み)、`todo`(対応予定)、`na`(デスクトップアプリには当てはまらない)の 3 種類です。
 
-拡張の中には、プラグインではなくアプリ本体の機能やタブとして実装したものもあります(ギャラリー、画像ブラウザ、キャラクター検索、パノラマ、Interrogator、Styles、Embedding 関連のタブ、表示言語など)。これらは[ツール](tools.html)、[画像ブラウザ](image-browser.html)、[キャラクター検索](character-searcher.html)、[パノラマ](panorama.html)、[LoRA と Embedding](lora-embeddings.html)、[表示言語](localization.html)(Bilingual Localization 拡張と A1111 の言語パック)で説明しています。
+拡張の中には、プラグインではなくアプリ本体の機能やタブとして実装したものもあります(ギャラリー、画像ブラウザ、キャラクター検索、パノラマ、Prompt Tools、Interrogator、Styles、Embedding 関連のタブ、表示言語など)。これらは[ツール](tools.html)、[画像ブラウザ](image-browser.html)、[キャラクター検索](character-searcher.html)、[パノラマ](panorama.html)、[プロンプトツール](prompt-tools.html)、[LoRA と Embedding](lora-embeddings.html)、[表示言語](localization.html)(Bilingual Localization 拡張と A1111 の言語パック)で説明しています。
 
 ## 外部プラグインを追加する
 

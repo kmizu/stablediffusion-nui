@@ -43,6 +43,11 @@ final class UiContext(val services: AppServices, val catalog: CatalogVM, val sta
   lazy val tagDictionary = new TagDictionary(this)
   var openStylesEditor: () => Unit = () => ()
   var openModelBrowser: (String, Option[PromptInsertionTarget]) => Unit = (_, _) => ()
+  /** Wired by the main window: the (prompt, negative prompt) properties of a generation tab. */
+  var promptFields: Mode => (javafx.beans.property.StringProperty, javafx.beans.property.StringProperty) =
+    _ => (new javafx.beans.property.SimpleStringProperty(""), new javafx.beans.property.SimpleStringProperty(""))
+  /** Wired by the main window: called with the prompts of every submitted job (prompt history). */
+  var recordPrompt: (String, String) => Unit = (_, _) => ()
   var editPositivePrompt: (String, Boolean) => Unit = (_, _) => ()
   var currentGeneration: () => GenerationParams = () => GenerationParams()
   /** Fastload transfers compare a destination snapshot before committing asynchronous work. */
