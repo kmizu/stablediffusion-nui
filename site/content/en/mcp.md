@@ -175,6 +175,7 @@ arguments. The client's `tools/list` response carries the full JSON schema of ea
 | `get_image` | Return one image from the outputs folder or an allowed folder, with its infotext. `max_side` (default 1024, 0 = original) downscales the preview. Reads `.png`, `.jpg` and `.webp`. |
 | `inspect_generation_metadata` | Read the parameters in a PNG and return `txt2img` arguments, AlwaysOn replay candidates and the fields it could not apply. Nothing runs. |
 | `controlnet_fastload` | `operation: "inspect"` reads the ControlNet settings saved in a Fastload image or `.cni` file; `operation: "version"` reports format versions. |
+| `clip_interrogate` | Work out a prompt for an image with CLIP Interrogator. `operation` is `prompt` (with `mode` best, fast, classic, negative or caption), `analyze` (top five medium, artist, movement, trending and flavor labels), `batch` (writes `.txt` files, `batch.txt` or `batch.csv` for an allowed `folder`, and never overwrites unless `overwrite: true`), `models` or `unload`. Models are released after each call unless `keep_loaded: true`. The first call downloads models from Hugging Face. |
 | `vae_tools` | Encode, decode or round-trip local files (`input_paths`, up to 64) with the loaded VAE. Optional TAESD or Approx NN weights are downloaded only with `allow_download: true`. |
 
 ## Generation arguments

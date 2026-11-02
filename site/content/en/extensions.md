@@ -270,7 +270,7 @@ You can also upscale or colour-correct a single image in the **Extras** tab.
 
 The status of every entry in the A1111 / reForge extension index (353 entries) is listed in [docs/EXTENSIONS.md](https://github.com/kmizu/stablediffusion-nui/blob/main/docs/EXTENSIONS.md) on GitHub. Each entry is `done` (built in), `todo` (planned) or `na` (does not apply to a desktop app).
 
-Some extensions are implemented as part of the app or as tabs rather than as plugins (the gallery, the Image Browser, the Character Searcher, Styles, the embedding tabs and others). These are covered in [Tools](tools.html), [Image Browser](image-browser.html), [Character Searcher](character-searcher.html) and [LoRA and embeddings](lora-embeddings.html).
+Some extensions are implemented as part of the app or as tabs rather than as plugins (the gallery, the Image Browser, the Character Searcher, the Interrogator, Styles, the embedding tabs and others). These are covered in [Tools](tools.html), [Image Browser](image-browser.html), [Character Searcher](character-searcher.html) and [LoRA and embeddings](lora-embeddings.html).
 
 ## Adding external plugins
 

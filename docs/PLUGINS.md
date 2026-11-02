@@ -1,5 +1,13 @@
 # Plugin coverage vs. reForge built-ins
 
+**Interrogator** (CLIP Interrogator, ledger target `core:clip_interrogator`) works out a prompt
+for an image: a BLIP caption plus the artist, flavor, medium, movement, trending and
+negative label lists ranked by CLIP similarity, in the best, fast, classic, negative and
+caption modes, with an Analyze table, a folder Batch (a `.txt` per image, `batch.txt` or
+`batch.csv`) and the `clip_interrogate` MCP tool. It is the **Interrogator** tab, not a
+generation plugin, so it has no AlwaysOn or Script entry and no infotext key. See
+[source behavior and verification status](clip-interrogator-verification.md).
+
 **Metadata Utils** reads and edits checkpoint or LoRA `.safetensors` metadata
 without loading model weights. Choose a file, load its JSON, edit it, and save a
 copy beside the source. Loading fingerprints the source with cancellable progress;

@@ -29,6 +29,10 @@ final class CharaSearcherHandle(val result: Future[ujson.Value], interruptFn: ()
 final class EmbeddingMergeHandle(val result: Future[EmbeddingMergeResult], interruptFn: () => Future[InterruptionDecision]):
   def interrupt(): Future[InterruptionDecision] = interruptFn()
 
+/** One CLIP Interrogator operation (prompt / analyze / batch / models / unload) and its scoped cancellation. */
+final class ClipInterrogatorHandle(val result: Future[ujson.Value], interruptFn: () => Future[InterruptionDecision]):
+  def interrupt(): Future[InterruptionDecision] = interruptFn()
+
 final class MetadataUtilsHandle(val result: Future[MetadataUtilsResult], interruptFn: () => Future[InterruptionDecision]):
   def interrupt(): Future[InterruptionDecision] = interruptFn()
 
@@ -164,6 +168,14 @@ final class EngineClient(val supervisor: EngineSupervisor):
       () => gate.beforeDispatch(), () => gate.dispatched()).map(Json.fromJs[EmbeddingMergeResult](_))
     result.onComplete(_ => gate.completed())(using ExecutionContext.parasitic)
     new EmbeddingMergeHandle(result, () => gate.cancel())
+
+  def clipInterrogatorOwned(params: ujson.Obj, listener: EngineEvent => Unit = _ => ()): ClipInterrogatorHandle =
+    val owner = java.util.UUID.randomUUID().toString
+    val gate = new TemporalLabCancelGate(owner, id => supervisor.captureInterrupt(Some(id), restartOnTimeout = false))
+    val result = supervisor.requestExtras(Protocol.Types.ClipInterrogator, params, listener, owner,
+      () => gate.beforeDispatch(), () => gate.dispatched())
+    result.onComplete(_ => gate.completed())(using ExecutionContext.parasitic)
+    new ClipInterrogatorHandle(result, () => gate.cancel())
 
   def metadataUtilsOwned(request: MetadataUtilsRequest, listener: EngineEvent => Unit = _ => ()): MetadataUtilsHandle =
     val owner = java.util.UUID.randomUUID().toString

@@ -76,6 +76,7 @@ Development: `sbt "mcp/runMain sdfx.mcp.McpMain --dry-run"` (no GPU needed).
 | `list_always_on` | Discover AlwaysOn extensions and typed values for the generation `always_on` object; applies to sync, async and script sub-generations. |
 | `inspect_generation_metadata` | Inspect a PNG without resaving it; returns generation arguments, AlwaysOn replay candidates, and unapplied metadata. Nothing executes automatically. |
 | `model_keyword_lookup` / `model_presets` | Look up checkpoint/LoRA keywords and manage model-bound preset libraries. |
+| `clip_interrogate` | CLIP Interrogator: `prompt` (best/fast/classic/negative/caption), `analyze`, folder `batch`, `models`, `unload`. Downloads CLIP and caption models on first use. |
 | `list_scripts` / `run_script` | Script plugins (X/Y/Z plot, prompt matrix, loopback, SD upscale...) with their controls; `async: true` returns a job_id. |
 
 Generation results: `content` = one `image` block per image (downscaled to `max_image_side`, default 1024;

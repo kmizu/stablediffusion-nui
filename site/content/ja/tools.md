@@ -199,6 +199,24 @@ decode に使える入力は、手を加えていない L / RGBA の PNG、CMYK 
 - JSON の値は文字列として保存されます。文字列以外の値やオブジェクトは JSON 文字列として保存されます。空のオブジェクト `{}` を保存すると、コピーのメタデータが空になります。
 - **Cancel** で、このメタデータ処理だけを取り消せます。
 
+## Interrogator
+
+手元にある画像から、プロンプトを推定するタブです。CLIP Interrogator と同じ仕組みで、キャプションモデル（BLIP）が画像を説明し、そのあと CLIP が画像との近さで、作家・画材・芸術運動・流行サイト・「フレーバー」の語句の一覧を順位づけします。ページは **Prompt**、**Analyze**、**Batch**、**About** です。
+
+1. **CLIP model** を選びます。**ViT-L-14/openai** は Stable Diffusion 1.x と XL、**ViT-H-14/laion2b_s32b_b79k** は 2.x、**ViT-bigG-14/laion2b_s39b_b160k** は XL にも向きます。**Caption model** も選びます（既定は `blip-large`、VRAM が 12 GB 以下の GPU では `blip-base`。`none` は Analyze と negative モードでだけ意味があります）。
+2. **Prompt**: 画像を入れ、モードを選んで **Generate** を押します。
+    - **best**: 近い語句をつないでいき、キャプション・classic・fast・つなげた結果のうち画像にいちばん近いものを採ります。最も遅く、たいてい最も近い結果になります。
+    - **fast**: キャプションのあとに、上位の語句を並べます。
+    - **classic**: キャプション、媒体と作家、流行サイト、芸術運動、フレーバー 3 個の順に書きます。
+    - **negative**: 画像に最も似ていない語句をつなぎます。ネガティブプロンプトとして使います。
+   ステータス欄に、プロンプトと画像の近さが出ます。**Send to txt2img / img2img / inpaint / Extras** でプロンプト（img2img と inpaint では画像も）を送れます。negative の結果はネガティブプロンプトに入ります。
+3. **Analyze**: 媒体・作家・芸術運動・流行・フレーバーの上位 5 件を、スコア付きで表示します。
+4. **Batch**: フォルダ内のすべての `.png`、`.jpg`、`.jpeg` にプロンプトを付けます。出力は、画像ごとの `.txt`、1 つの `batch.txt`、`filename,prompt` 列の `batch.csv` から選べます。すでに `.txt` がある画像と、既存の `batch.txt`・`batch.csv` は、**Overwrite existing outputs** をオンにしない限り残ります。
+
+- **Keep models loaded** をオンにすると、CLIP とキャプションモデルを実行間でメモリに置いておきます。オフなら実行のたびに解放します。**Unload** はすぐに解放します。**Cancel** はこの実行だけを取り消します。
+- 初回は Hugging Face からモデルをダウンロードし、語句の埋め込みを計算します（数分かかります。結果は設定フォルダの `clip-interrogator` に保存され、次回から再利用されます）。
+- 元の拡張機能とは違い、既定では何も上書きしません。モデルは同じ重みの Hugging Face 変換版です。一覧にない CLIP モデル（`RN50` 系など）は使えません。
+
 ## Model Presets
 
 チェックポイントごとに生成設定のプリセットを保存し、生成タブに送るタブです（画面上の見出しは **Model Preset Manager**）。モデルページの URL、トリガーワード、サムネイルも管理できます。

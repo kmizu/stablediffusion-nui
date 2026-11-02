@@ -158,6 +158,7 @@ claude mcp add --transport http stablediffusion-nui-gui http://127.0.0.1:7861/mc
 | `get_image` | 出力フォルダまたは許可フォルダの画像 1 枚を infotext 付きで返します。`max_side`（既定 1024、0 は元のサイズ）でプレビューを縮小します。`.png`、`.jpg`、`.webp` を読めます。 |
 | `inspect_generation_metadata` | PNG に埋め込まれたパラメータを読み、`txt2img` の引数、AlwaysOn の再現候補、適用できなかった項目を返します。何も実行しません。 |
 | `controlnet_fastload` | `operation: "inspect"` で Fastload 画像や `.cni` ファイルに保存された ControlNet 設定を読み、`operation: "version"` で形式のバージョンを返します。 |
+| `clip_interrogate` | CLIP Interrogator で画像からプロンプトを推定します。`operation` は `prompt`（`mode` は best・fast・classic・negative・caption）、`analyze`（媒体・作家・芸術運動・流行・フレーバーの上位 5 件）、`batch`（許可フォルダ `folder` に `.txt`、`batch.txt`、`batch.csv` を書き出します。`overwrite: true` でない限り上書きしません）、`models`、`unload` です。`keep_loaded: true` でない限り、呼び出しごとにモデルを解放します。初回は Hugging Face からモデルをダウンロードします。 |
 | `vae_tools` | 読み込み中の VAE で、ローカルファイル（`input_paths`、最大 64 個）をエンコード、デコード、または往復変換します。TAESD や Approx NN の重みは `allow_download: true` のときだけダウンロードします。 |
 
 ## 生成の引数

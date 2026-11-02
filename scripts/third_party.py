@@ -21,6 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # (repo, how it is used, what)
 BASE = [
+    ("pharmapsychotic/clip-interrogator", "data and behavior reference", "MIT library at bc07ce62c179d3aab3053a623d96a071101d11cb; its artists.txt, flavors.txt, mediums.txt, movements.txt and negative.txt label lists are bundled unchanged in python/sdfx/data/clip_interrogator (82,438 / 1,804,274 / 1,606 / 2,683 / 418 bytes), and its best / fast / classic / negative / caption algorithms and embedding-cache layout are re-implemented as the `clip_interrogator` engine request, Interrogator tab and MCP tool. CLIP runs through transformers' CLIPModel on the Hugging Face conversions of the OpenAI (openai/clip-vit-large-patch14 and siblings; model cards state no licence) and LAION (laion/CLIP-ViT-H-14-laion2B-s32B-b79K, bigG, g, L, B; MIT) weights; captions use Salesforce/blip-image-captioning-large and -base (BSD-3-Clause), microsoft/git-large-coco (MIT) and Salesforce/blip2-opt-2.7b and blip2-flan-t5-xl (MIT). None of the models is bundled; they are downloaded from Hugging Face on first use"),
     ("Malisius/booru2prompt", "reimplemented", "Unlicensed behavior reference 4bd88839a6454428d098c7ad6672cc0989dd6a60; only its README was used (post link / id selection, search, extra tag choices, underscore and comma options), re-implemented in the `booru_prompt` script; no upstream code was read or copied"),
     ("antis0007/sd-webui-gelbooru-prompt", "reimplemented", "Pinned GPL-3.0 source b0128f931a8306a8f1a030c515792e3128b97f04; only its README was used (tags of a saved Gelbooru image from its md5 file name), re-implemented as post references in the `booru_prompt` script; no upstream code copied"),
     ("nochnoe/sd-webui-e621-prompt", "reimplemented", "Pinned MIT source 74ce0a50d788abfa42d67b0614f7195d3f71294c; only its README was used (e621 link / id / md5, tag categories with prefixes, underscores, exclude and append tags), re-implemented in the `booru_prompt` script; no upstream code copied"),
@@ -222,6 +223,8 @@ BASE = [
 # Keep these source-pinned original LICENSE bytes; do not normalize newlines.
 # (commit, license path, SHA-256, SPDX)
 PINNED_LICENSES = {
+    "pharmapsychotic/clip-interrogator": ("bc07ce62c179d3aab3053a623d96a071101d11cb", "LICENSE", "7e1e37e5be417bda424b5c834169653b31353f1d10640c7f1dd62bf56a5c677b", "MIT"),
+    "pharmapsychotic/clip-interrogator-ext": ("0f1a4591f82b93859a1b854afb79494f39384662", "LICENSE", "882ca262c9f5da6be4f93fb52394b8a7525d41b68594afa8e7ef5de2bed2a6f4", "MIT"),
     "antis0007/sd-webui-gelbooru-prompt": ("b0128f931a8306a8f1a030c515792e3128b97f04", "LICENSE", "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986", "GPL-3.0"),
     "nochnoe/sd-webui-e621-prompt": ("74ce0a50d788abfa42d67b0614f7195d3f71294c", "LICENSE", "442e98fcf4a5025b373765e15a9e41a3d1aef54b6f5413313e3e669c5f209252", "MIT"),
     "continue-revolution/sd-webui-animatediff": ("a88e88912bcbae0531caccfc50fd639f6ea83fd0", "LICENSE", "9e502ba75fd0fd30cea5497b438a4bc12f07f02bc932a7a6041fd6a18b8f46a0", "CC-BY-NC-SA-4.0"),

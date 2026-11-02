@@ -32,6 +32,7 @@ object Protocol:
     val Memory = "memory"
     val Tokenize = "tokenize"
     val MetadataUtils = "metadata_utils"
+    val ClipInterrogator = "clip_interrogator"
     val ControlNetFastloadData = "controlnet_fastload_data"
     val EmbeddingMerge = "embedding_merge"
     val SystemInfo = "system_info"

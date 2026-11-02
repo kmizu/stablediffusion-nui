@@ -199,6 +199,24 @@ Shows the metadata in a checkpoint or LoRA safetensors file and saves an edited 
 - JSON values are stored as strings; objects and other values are stored as JSON text. Saving an empty object `{}` clears the copy's metadata.
 - **Cancel** cancels only this metadata operation.
 
+## Interrogator
+
+Works out a prompt for an image you already have. It is CLIP Interrogator: a caption model (BLIP) describes the picture, then CLIP ranks lists of artists, mediums, movements, trending sites and "flavor" phrases against it. The tab has **Prompt**, **Analyze**, **Batch** and **About** pages.
+
+1. Choose the **CLIP model**. **ViT-L-14/openai** suits Stable Diffusion 1.x and XL, **ViT-H-14/laion2b_s32b_b79k** suits 2.x, and **ViT-bigG-14/laion2b_s39b_b160k** also suits XL. Choose a **Caption model** too (`blip-large` by default, `blip-base` on GPUs with 12 GB or less; `none` is only useful for Analyze and the negative mode).
+2. **Prompt**: drop an image, choose a mode and press **Generate**.
+    - **best** chains the most similar terms and keeps the candidate (caption, classic, fast or chain) that is closest to the image. It is the slowest and usually the most similar.
+    - **fast** adds the top-ranked terms after the caption.
+    - **classic** writes the caption, then a medium and artist, a trending site, a movement and three flavors.
+    - **negative** chains the terms least like the image. Use it as a negative prompt.
+   The status line shows how similar the prompt is to the image. **Send to txt2img / img2img / inpaint / Extras** moves the prompt (and the image, for img2img and inpaint). A negative result goes to the negative prompt.
+3. **Analyze** lists the five best medium, artist, movement, trending and flavor labels with their scores.
+4. **Batch** writes a prompt for every `.png`, `.jpg` and `.jpeg` in a folder: a `.txt` next to each image, one `batch.txt`, or a `batch.csv` with `filename,prompt`. Images that already have a `.txt`, and an existing `batch.txt` or `batch.csv`, are kept unless you tick **Overwrite existing outputs**.
+
+- **Keep models loaded** keeps CLIP and the caption model in memory between runs; otherwise they are released after each run. **Unload** releases them now. **Cancel** cancels only this run.
+- The first run downloads the models from Hugging Face and works out the label embeddings (a few minutes; they are cached in the `clip-interrogator` folder of the config directory and reused afterwards).
+- Unlike the original, nothing is overwritten by default, and the models are the Hugging Face conversions of the same weights. CLIP models outside the list (for example the `RN50` family) are not available.
+
 ## Model Presets
 
 Saves generation-setting presets per checkpoint and sends them to the generation tabs (the heading on screen is **Model Preset Manager**). It also keeps the model page URL, trigger words and a thumbnail.

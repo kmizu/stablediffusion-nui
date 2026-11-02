@@ -191,6 +191,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   val stylesEditor = new StylesEditorTab(ctx)
   val vaeTools = new VaeToolsTab(ctx)
   val metadataUtils = new MetadataUtilsTab(ctx)
+  val clipInterrogator = new ClipInterrogatorTab(ctx)
   val controlNetFastload = new ControlNetFastloadTab(ctx)
   val controlNetFastloadGallery = new ControlNetFastloadGalleryTab(ctx, path => {
     if controlNetFastload.inspectPath(path) then tabs.getSelectionModel.select(controlNetFastloadTab)
@@ -249,6 +250,8 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   modelPresetsTab.setId("model-presets-tab")
   private val metadataUtilsTab = new Tab("Metadata Utils", metadataUtils.node)
   metadataUtilsTab.setId("metadata-utils-tab")
+  private val clipInterrogatorTab = new Tab("Interrogator", clipInterrogator.node)
+  clipInterrogatorTab.setId("clip-interrogator-tab")
   private val controlNetFastloadTab = new Tab("ControlNet Fastload", controlNetFastload.node)
   controlNetFastloadTab.setId("controlnet-fastload-tab")
   private val controlNetFastloadGalleryTab = new Tab("ControlNet Fastload Filter", controlNetFastloadGallery.node)
@@ -282,7 +285,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   scramblePages.setId("scramble-pages")
   private val scrambleTab = new Tab("Image Scrambling", scramblePages)
   scrambleTab.setId("image-scrambling-tab")
-  tabs.getTabs.addAll(pngTab, extrasTab, tokenizerTab, embeddingInspectorTab, embeddingEditorTab, temporalLabTab, systemInfoTab, stylesTab, keywordTab, comparisonTab, vaeToolsTab, metadataUtilsTab, embeddingMergeTab, modelPresetsTab, controlNetFastloadTab, controlNetFastloadGalleryTab, scrambleTab)
+  tabs.getTabs.addAll(pngTab, extrasTab, tokenizerTab, embeddingInspectorTab, embeddingEditorTab, temporalLabTab, systemInfoTab, stylesTab, keywordTab, comparisonTab, vaeToolsTab, metadataUtilsTab, clipInterrogatorTab, embeddingMergeTab, modelPresetsTab, controlNetFastloadTab, controlNetFastloadGalleryTab, scrambleTab)
   tabs.getTabs.add(new Tab("VRAM Estimator", vramEstimator.node))
   private val imageBrowserTab = new Tab("Image Browser", imageBrowser.node)
   imageBrowserTab.setId("image-browser-tab")
@@ -305,6 +308,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     systemInfo.setActive(t eq systemInfoTab)
     if t eq imageBrowserTab then imageBrowser.shown()
     if t eq charaSearcherTab then charaSearcher.shown()
+    if t eq clipInterrogatorTab then clipInterrogator.shown()
     if (previous eq stylesTab) && (t ne stylesTab) then stylesEditor.leave()
     refreshComparisonOptions()
     if (t eq comparisonTab) || (t eq imageBrowserTab) || (t eq charaSearcherTab) then // both need the whole window width
@@ -431,6 +435,11 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
 
   // ---- wiring ------------------------------------------------------------------------------------------
   ctx.sendToTab = (m, p, t) => sendTo(m, p, t)
+  ctx.sendPrompt = (m, text, negative) =>
+    val vm = vms(m)
+    (if negative then vm.negativePrompt else vm.prompt).set(text)
+    select(m)
+    ctx.info(s"Prompt sent to ${m.label}")
   ctx.showImage = p => preview.show(p)
   ctx.sendToExtras = p => { extras.image.set(p.toString); tabs.getSelectionModel.select(extrasTab); ctx.info("Sent to Extras") }
   ctx.openStylesEditor = () => { stylesEditor.reload(); tabs.getSelectionModel.select(stylesTab) }
@@ -1083,6 +1092,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       "temporal lab" -> (() => temporalLab.dispose()),
       "styles editor" -> (() => stylesEditor.dispose()),
       "metadata utils" -> (() => metadataUtils.dispose()),
+      "clip interrogator" -> (() => clipInterrogator.dispose()),
       "model presets" -> (() => modelPresets.dispose()),
       "controlnet fastload" -> (() => controlNetFastload.dispose()),
       "controlnet fastload gallery" -> (() => controlNetFastloadGallery.dispose()),

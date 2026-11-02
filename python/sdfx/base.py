@@ -222,7 +222,7 @@ class BaseEngine:
         }
 
     def features(self) -> list[str]:
-        return ["controlnet_fastload_data", "embedding_merge", "metadata_utils", "prevent_interrupt", *self._batch_features()]
+        return ["clip_interrogator", "controlnet_fastload_data", "embedding_merge", "metadata_utils", "prevent_interrupt", *self._batch_features()]
 
     def _batch_features(self) -> list[str]:
         if self.dry_run:
@@ -329,6 +329,12 @@ class BaseEngine:
     def embedding_merge(self, params: dict, ctx: JobContext) -> dict:
         from .embedding_merge_service import run
         return run(self, params, ctx)
+
+    def clip_interrogator(self, params: dict, ctx: JobContext) -> dict:
+        from . import clip_interrogator
+        if self.dry_run and params.get("operation", "prompt") not in ("models", "unload"):
+            raise EngineError(UNSUPPORTED, "CLIP Interrogator needs the real engine; dry-run has no CLIP or caption model")
+        return clip_interrogator.run(self, params, ctx)
 
     def metadata_utils(self, params: dict, ctx: JobContext) -> dict:
         from .metadata_utils import run

@@ -67,6 +67,30 @@ class McpToolsSuite extends munit.FunSuite:
     assert(rejected("isError").bool)
   }
 
+  test("CLIP Interrogator is discoverable and rejects bad input, out-of-policy files and protected sessions") {
+    val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
+    val tool = ts.find(_("name").str == "clip_interrogate").getOrElse(fail("CLIP Interrogator tool missing"))
+    val props = tool("inputSchema")("properties").obj
+    assertEquals(props("mode")("enum").arr.map(_.str).toSeq, Seq("best", "fast", "classic", "negative", "caption"))
+    assertEquals(props("operation")("enum").arr.map(_.str).toSeq, Seq("prompt", "analyze", "batch", "models", "unload"))
+    assert(call("clip_interrogate", ujson.Obj("operation" -> "bogus"))("isError").bool)
+    assert(call("clip_interrogate", ujson.Obj("operation" -> "prompt", "mode" -> "bogus", "image" -> "x"))("isError").bool)
+    val outside = Files.createTempFile("clip-outside-", ".png")
+    try
+      val denied = call("clip_interrogate", ujson.Obj("operation" -> "prompt", "image" -> outside.toString))
+      assert(denied("isError").bool)
+      assert(textOf(denied).contains("allowed folders"), textOf(denied))
+      val folder = call("clip_interrogate", ujson.Obj("operation" -> "batch", "folder" -> outside.getParent.toString))
+      assert(folder("isError").bool)
+      services.imageScrambleSession.unlock("private-test-password")
+      try
+        val blocked = call("clip_interrogate", ujson.Obj("operation" -> "prompt", "image" -> outside.toString))
+        assert(blocked("isError").bool)
+        assert(textOf(blocked).contains("protected image session"))
+      finally services.imageScrambleSession.lock()
+    finally Files.deleteIfExists(outside)
+  }
+
   test("ControlNet Fastload rejects protected sessions and out-of-policy files") {
     val outside = Files.createTempFile("fastload-outside-", ".cni")
     try
