@@ -511,3 +511,25 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("scripts").obj.contains("animatediff"))
   }
+
+  test("Clip I/O infotext becomes a typed candidate and its keys are consumed") {
+    val dir = Files.createTempDirectory("mcp-inspect-")
+    val path = dir.resolve("clipio.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val plugin = new sdfx.plugins.ClipIoPlugin
+    val values = sdfx.core.plugins.api.Values(sdfx.core.plugins.api.Values.defaults(plugin.controls).map ++
+      Map("enabled" -> "true", "input_enabled" -> "true", "positive_mode" -> "Directive", "output_enabled" -> "true",
+        "output_name" -> "cat", "transpose" -> "true"))
+    val params = plugin.process(sdfx.core.model.GenerationParams(prompt = "cat.csv"), values)
+    val text = sdfx.core.infotext.Infotext.write(params, sdfx.core.infotext.ImageFacts(seed = 4))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    val candidate = result("always_on")("clip_io")
+    assertEquals(candidate("enabled").bool, true)
+    assertEquals(candidate("positive_mode").str, "Directive")
+    assertEquals(candidate("output_name").str, "cat")
+    assertEquals(candidate("transpose").bool, true)
+    assert(!result("unapplied_fields").obj.keySet.exists(k => sdfx.plugins.ClipIoPlugin.InfotextKeys.contains(k)))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
+    assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("clip_io"))
+  }

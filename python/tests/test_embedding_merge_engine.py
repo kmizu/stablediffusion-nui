@@ -37,6 +37,7 @@ def test_expression_resolution_precedes_attention_schedule_parsing(monkeypatch):
 
     scope = {'__name__': 'sdfx.engine', '__package__': 'sdfx',
              'hooks_mod': SimpleNamespace(hook_config=lambda *args: None),
+             'clip_io': SimpleNamespace(DEFAULTS={}),
              'prompt': SimpleNamespace(strip_extra_networks=lambda s: s),
              'prompt_schedule': SimpleNamespace(schedule=schedule)}
     exec(compile(ast.fix_missing_locations(ast.Module(body=[future, cls], type_ignores=[])), '<actual-engine>', 'exec'), scope)

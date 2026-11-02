@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 150, todo 152, na 51.
+Totals: done 151, todo 151, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -170,7 +170,7 @@ Totals: done 150, todo 152, na 51.
 | 161 | [Lua](https://github.com/yownas/sd-webui-lua.git) | 37 | todo | `lua_scripting` |  |
 | 162 | [Model Downloader](https://github.com/Iyashinouta/sd-model-downloader.git) | 50 | todo | `model_downloader` |  |
 | 163 | [Styles Editor](https://github.com/chrisgoringe/Styles-Editor.git) | 87 | done | `core:styles-editor` |  |
-| 164 | [Clip I/O](https://github.com/Filexor/Clip_IO.git) | 19 | todo | `clip_io` |  |
+| 164 | [Clip I/O](https://github.com/Filexor/Clip_IO.git) | 19 | done | `clip_io` | AlwaysOn hook `clip_io` written from the README only (AGPL-3.0, pinned b6c2e96; the script was not read, nothing copied). Clip Output: positive and optional negative conditioning to .csv or .pt in the conditioning folder ($SDFX_CLIP_IO_DIR, default ~/.cache/stablediffusion-nui/clip_io/conditioning) with Transpose, no bos/eos/pad, Ignore emphasis, Bypass normalization, token strings, Overwrite. Clip Input: Positive/Negative prompts as file lists (Simple: quoting, .csv then .pt lookup, triple-quoted CLIP prompts, concatenation) and Directive mode (`?prompt(...)` with clip_skip / no_padding lists, `?eval` / `?eval_ORDER`), PNG/MCP replay, SD1.x / SD2.x / SDXL. Own design where the README is silent: file layout (rows = tokens), .pt format (tensor; SDXL dict with pooled), SDXL CSV input takes the empty prompt's pooled vector, eval runs after the pieces are joined, only the generation's own prompts are replaced. Not provided: `?exec`, the `g` and `p` objects, Python `eval` (a restricted arithmetic interpreter is used instead), prompt editing / alternating words / AND / BREAK inside input prompts. Verified on real SD1.5 and SDXL, docs/clip-io-verification.md. |
 | 165 | [Inpaint Anything](https://github.com/Uminosachi/sd-webui-inpaint-anything.git) | 1298 | todo | `inpaint_anything` |  |
 | 166 | [QR Code Generator](https://github.com/missionfloyd/webui-qrcode-generator.git) | 47 | todo | `qr_code` |  |
 | 167 | [sd-webui-roop](https://github.com/s0md3v/sd-webui-roop) | 3561 | todo | `face_swap` |  |

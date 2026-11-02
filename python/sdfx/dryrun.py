@@ -87,7 +87,7 @@ class FakeEngine(BaseEngine):
         return (["inpaint_difference"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + nsfw + ["clip_interrogator", "controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "pag", "controlnet", "apg", "mahiro", "rescale_cfg", "semantic_guidance", "agent_attention", "cd_tuner", "incantations", "sonar", "llul", "aesthetic_gradients", "characteristic_guidance",
                 "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier", "soft_inpainting", "sag", "neveroom",
                 "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint", "photomaker", "img2imgalt",
-                "face_restore", "caption", "img2vid", "novel_view", "ldsr", "marigold", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "system_info", "prevent_interrupt"] + list(SAMPLING_HOOKS) + (
+                "face_restore", "caption", "img2vid", "novel_view", "ldsr", "marigold", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "clip_io", "system_info", "prevent_interrupt"] + list(SAMPLING_HOOKS) + (
                     ["temporal_lab"] if HAVE_NUMPY and HAVE_PIL else []) + (
                     ["custom_code"] if os.environ.get("SDFX_ALLOW_CODE") == "1" else [])
 
@@ -293,6 +293,15 @@ class FakeEngine(BaseEngine):
                 raise EngineError(UNSUPPORTED, "AnimateDiff cannot be combined with Hires. fix")
             if not HAVE_PIL:
                 raise EngineError(UNSUPPORTED, "AnimateDiff dry run needs Pillow")
+        from . import clip_io
+        cio = hook_config(gp.hooks, "clip_io", clip_io.DEFAULTS)
+        if cio is not None:
+            cio = clip_io.normalize(cio)
+            for text, mode in ((gp.prompt, cio["positive_mode"]), (gp.negative_prompt, cio["negative_mode"])):
+                if cio["input_enabled"] and mode != "off":
+                    for piece in clip_io.parse_input(text, mode):
+                        if piece.kind == "file":
+                            clip_io.resolve_file(piece.text)
         try:
             for it in range(n_iter):
                 idx0 = it * bs

@@ -31,7 +31,7 @@ object StandardPlugins:
     new NeverOomPlugin, new TemperatureGuardPlugin,
     // prompt processing (extension index)
     new RandomizePlugin, new PromptFormatPlugin, new PromptFilterPlugin, new NegativePromptWeightPlugin,
-    new NovelAIPromptPlugin, new StyleVariablesPlugin(), new LoraBlockWeightPlugin, new WeightGradientPlugin, new NegPipPlugin,
+    new NovelAIPromptPlugin, new StyleVariablesPlugin(), new LoraBlockWeightPlugin, new WeightGradientPlugin, new NegPipPlugin, new ClipIoPlugin,
     new NeutralPromptPlugin, new TokenizerPlugin, new VaeToolsPlugin,
     // sampling (extension index)
     // after the prompt processors, so CD Tuner reads <cdt:...> from the final prompt

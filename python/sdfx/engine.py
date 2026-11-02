@@ -27,7 +27,7 @@ from . import hires as hires_mod
 from . import hooks as hooks_mod
 from . import adapters, animatediff, extras, inpaint, lora_blocks, models, preview, prompt, prompt_schedule, schedulers, sonar, upscalers
 from . import weight_gradient, save_intermediate, latent_upscale, steps_animation
-from . import aesthetic_gradients, negpip
+from . import aesthetic_gradients, clip_io, negpip
 from . import neutral_prompt, neutral_runtime, prompt_fusion
 from .clora import runtime as composable_lora
 from . import extensions as ext_mod
@@ -222,7 +222,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "clip_io"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")
@@ -855,6 +855,16 @@ class Engine(BaseEngine):
                                    hires_total: Optional[int] = None, gradient_total: Optional[int] = None) -> dict:
         """_encode plus A1111 prompt editing / alternation: returns the embeddings for step 1; when the prompt
         changes during sampling the result is a ScheduledEmbeds carrying [(end_step, embeds), ...] (equal lengths)."""
+        cio = hooks_mod.hook_config(gp.hooks, "clip_io", clip_io.DEFAULTS)
+        if cio is not None:
+            cio = clip_io.normalize(cio)
+            modes = clip_io.applies(cio, pos, neg, gp)
+            self._clip_io_export(cio, pos, neg, gp, steps, modes)
+            if modes != ("off", "off"):
+                try:
+                    return clip_io.encode_input(self, cio, pos, neg, gp, bs, modes)
+                except (OSError, ValueError, RuntimeError) as exc:
+                    raise EngineError(INVALID_PARAMS, f"Clip I/O: {exc}") from exc
         job = getattr(self, "_composable_job", None)
         if job is not None and hooks_mod.hook_config(gp.hooks, "composable_lora", {}) is not None:
             try:
@@ -916,6 +926,30 @@ class Engine(BaseEngine):
         out = ScheduledEmbeds(variants[0][1])
         out.schedule = variants
         return out
+
+    def _clip_io_export(self, cio: dict, pos: str, neg: str, gp: GenerationParams, steps: int, modes: tuple) -> None:
+        """Clip Output: write the conditioning of the generation's own prompts once per request."""
+        if not cio["output_enabled"]:
+            return
+        done = getattr(self, "_clip_io_done", None)
+        if done is None:
+            done = self._clip_io_done = set()
+        ctx = getattr(self, "_embedding_merge_ctx", None)
+        for text, own, name, mode in ((pos, gp.prompt, cio["output_name"], modes[0]),
+                                      (neg, gp.negative_prompt, cio["negative_output_name"], modes[1])):
+            if not name or text != own or mode != "off" or (name, text) in done:
+                continue
+            done.add((name, text))
+            first = prompt_schedule.schedule(prompt.strip_extra_networks(text), steps)[0][1]
+            try:
+                path = clip_io.export(self, cio, first, name, gp)
+            except (OSError, ValueError, RuntimeError) as exc:
+                raise EngineError(INVALID_PARAMS, f"Clip I/O: {exc}") from exc
+            if path is None:
+                if ctx is not None:
+                    ctx.warn(f"Clip Output: '{name}' already exists and Overwrite is off; not written")
+            else:
+                log.info("Clip Output: wrote %s", path)
 
     def _adjust_embeds(self, gp: GenerationParams, embeds: dict, ctx: JobContext) -> dict:
         if "_neutral" in embeds:
@@ -1539,6 +1573,7 @@ class Engine(BaseEngine):
     def _generate(self, params: dict, ctx: JobContext, mode: str) -> dict:
         self._editor_preview = None
         self._embedding_merge_ctx = ctx
+        self._clip_io_done = set()
         self._intermediate_recorder = None
         self._composable_job = None
         self._cd_tuner_job = None
