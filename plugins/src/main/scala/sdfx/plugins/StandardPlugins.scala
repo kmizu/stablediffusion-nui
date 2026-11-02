@@ -63,7 +63,7 @@ object StandardPlugins:
     // mask-driven img2img (extension index)
     new DepthMaskPlugin, new InpaintBackgroundPlugin, new SeamlessTilePlugin,
     // extension index: prompt and sequence scripts
-    new DynamicPromptsPlugin, new OneButtonPromptPlugin, new TestMyPromptPlugin, new ScramblePromptsPlugin,
+    new DynamicPromptsPlugin, new OneButtonPromptPlugin, new BooruPromptPlugin, new TestMyPromptPlugin, new ScramblePromptsPlugin,
     new TweakWeightsPlugin, new LoraQueuePlugin, new BatchCheckpointsPromptsPlugin, new SeedTravelPlugin,
     new ShiftAttentionPlugin
   )

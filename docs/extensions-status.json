@@ -483,19 +483,19 @@
 "index": 80,
 "name": "booru2prompt",
 "url": "https://github.com/Malisius/booru2prompt.git",
-"status": "todo:booru_prompt"
+"status": "done:booru_prompt"
 },
 {
 "index": 81,
 "name": "Gelbooru Prompt",
 "url": "https://github.com/antis0007/sd-webui-gelbooru-prompt.git",
-"status": "todo:booru_prompt"
+"status": "done:booru_prompt"
 },
 {
 "index": 82,
 "name": "e621 Prompt",
 "url": "https://github.com/nochnoe/sd-webui-e621-prompt.git",
-"status": "todo:booru_prompt"
+"status": "done:booru_prompt"
 },
 {
 "index": 83,
@@ -1377,7 +1377,7 @@
 "index": 229,
 "name": "Ranbooru",
 "url": "https://github.com/Inzaniak/sd-webui-ranbooru.git",
-"status": "todo:booru_prompt"
+"status": "done:booru_prompt"
 },
 {
 "index": 230,
@@ -2085,7 +2085,7 @@
 "index": 347,
 "name": "Gelbooru Prompt Randomizer",
 "url": "https://github.com/RED1cat/Gelbooru-Prompt-Randomizer.git",
-"status": "todo:booru_prompt"
+"status": "done:booru_prompt"
 },
 {
 "index": 348,

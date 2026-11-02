@@ -21,6 +21,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # (repo, how it is used, what)
 BASE = [
+    ("Malisius/booru2prompt", "reimplemented", "Unlicensed behavior reference 4bd88839a6454428d098c7ad6672cc0989dd6a60; only its README was used (post link / id selection, search, extra tag choices, underscore and comma options), re-implemented in the `booru_prompt` script; no upstream code was read or copied"),
+    ("antis0007/sd-webui-gelbooru-prompt", "reimplemented", "Pinned GPL-3.0 source b0128f931a8306a8f1a030c515792e3128b97f04; only its README was used (tags of a saved Gelbooru image from its md5 file name), re-implemented as post references in the `booru_prompt` script; no upstream code copied"),
+    ("nochnoe/sd-webui-e621-prompt", "reimplemented", "Pinned MIT source 74ce0a50d788abfa42d67b0614f7195d3f71294c; only its README was used (e621 link / id / md5, tag categories with prefixes, underscores, exclude and append tags), re-implemented in the `booru_prompt` script; no upstream code copied"),
+    ("Inzaniak/sd-webui-ranbooru", "reimplemented", "Unlicensed behavior reference dfbf48b0684770199f9025b4e8b27a3a30fa3e62; only its README and usage guide were used (random posts, tag filters, mixing, chaos / negative mode, img2img, LoRAnado), re-implemented in the `booru_prompt` script; no upstream code was read or copied"),
+    ("RED1cat/Gelbooru-Prompt-Randomizer", "reimplemented", "Unlicensed behavior reference 032805388740dad2bcd06493f0286c8792e71230; only its README was used (random Gelbooru post with required and excluded tags), re-implemented in the `booru_prompt` script; no upstream code was read or copied"),
     ("Kahsolt/stable-diffusion-webui-sonar", "reimplemented", "Pinned MIT source 15f92859f70f624513796dde91396109134da47b; independent momentum Euler / Euler a / Naive scheduler steps, reference-image guidance and upscale from the source behaviour; no upstream code copied"),
     ("Elldreth/loopback_scaler", "reimplemented", "Pinned MIT source 184a53e6d22579c578c6ee1bf55d821479213c49; independent native img2img loop schedule and final filters; no upstream code copied"),
     ("light-and-ray/sd-webui-old-sd-firstpasser", "reimplemented", "Unlicensed behavior reference 74eb6b965bc5dbb65be99999b4a86bfbb0ee2b13; only its README was used (firstpass with an old SD 1.x / SDXL checkpoint, upscale, main-checkpoint img2img, Hires fix supported), re-implemented as the `old_sd_firstpasser` txt2img script; no upstream code was read or copied (its README screenshot was viewed only to name the controls)"),
@@ -208,6 +213,8 @@ BASE = [
 # Keep these source-pinned original LICENSE bytes; do not normalize newlines.
 # (commit, license path, SHA-256, SPDX)
 PINNED_LICENSES = {
+    "antis0007/sd-webui-gelbooru-prompt": ("b0128f931a8306a8f1a030c515792e3128b97f04", "LICENSE", "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986", "GPL-3.0"),
+    "nochnoe/sd-webui-e621-prompt": ("74ce0a50d788abfa42d67b0614f7195d3f71294c", "LICENSE", "442e98fcf4a5025b373765e15a9e41a3d1aef54b6f5413313e3e669c5f209252", "MIT"),
     "Kahsolt/stable-diffusion-webui-sonar": ("15f92859f70f624513796dde91396109134da47b", "LICENSE", "db9e98edd8524ac09e959b256bfb5687d27f88a9a442be629b0e55d102bfc0eb", "MIT"),
     "tsngo/stable-diffusion-webui-aesthetic-image-scorer": ("1c3ab7a116ab5bc3b81d718e6383edd98903a01f", "LICENSE", "f5ca122d1eed10b6471854b92bb9ea69da0d40ec229a2677d83e0f2166b3c517", "MIT"),
     "p1atdev/stable-diffusion-webui-cafe-aesthetic": ("d1c7ee842736f9d9cc6564c2c92a5bff54d19e26", "LICENSE", "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef", "AGPL-3.0"),
@@ -267,6 +274,12 @@ PINNED_LICENSES = {
 # Audited source has no license file. Do not fetch another branch or invent a license text.
 # (commit, notice label)
 PINNED_UNLICENSED = {
+    "Malisius/booru2prompt": (
+        "4bd88839a6454428d098c7ad6672cc0989dd6a60", "no license file published at pinned source"),
+    "Inzaniak/sd-webui-ranbooru": (
+        "dfbf48b0684770199f9025b4e8b27a3a30fa3e62", "no license file published at pinned source"),
+    "RED1cat/Gelbooru-Prompt-Randomizer": (
+        "032805388740dad2bcd06493f0286c8792e71230", "no license file published at pinned source"),
     "CodeExplode/stable-diffusion-webui-embedding-editor": (
         "c8f290230f9360729abc3a3a57fe1befc2d43b23", "no license file published at pinned source"),
     "rifeWithKaiju/model_preset_manager": (

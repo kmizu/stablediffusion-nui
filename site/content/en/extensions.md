@@ -194,6 +194,7 @@ For Hires. fix itself, see [Generating images](generate.html).
 | **Prompts from file or textbox** | Runs one generation per line; lines may use options such as `--prompt` and `--steps`. |
 | **Dynamic Prompts / Wildcards** | Builds prompts from templates such as `{a|b|c}` and `__wildcards__` from `wildcards/*.txt`. |
 | **One Button Prompt** | Generates complete random prompts (subject, style, setting, lighting and more) and renders them. |
+| **Booru prompt** | Turns the tags of a booru post into the prompt: a random result of your search tags (every image gets its own post) or specific posts by link, id or md5. Danbooru, AIBooru, e621, Gelbooru, Rule34, Safebooru, Xbooru, Konachan and Yande.re; rating filter, tag categories, remove/append/shuffle/limit tags, mixing, chaos and negative mode, optional img2img from the post's picture and random LoRAs. Gelbooru and Rule34 need a user id and API key. The buttons under the form add the tags of a post or a random post to the visible prompt. The tags are saved with the image; later replays need no network. |
 | **StylePile** | Mixes weighted image types, artists and art movements, with sequential and random prompt variables. |
 | **Scramble prompts** | Creates prompt variations by shuffling and randomly dropping comma-separated tags. |
 | **Tweak weights** | Creates variations by randomly re-weighting tags that match a pattern (all tags when empty). |

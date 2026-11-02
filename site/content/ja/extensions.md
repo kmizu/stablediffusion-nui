@@ -194,6 +194,7 @@ Hires. fix 自体の使い方は [画像の生成](generate.html) を参照し�
 | **Prompts from file or textbox** | 1 行ごとに 1 回生成します。行には `--prompt` や `--steps` などのオプションも書けます。 |
 | **Dynamic Prompts / Wildcards** | `{a|b|c}` などのテンプレートと、`wildcards/*.txt` の `__wildcards__` からプロンプトを作ります。 |
 | **One Button Prompt** | 被写体、スタイル、場所、照明などを含むプロンプトをランダムに作って生成します。 |
+| **Booru prompt** | booru の投稿のタグをプロンプトにします。検索タグに合う投稿をランダムに選ぶ（画像ごとに別の投稿）か、リンク・ID・md5 で投稿を指定します。Danbooru、AIBooru、e621、Gelbooru、Rule34、Safebooru、Xbooru、Konachan、Yande.re に対応し、レーティング、タグの種類、除外・追加・シャッフル・件数制限、タグの混合、カオス・ネガティブモード、投稿画像からの img2img、ランダム LoRA が使えます。Gelbooru と Rule34 は user id と API キーが必要です。フォーム下のボタンで、指定した投稿またはランダムな投稿のタグを今のプロンプトへ追加できます。タグは画像に保存されるので、再現にネットワークは要りません。 |
 | **StylePile** | 画像の種類、アーティスト、芸術運動などを重み付きで組み合わせ、順番またはランダムに変化させます。 |
 | **Scramble prompts** | カンマ区切りのタグを並べ替えたり、ランダムに外したりして、プロンプトの変化形を作ります。 |
 | **Tweak weights** | パターンに合うタグ(空ならすべてのタグ)の重みをランダムに変えて、変化形を作ります。 |
