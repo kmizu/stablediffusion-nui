@@ -23,6 +23,7 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       "SDFX_SCALATORCH_MODEL"->root.toString,"SDFX_SCALATORCH_SCHEDULER"->config.toString)).get
     val supervisor=new EngineSupervisor(() => launch,maxRestarts=0)
     val client=new EngineClient(supervisor)
+    var failure: Throwable=null
     try
       val hello=supervisor.start()
       assertEquals(hello.python,"")
@@ -43,6 +44,11 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       val requestedVaeDevice=sys.env.getOrElse("SDFX_SCALATORCH_VAE_DEVICE","cpu")
       val expectedVaeDevice=if requestedVaeDevice=="cuda" then "cuda:0" else requestedVaeDevice
       assertEquals(Await.result(client.systemStatus(),10.seconds)("runtime")("vae_device").str,expectedVaeDevice)
+      val placement=Await.result(client.systemStatus(),10.seconds)("runtime")
+      assertEquals(placement("unet_offload_weights").bool,expectedUnetDevice!="cpu" &&
+        sys.env.get("SDFX_SCALATORCH_UNET_OFFLOAD_WEIGHTS").contains("true"))
+      assertEquals(placement("vae_offload_weights").bool,expectedVaeDevice!="cpu" &&
+        sys.env.get("SDFX_SCALATORCH_VAE_OFFLOAD_WEIGHTS").contains("true"))
       val loaded=Await.result(client.loadModel(LoadModelRequest(root.toString,dtype="fp32",vramMode="cpu")),30.seconds)
       assertEquals(loaded.path,root.toRealPath().toString)
       assert(loaded.hash.matches("[0-9a-f]{64}"))
@@ -72,9 +78,17 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       assert(mapping("delete")("deleted").bool)
       assertEquals(mapping("check")("source").str,"no match")
       Await.result(client.unload(),10.seconds)
+    catch case error: Throwable =>
+      failure=error
+      throw error
     finally
-      supervisor.close()
-      val files=Files.list(temp)
-      try files.forEach(p => { Files.delete(p);() }) finally files.close()
-      Files.delete(temp)
+      try
+        supervisor.close()
+        val files=Files.walk(temp)
+        try files.sorted(java.util.Comparator.reverseOrder[Path]()).forEach(p => {
+          require(p.toAbsolutePath.normalize().startsWith(temp.toAbsolutePath.normalize()))
+          Files.delete(p);()
+        }) finally files.close()
+      catch case cleanup: Throwable =>
+        if failure!=null then failure.addSuppressed(cleanup) else throw cleanup
   }

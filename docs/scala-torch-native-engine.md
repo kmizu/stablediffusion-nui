@@ -1,3 +1,20 @@
+## Native CUDA weight offload (2026-11-03)
+
+Set SDFX_SCALATORCH_UNET_OFFLOAD_WEIGHTS=true and
+SDFX_SCALATORCH_VAE_OFFLOAD_WEIGHTS=true together with their DEVICE=cuda options
+to upload weights per operation instead of retaining every weight on the GPU.
+Both default false and accept literal true/false. Activations remain on CUDA;
+CLIP/schedulers and stored FP32 model weights remain on CPU. More transfers may
+reduce throughput. MAX_BYTES caps session allocations, not total device usage.
+Status runtime.unet_offload_weights / vae_offload_weights report the settings.
+
+NativeScalaEngineSuite passed using both offload options and16MiB per session:
+64x64 tiny-model generation, previews, VAE replacement/restore, keyword mapping,
+and status. The same64x64 job fails VAE decode at2MiB; recovery latents are saved.
+The test cleanup now handles recovery directories recursively and preserves the
+original exception if cleanup also fails. Separate Java worker tests at10x6 pass
+with2MiB per session. These are tiny-model checks, not SD1.5/SDXL acceptance or
+proof that every NUI feature works without Python.
 # Scala native engine integration
 
 The opt-in `sdfx.engine.NativeScalaEngineSuite` launches scala-torch's
