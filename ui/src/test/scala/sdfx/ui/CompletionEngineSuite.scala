@@ -108,17 +108,37 @@ class CompletionEngineSuite extends FunSuite:
     val d = data.copy(extra = extra)
     assertEquals(run(d, "blue|").get.items.map(_.label), Vector("blue_hair", "blue_eyes", "blue_sky"))
     assertEquals(run(d, "blue|", cfg.copy(extraAfter = false)).get.items.map(_.label), Vector("blue_sky", "blue_hair", "blue_eyes"))
-    assertEquals(run(d, "mast|").get.items.head.detail, "Quality tag")
-    assertEquals(run(d, "blue_s|").get.items.head.detail, "Custom tag")
+    assertEquals(run(d, "mast|").get.items.head.detail, "Quality tag  category 0")
+    assertEquals(run(d, "blue_s|").get.items.head.detail, "Custom tag  category 0")
     assertEquals(run(d, "blue_s|").get.items.head.kind, SuggestionKind.Extra)
   }
   test("chants JSON parsing and validation") {
     val chants = CompletionEngine.parseChants("""[{"name":"A","terms":"x,y","content":"c1","color":2},{"name":"B","content":"c2"}]""")
     assertEquals(chants.map(_.name), Vector("A", "B"))
     assertEquals(chants(1).color, 0)
+    assertEquals(chants(1).colorSpecified, false)
+    assertEquals(run(data.copy(chants = chants), "<c:b|").get.items.head.category, None)
     intercept[IllegalArgumentException](CompletionEngine.parseChants("""[{"name":"A"}]"""))
     intercept[IllegalArgumentException](CompletionEngine.parseChants("[]"))
     intercept[Exception](CompletionEngine.parseChants("{"))
+  }
+  test("tag and chant suggestions carry their source category without changing insertion") {
+    val parsed = TagCompletion.parse(Iterator("name,category,count,aliases", "azure_hair,4,20,bluehair", "landscape,0,10,"))
+    val d = data.copy(tags = parsed, chants = Vector(Chant("Bright", "light", "sunlit sky", 3)))
+    val tag = run(d, "bluehair|").get.items.head
+    assert(tag.detail.contains("category 4"))
+    assertEquals(tag.insert(), "azure hair")
+    val chant = run(d, "<c:bright|").get.items.head
+    assert(chant.detail.contains("category 3"))
+    assertEquals(chant.insert(), "sunlit sky")
+    assertEquals(tag.category, Some(4))
+    assertEquals(chant.category, Some(3))
+    val extra = CompletionEngine.parseExtra(Iterator("extra_tag,1,custom,"))
+    assertEquals(run(d.copy(extra = extra), "extra|").get.items.head.category, Some(1))
+    assert(run(d.copy(extra = extra), "extra|").get.items.head.detail.contains("category 1"))
+    val malformed = TagCompletion.parse(Iterator("a,not-a-number,1,", "b,99,1,"))
+    assertEquals(malformed.find(_.name == "a").get.category, None)
+    assertEquals(malformed.find(_.name == "b").get.category, Some(99))
   }
   test("plain tags still work with weights and ignore finished network tags") {
     assertEquals(applied(data, "(blue h|:1.2), x"), "(blue hair:1.2), x")

@@ -45,7 +45,7 @@ non-empty lines; the popup warns when later lines are omitted.
 - **Extra tag CSV**: same layout as the tag CSV, but column 3 is the grey meta text (default "Custom tag").
   Shown after (default) or before the normal tags.
 - **Chants JSON**: `[{"name": ..., "terms": ..., "content": ..., "color": ...}]`. `name` and `terms` are searched,
-  `content` is inserted as written (`color` is accepted but not drawn).
+  `content` is inserted as written; numeric `color` is shown as a category marker.
 - **LoRA trigger words**: the A1111 `<model>.json` sidecar field `activation text`; inserted as
   `<lora:name:1.0>, words`. Turn off in the dialog.
 - **Previews**: `<model>.preview.png`, `<model>.png`, `.jpg`, `.jpeg`, `.webp`, `.gif` next to the model file, shown in
@@ -59,11 +59,19 @@ Maximum results (1-50), replace `_` with a space, escape parentheses, append `, 
 `<lora:...>` tags), search by alias, show only the alias (otherwise `alias ➝ tag`), switches for wildcards,
 extra networks, chants, trigger words and previews.
 
+## Category markers
+
+The numeric `type` / `category` field in tag and extra-tag CSV files and the `color` field of a
+chant are shown as category numbers. Categories 0, 1, 3, 4 and 5 also have coloured markers;
+other numbers remain visible without a marker. These colours identify numbers only: category
+meanings vary by data source. A missing or non-numeric category has no marker. The upstream
+extension's per-file custom colour settings are not supported.
+
 ## Scope
 
 Provided: everything above plus the v0.03 behaviour (positive and negative prompt, keyboard and mouse insertion,
 IME composition guards). Not provided: hypernetworks (`<h:` offers nothing, the app has no hypernetwork loader),
 embedding v1/v2 filter, the model-keyword trigger lists, the upstream next-folder and always-full Tab modes,
 Umi AI wildcards, live translation preview, wiki links, completion delay, remappable hotkeys,
-category colours, per-model black/whitelist, built-in danbooru/e621 lists. A physical Japanese IME was not
+custom category colours, per-model black/whitelist, built-in danbooru/e621 lists. A physical Japanese IME was not
 exercised (synthetic composition events only). See [tag-autocomplete-verification.md](tag-autocomplete-verification.md).

@@ -46,6 +46,8 @@ work as in A1111.
 
   When several wildcard paths match, Tab extends their common prefix. After choosing a file, select a line to insert it directly, or press Escape to keep the `__name__` reference. Use Previous/Next or PageUp/PageDown to browse more lines.
 
+  Tags and chants with numeric categories show their number and, for some numbers, a coloured marker. The meaning of each number depends on the data source; marker colours distinguish numbers rather than assign a universal meaning. Custom colours are not supported.
+
 For **✚ LoRA** and **Networks…** in the toolbar, see [LoRA and embeddings](lora-embeddings.html).
 
 ## Styles

@@ -58,7 +58,7 @@ object RealTagAutocompleteExtrasCheck:
     Files.writeString(wildcardDir.resolve("colors/cold.txt"), "blue\n")
     val files = Files.createDirectories(run.resolve("data"))
     val tagCsv = files.resolve("tags.csv")
-    Files.writeString(tagCsv, "blue_hair,0,20,azure_hair\nblue_eyes,0,10,\nred_(dress),0,5,\n")
+    Files.writeString(tagCsv, "blue_hair,4,20,azure_hair\nblue_eyes,0,10,\nred_(dress),0,5,\n")
     val translationCsv = files.resolve("translation.csv")
     Files.writeString(translationCsv, "blue_hair,青い髪\nblue_eyes,青い目\n", java.nio.charset.StandardCharsets.UTF_8)
     val extraCsv = files.resolve("extra.csv")
@@ -188,6 +188,8 @@ object RealTagAutocompleteExtrasCheck:
           a.setText(before + typed); a.positionCaret(a.getText.length)
           check(s"popup for '$typed'")(editor.completionVisible && editor.completionItems.nonEmpty)
           check(s"first row of '$typed' is '$label'")(editor.completionItems(down).label == label)
+          if label == "blue_hair" then check("translated tag retains category 4")(editor.completionItems(down).category.contains(4))
+          if label == "Basic-HighQuality" then check("chant retains category 1")(editor.completionItems(down).category.contains(1))
           if expectPreview then check(s"preview window shown for '$typed'")(editor.previewVisible)
         }
         if expectPreview then

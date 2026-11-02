@@ -221,6 +221,7 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
   list.setFocusTraversable(false)
   list.setPrefWidth(420)
   list.setCellFactory(_ => new ListCell[Suggestion]():
+    private val categoryColors = Map(0 -> "#59a8ee", 1 -> "#ee7777", 3 -> "#bd8df1", 4 -> "#73c98b", 5 -> "#e9b45f")
     setOnMousePressed(e =>
       if getItem != null then
         list.getSelectionModel.select(getItem)
@@ -232,6 +233,19 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
       setText(if empty || item == null then null else
         val kind = if item.kind == sdfx.ui.vm.SuggestionKind.Tag then "" else s"[${item.kind.title}] "
         s"$kind${item.label}    ${item.detail}")
+      setGraphic(null)
+      setAccessibleText(null)
+      if !empty && item != null then
+        item.category.foreach { category =>
+          setAccessibleText(s"${item.label}, ${item.detail}, category $category")
+          categoryColors.get(category).foreach { color =>
+            val dot = new javafx.scene.shape.Circle(4, javafx.scene.paint.Color.web(color))
+            dot.setStroke(javafx.scene.paint.Color.web("#343b46"))
+            dot.setStrokeWidth(0.8)
+            dot.setAccessibleText(s"category $category")
+            setGraphic(dot)
+          }
+        }
   )
   popup.getContent.add(new VBox(list, lineNavigation))
   previewView.setFitWidth(160); previewView.setFitHeight(160); previewView.setPreserveRatio(true)
