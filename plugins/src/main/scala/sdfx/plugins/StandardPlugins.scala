@@ -40,7 +40,7 @@ object StandardPlugins:
     new SaveIntermediatePlugin, new GridNumbersPlugin
   )
 
-  def scripts(extraAxes: () => Seq[XyzAxis]): Seq[Plugin] = Seq(
+  def scripts(extraAxes: () => Seq[XyzAxis], home: sdfx.core.config.AppHome = sdfx.core.config.AppHome.detect()): Seq[Plugin] = Seq(
     new XyzGridPlugin(extraAxes),
     new PromptMatrixPlugin,
     new StylePilePlugin,
@@ -66,7 +66,7 @@ object StandardPlugins:
     // mask-driven img2img (extension index)
     new DepthMaskPlugin, new InpaintBackgroundPlugin, new SeamlessTilePlugin,
     // extension index: prompt and sequence scripts
-    new DynamicPromptsPlugin, new OneButtonPromptPlugin, new BooruPromptPlugin, new TestMyPromptPlugin, new ScramblePromptsPlugin,
+    new DynamicPromptsPlugin, new OneButtonPromptPlugin, new BooruPromptPlugin, new CreaPromptPlugin(() => Some(home.root.resolve("creaprompt").resolve("csv"))), new TestMyPromptPlugin, new ScramblePromptsPlugin,
     new TweakWeightsPlugin, new LoraQueuePlugin, new BatchCheckpointsPromptsPlugin, new SeedTravelPlugin,
     new ShiftAttentionPlugin
   )
@@ -85,7 +85,7 @@ object StandardPlugins:
   )
 
   /** `extraAxes` lets the host contribute axes of all loaded plugins (including these AlwaysOn ones). */
-  def all(extraAxes: () => Seq[XyzAxis]): Seq[Plugin] = scripts(extraAxes) ++ extras ++ alwaysOn
+  def all(extraAxes: () => Seq[XyzAxis], home: sdfx.core.config.AppHome = sdfx.core.config.AppHome.detect()): Seq[Plugin] = scripts(extraAxes, home) ++ extras ++ alwaysOn
 
   /** Convenience: all standard plugins with the X/Y/Z grid seeing the standard AlwaysOn axes. */
   def withOwnAxes: Seq[Plugin] =

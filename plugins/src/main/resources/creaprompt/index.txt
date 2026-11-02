@@ -1,0 +1,54 @@
+0_0Man.csv
+1_0Woman.csv
+1_2Celebrity_Man.csv
+1_2Celebrity_Woman.csv
+1_4haircuts_Thomas_Buyle.csv
+1_6haircolors_Thomas_Buyle.csv
+1_7Eyes_Style.csv
+1_8Woman_Dress_Malapris_PJ.csv
+2_0Expressions_Malapris.csv
+2_1Erotic.csv
+2_2Sports_Malapris.csv
+2_3Actions.csv
+2_3Actions_Malapris_v2.0.csv
+2_3Films_Scenes_Malapris.csv
+2_4animals.csv
+2_6fictional characters.csv
+2_8humanoids.csv
+2_9vehicles.csv
+3_0shotstyle.csv
+3_1Angle_of_view_FD.csv
+3_2Angle_of_view_PJ.csv
+3_3Places.csv
+3_5Landscapes.csv
+3_5Special_Places_Malapris.csv
+3_6locations.csv
+3_7Sky_Malapris.csv
+3_8Eras_Malapris.csv
+4_0artistic_style.csv
+4_1realistic_style.csv
+4_2Artists.csv
+4_2Artists_special.csv
+4_4artists_AdelAiRealistic.csv
+6_2image_quality.csv
+7_4Cameras.csv
+7_6lighting.csv
+8_0effects_AdelAI_Realistic.csv
+8_1styles_AdelAI_Realistic.csv
+8_2lighting_AdelAI_Realitic.csv
+8_4films_AdelAI_Realistic.csv
+8_6cameras_AdelAI_Realistic.csv
+9_9AccidentsIndustry_Malapris.csv
+9_9Prevention_Malapris.csv
+After prefix.config
+Animals.config
+Deselect All.config
+Fictional characters.config
+Humanoids.config
+Landscapes.config
+Man.config
+Select All.config
+Vehicles.config
+Woman.config
+Woman2.config
+collection.txt

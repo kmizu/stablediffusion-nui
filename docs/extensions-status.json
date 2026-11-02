@@ -1677,7 +1677,7 @@
 "index": 279,
 "name": "sd-webui-creaprompt",
 "url": "https://github.com/tritant/sd-webui-creaprompt.git",
-"status": "todo:creaprompt"
+"status": "done:creaprompt"
 },
 {
 "index": 280,
