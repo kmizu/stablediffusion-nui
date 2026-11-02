@@ -16,6 +16,8 @@ psutil==7.0.0
 onnxruntime==1.23.2  # WD14 tagger (Caption plugin, method wd14), the NudeNet NSFW Censor detector, the NSFWJS filter and the Character Searcher person detector, ISNet matting and WD tagger (CPU)
 # optional: PhotoMaker plugin (v1 adapters). Install without dependencies so the pins above stay intact:
 #   pip install --no-deps "git+https://github.com/TencentARC/PhotoMaker.git"
+# optional: OpenCLIP models in CLIP Interrogator (additional model weights download separately):
+#   pip install --no-deps open_clip_torch==2.32.0 timm==1.0.15 ftfy==6.3.1 wcwidth==0.2.13
 # optional: Compile hook, TensorRT backend (versions must match your torch build; tensorrt is NVIDIA proprietary,
 # installed by you, not redistributed). Torch-TensorRT 2.7 + tensorrt 10.9 pair with torch 2.7:
 #   pip install torch-tensorrt==2.7.0 --extra-index-url https://download.pytorch.org/whl/cu128

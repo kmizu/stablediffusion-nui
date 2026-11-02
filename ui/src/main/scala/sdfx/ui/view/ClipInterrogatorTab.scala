@@ -25,6 +25,37 @@ final class ClipInterrogatorTab(ctx: UiContext):
   private val captionModel = new ComboBox[String](FXCollections.observableArrayList(CaptionModels*))
   captionModel.setId("clip-caption-model")
   captionModel.setValue("blip-large")
+  private val clipDependencyNotice = W.label("", "hint")
+  clipDependencyNotice.setId("clip-dependency-notice")
+  clipDependencyNotice.setWrapText(true)
+  private val clipModelNotice = W.label("", "hint")
+  clipModelNotice.setId("clip-model-notice")
+  clipModelNotice.setWrapText(true)
+  private val clipModelSource = W.label("", "hint")
+  clipModelSource.setId("clip-model-source")
+  clipModelSource.setWrapText(true)
+  private val clipCardLicense = W.label("", "hint")
+  clipCardLicense.setId("clip-card-license")
+  clipCardLicense.setWrapText(true)
+  private var openclipDependency = "unknown"
+  private var openclipSnapshotDate = "unknown"
+  private var openclipModels = Map.empty[String, (String, String, String)]
+  private def refreshModelNotices(): Unit =
+    clipDependencyNotice.setText(ClipModelNotice.dependency(openclipDependency))
+    val selected = Option(clipModel.getValue).getOrElse("")
+    openclipModels.get(selected) match
+      case Some((source, verification, licence)) =>
+        clipModelNotice.setText(ClipModelNotice.model(verification))
+        clipModelSource.setText(if source.nonEmpty then "Model source: https://huggingface.co/" + source.split('/').take(2).mkString("/") else "")
+        clipModelSource.setVisible(source.nonEmpty); clipModelSource.setManaged(source.nonEmpty)
+        clipCardLicense.setText(s"Model card licence label ($openclipSnapshotDate): $licence. Check current terms at the model source.")
+        clipCardLicense.setVisible(true); clipCardLicense.setManaged(true)
+      case None =>
+        clipModelNotice.setText(ClipModelNotice.model("transformers"))
+        clipModelSource.setText(""); clipModelSource.setVisible(false); clipModelSource.setManaged(false)
+        clipCardLicense.setText(""); clipCardLicense.setVisible(false); clipCardLicense.setManaged(false)
+  clipModel.valueProperty.addListener((_, _, _) => refreshModelNotices())
+  refreshModelNotices()
   private val keepLoaded = new CheckBox("Keep models loaded")
   keepLoaded.setId("clip-keep-loaded")
   keepLoaded.setTooltip(new Tooltip("Keep CLIP and the caption model in memory between runs. Off frees GPU memory after each run."))
@@ -256,8 +287,8 @@ final class ClipInterrogatorTab(ctx: UiContext):
   private val about = W.label(
     "Works out a prompt for an existing image with CLIP, after pharmapsychotic's CLIP Interrogator. " +
     "ViT-L-14/openai suits Stable Diffusion 1.x and XL; ViT-H-14/laion2b_s32b_b79k suits 2.x; ViT-bigG-14/laion2b_s39b_b160k also suits XL. " +
-    "The first run downloads the CLIP and caption models from Hugging Face and computes the label embeddings once (cached in the config folder). " +
-    "Press Unload when you are done to free memory. Models and label lists are the upstream ones; see the Extensions page for licences.", "muted")
+    "The first run downloads the CLIP and caption models from Hugging Face. Transformer label embeddings are cached; OpenCLIP labels are recalculated when the model is loaded. " +
+    "Press Unload when you are done to free memory. Model licences differ: check the model source before use.", "muted")
   about.setWrapText(true)
   private val aboutPage = new VBox(10, about)
   aboutPage.setPadding(new Insets(10))
@@ -276,6 +307,7 @@ final class ClipInterrogatorTab(ctx: UiContext):
 
   val node: VBox = new VBox(8, W.label("Interrogator", "section-title"),
     new FlowPane(8, 6, W.label("CLIP model", "muted"), clipModel, W.label("Caption model", "muted"), captionModel, keepLoaded, unload),
+    clipDependencyNotice, clipModelNotice, clipModelSource, clipCardLicense,
     pages, progress, status)
   node.setPadding(new Insets(14))
   node.setMinWidth(0)
@@ -289,11 +321,20 @@ final class ClipInterrogatorTab(ctx: UiContext):
       val handle = ctx.services.client.clipInterrogatorOwned(ujson.Obj("operation" -> "models"))
       Fx.onFx(handle.result) { v =>
         if !disposed then
+          openclipDependency = v.obj.get("openclip_status").flatMap(_.objOpt).flatMap(_.get("state")).flatMap(_.strOpt).getOrElse("unknown")
+          openclipSnapshotDate = v.obj.get("openclip_status").flatMap(_.objOpt).flatMap(_.get("card_snapshot_date")).flatMap(_.strOpt).getOrElse("unknown")
+          openclipModels = v.obj.get("openclip_model_info").flatMap(_.objOpt).toSeq.flatMap(_.toSeq).flatMap { (name, value) =>
+            value.objOpt.map { entry =>
+              name -> (entry.get("source").flatMap(_.strOpt).getOrElse(""), entry.get("verification").flatMap(_.strOpt).getOrElse("not-tested"),
+                entry.get("card_license").flatMap(_.strOpt).getOrElse("unknown"))
+            }
+          }.toMap
           val keepClip = clipModel.getValue
           clipModel.getItems.setAll(v("clip_models").arr.map(_.str).toSeq*)
           clipModel.setValue(if clipModel.getItems.contains(keepClip) then keepClip else v("default_clip_model").str)
           captionModel.getItems.setAll((v("caption_models").arr.map(_.str).toSeq :+ "none")*)
           captionModel.setValue(v("default_caption_model").str)
+          refreshModelNotices()
       }(_ => modelsLoaded = false)
 
   def dispose(): Unit =
@@ -307,3 +348,17 @@ object ClipInterrogatorTab:
   val AnalyzeKeys = Seq("medium", "artist", "movement", "trending", "flavor")
   val BatchOutputModes = Seq("Text file for each image", "Single text file with all prompts",
     "csv file with columns for filenames and prompts")
+
+/** Describes registry candidates without implying that every model was tested or downloaded. */
+object ClipModelNotice:
+  def dependency(state: String): String = state match
+    case "available" => "OpenCLIP registry is available; its models have not all been tested."
+    case "missing" => "Additional OpenCLIP models need an optional install: open_clip_torch 2.32.0."
+    case "incompatible-version" => "OpenCLIP needs version 2.32.0; existing models remain available."
+    case "load-error" => "OpenCLIP could not load; check its optional dependencies. Existing models remain available."
+    case _ => "OpenCLIP availability is unknown until the model list loads."
+  def model(verification: String): String = verification match
+    case "transformers" => "Transformer model; check its licence before use."
+    case "previous-gui-and-mcp" => "OpenCLIP model exercised through GUI and MCP in an earlier build; check its licence."
+    case "previous-engine-local-weights" => "OpenCLIP model exercised with local weights in an earlier engine test; check its licence."
+    case _ => "OpenCLIP registry entry has not been tested; check its licence and model requirements."

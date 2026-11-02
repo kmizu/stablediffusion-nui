@@ -57,7 +57,7 @@ foreach ($required in @('SDNUI.exe', 'app/stablediffusion-nui.jar', 'runtime/leg
 # The CLIP Interrogator label lists (python/sdfx/data/clip_interrogator/*.txt, MIT upstream lists) are plain data the engine reads at run time.
 $tracked = @(git -C $repo ls-files -- python/sdfx models licenses)
 if ($LASTEXITCODE -ne 0) { throw 'git ls-files failed; a Git checkout is required.' }
-$payload = @($tracked | Where-Object { $_ -match '^python/sdfx/.+\.py$|^python/sdfx/waifu2x_assets\.json$|^python/sdfx/data/model_keyword/(model|lora)-keyword\.txt$|^python/sdfx/data/clip_interrogator/[a-z]+\.txt$|^python/sdfx/.+/LICENSE$|^models/.+/README\.txt$|^models/nudenet/best\.onnx$|^licenses/[A-Za-z0-9_.-]+\.txt$' })
+$payload = @($tracked | Where-Object { $_ -match '^python/sdfx/.+\.py$|^python/sdfx/waifu2x_assets\.json$|^python/sdfx/data/model_keyword/(model|lora)-keyword\.txt$|^python/sdfx/data/clip_interrogator/[a-z]+\.txt$|^python/sdfx/data/clip_interrogator/openclip_registry_licenses\.json$|^python/sdfx/.+/LICENSE$|^models/.+/README\.txt$|^models/nudenet/best\.onnx$|^licenses/[A-Za-z0-9_.-]+\.txt$' })
 if (-not ($payload -contains 'python/sdfx/__main__.py')) { throw 'Python source files missing from Git index.' }
 $nudenet = 'models/nudenet/best.onnx'
 if (-not ($payload -contains $nudenet)) { throw "Pinned NudeNet detector missing from Git index: $nudenet" }
