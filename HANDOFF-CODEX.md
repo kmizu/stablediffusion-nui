@@ -33,7 +33,7 @@ Claude Code の週間上限が近いため、作業を Codex に引き継ぐ。�
 |---|---|---|
 | #26 | `afb99384e42e1188b` | 実装中 |
 | #27 | `a40abe8e29871d4c8` | 実装中 |
-| #143 | `ab7508137bf41c07e` | 実装済み・計測中。`perf.py`、`vae_memory.py`、`deepcache.py`、`scripts/dev/bench_optimizations.py` など。計測結果から各オプションの既定値を決める段階。DeepCache(interval 3)は SD1.5 で速いが画像差 8.9% なので既定は off の予定。VAE 復号が VRAM のピーク(SDXL で denoise 7.1 GB に対し復号で 11.9 GB)で、VAE slicing と fp16 復号が効く |
+| #143 | `ab7508137bf41c07e` | **コミット済み `7696734`(部分実装、`Refs #143`、main には未マージ)**。ブランチ `worktree-agent-ab7508137bf41c07e`。計測済み(`docs/optimization-verification.md`): `vae_auto`(既定 on。小さい GPU で復号の OOM を解消、1792x2304 で 9 倍速)、`vae_fp16`(SDXL のピークが 11.8→9.1 GB、画像差 0.0002)、`vae_slicing`(バッチでピークが下がる)、`vram_mode=auto`、`fp8_storage`(VRAM は減るが遅く画像も変わる)、DeepCache(1.4–2.0 倍速、画像差あり)。`channels_last` / TF32 / `cudnn_benchmark` は効果なしで落とした。**未実施: Scala の `sbt test` は途中で止めたまま、`ui/assembly` と Python 全件は未実行(Scala の変更は未コンパイル)。実アプリ・MCP の確認と、実機の小さい GPU での確認もなし。** マージ手順の 4 を通してから main に入れる |
 
 終わらせる気がなければ worktree ごと捨ててよい(`git worktree remove`)。issue #26、#27 の中身は `gh issue view` で確認する。
 
