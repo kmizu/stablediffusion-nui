@@ -3,9 +3,9 @@
 ## 2026-11-03 作業中の追記
 
 - ユーザーの方針: issue を速く解決し、10件ごとにリリース。MCP から AI が使えることを重視。日本語マニュアルで十分、必要な画面はキャプチャする。次のリリース番号は未決定なので推測しない。
-- main `341dc29e720dee1da8094790d32c20e816b0d9cc` は push 済み（作業時に remote と一致を確認）。`.claude/` は未追跡の既存 worktrees なので消さない。
+- main `674cb7992e4919594adf11d7afd573fd852e0a20` は push 済み（作業時に remote と一致を確認）。`.claude/` は未追跡の既存 worktrees なので消さない。
 - ネガティブ候補 `c484556`: 画質・人体・文字のセットと個別調整、日本語説明。実 GUI と SD1.5/SDXL、展開版 MCP を確認。詳細は `docs/negative-suggestions-verification.md`。抽出版 GUI 自体の実生成は未確認。
-- #2 Aesthetic Gradients `c4abab3`: GUI/MCP の embedding 作成、PNG 復元の SHA 照合、日本語マニュアル。実 GUI と展開版 MCP で SD1.5/SDXL を確認。Scala 全体と Python CPU 全体も通過。元拡張との互換性、OS chooser の手操作、配布 EXE の GUI など未確認があるため issue は open、台帳は todo のまま。詳細は `docs/aesthetic-gradients-verification.md` と `docs/aesthetic-embeddings.md`。新しい main と合わせた後の配布物そのものはまだ実モデルで検証していない。
+- #2 Aesthetic Gradients `c4abab3`: GUI/MCP の embedding 作成、PNG 復元の SHA 照合、日本語マニュアル。実 GUI と展開版 MCP で SD1.5/SDXL を確認。Scala 全体と Python CPU 全体も通過。`674cb79` で SDXL の強い重みについて日英の案内を追加、明示値は変えない。元拡張との互換性、OS chooser の手操作、配布 EXE の GUI など未確認があるため issue は open、台帳は todo のまま。詳細は `docs/aesthetic-gradients-verification.md` と `docs/aesthetic-embeddings.md`。新しい main と合わせた後の配布物そのものはまだ実モデルで検証していない。
 - #26 CreaPrompt: main `2284f49` に統合・push し、GitHub issue closed を確認。実 GUI と配布版 MCP で SD1.5・SDXL を検証し画像を目視。main の `sbt test ui/assembly` は exit 0、テストの一部はキャッシュでスキップされた。生成した JAR は配布版実測時の JAR と SHA-256 が一致。抽出版 GUI 自体の実生成などの限界は `docs/creaprompt-verification.md` に記載。新リリースへの issue 件数は 1/10。
 - #24 タグ補完: main `9876bda` に wildcard の部分 Tab 補完と行選択を部分統合。実 GUI と SD1.5・SDXL を確認したが、上流の未実装機能や配布 GUI の検証が残り issue は open。`docs/tag-autocomplete-acceptance-24.md` と `docs/tag24-wildcard-verification.md` を参照。
 - #143 VRAM/最適化: main `341dc29` に部分統合。実 SD1.5・SDXL と展開版 MCP の検証、Python 全体、Scala の回帰を実施。fp32 fallback の NaN と VRAM 制限は試験で再現したもの。物理低 VRAM 端末、GUI、fp8 実アプリ、実 ControlNet などは未検証のため issue は open。`docs/optimization-handoff.md` と `docs/optimization-verification.md` を参照。
