@@ -16,6 +16,9 @@
 - ControlNet inpaint の WIP は `C:/Users/Mizushima/.codex/worktrees/controlnet-inpaint-mask/stablediffusion-nui`、branch `codex/controlnet-inpaint-mask`、`eba998b`（先行 commit 含む）。CPU 回帰と実 SD1.5 Engine の通常・only-masked crop・反転を確認し画像目視済み。GUI/MCP、複数 unit、SDXL、配布版、hook の組合せと暫定拒否の解消は未了。詳細は同 worktree の `docs/controlnet-inpaint-prototype.md`。main へ未統合。
 - #23 の単一設定復元は main に部分統合。独立レビューで見つかった選択外の入力途中値を確定する問題も修正し、実 GUI と SD1.5/SDXL を確認して画像を目視。main 上でも関連10件・実 GUI・assembly を確認。実モデルは分離 worktree の source-class GUI による検証、配布版 GUI は未検証。`docs/state-manager-verification.md` 参照。#23 は open、リリース件数には数えない。
 - #24 の Wiki リンクは main に部分統合。選択候補から `?` または F1 で開き、既定オフ。固定 HTTPS host・URL・互換性の単体18件、実 GUI の Robot 押下と候補保持、実 SD1.5/SDXL MainWindow を確認。main でも単体18件・GUI 2件・assembly を再実行。実ブラウザとスクロール後セル、配布 GUI は未検証。`docs/tag24-wiki-wip.md` に証拠と制約。#24 は open、リリース件数には数えない。
+- #12 OpenCLIP の試作は `C:/Users/Mizushima/.codex/worktrees/interrogator-openclip/stablediffusion-nui`、branch `codex/interrogator-openclip`、`482b539`。ConvNeXt と BLIP-base で SD1.5/SDXL 由来画像を実 MCP SDK で解析したが、GUI・配布版・他の多数モデル・offline と重み読込の監査は未了。新 backend の disk cache は暫定無効。詳細は同 worktree の `docs/clip-interrogator-openclip-wip.md`。main 未統合。
+- #6 MediaPipe 顔検出の試作は `C:/Users/Mizushima/.codex/worktrees/batch-face-mediapipe/stablediffusion-nui`、branch `codex/batch-face-mediapipe`、`b513b40` 以降の更新を確認すること。SD1.5/SDXL の実 MCP で顔検出と描き直しを確認した後、モデルファイルの公開競合・差替え対策を追加検証中。GUI、replay、キャンセル、配布版や #6 の別 checkpoint／フォルダ入力は未了。main 未統合。
+- #23 お気に入りは `C:/Users/Mizushima/.codex/worktrees/state-manager23-favourites/stablediffusion-nui` で進行中。複数登録・解除と履歴消去時の保護を実 GUI で確認、実モデル検証の結果・未 commit 差分を確認してから再開する。
 - 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
 - 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 
