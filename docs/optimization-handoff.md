@@ -68,3 +68,6 @@ Post-review real SD1.5/SDXL packaged launcher and SDK tests now passed DeepCache
 
 
 Main `9876bda` merged at `61fa1a0`. JDK 21 Scala test and assembly passed; 43 tests executed and task cache 90%. Latest test ZIP `4dabfd9a66dc928439865688f90884106397085061b55829e85f3bc651e0c5b1` contains jar `277aea203a5a44a39928d599c1293286ce7ddb8761217c1cffbc89aa494d7c9c`; payload hashes match. Packaged launcher with official SDK passed both model families for DeepCache and planner-capped img2img/inpaint; viewed inpaint images were intact. The cap affects planner calculation only, not the physical device. See final verification section. GUI, fp8 application path, actual ControlNet integration and physical low-VRAM device remain unverified.
+
+
+SD1.5 real canny ControlNet and DeepCache refusal/recovery passed through main jar and official MCP SDK, with and without fp8 requested. Test-only instrumentation counted 468 float8 and 218 fp16 U-Net parameters for fp8 vs 686 fp16 normally; images were viewed. Details and limitations in the last verification section. No SDXL ControlNet model was found in inspected locations; SDXL ControlNet, GUI real operation, SDXL app fp8 and physical low-VRAM remain unverified.
