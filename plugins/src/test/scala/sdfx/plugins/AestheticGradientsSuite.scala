@@ -9,6 +9,17 @@ class AestheticGradientsSuite extends munit.FunSuite:
   private def enabled(extra: (String, String)*) =
     Values(Values.defaults(plugin.controls).map ++ Map("enabled" -> "true", "embedding" -> "sunset") ++ extra)
 
+  test("SDXL weight guidance is visible beside weight without adding an input or changing values"):
+    val i = plugin.controls.indexWhere(_.key == "weight")
+    val note = plugin.controls(i + 1)
+    assert(note.isInstanceOf[sdfx.core.plugins.api.Control.Note])
+    assert(note.label.contains("SDXL") && note.label.contains("0.3") && note.label.contains("0.5"))
+    assert(!note.hasValue && !Values.defaults(plugin.controls).map.contains(note.key))
+    for weight <- Seq("0", "0.3", "0.9") do
+      val p = plugin.process(GenerationParams(), enabled("weight" -> weight))
+      assertEquals(p.hooks(plugin.id)("weight").num, weight.toDouble)
+      assertEquals(AestheticGradientsPlugin.replay(Map("Aesthetic embedding" -> "sunset", "Aesthetic weight" -> weight)).get.double("weight"), weight.toDouble)
+
   test("defaults write the extension's infotext keys and the engine hook"):
     assert(!plugin.isActive(Values.defaults(plugin.controls)))
     val params = plugin.process(GenerationParams(), enabled())

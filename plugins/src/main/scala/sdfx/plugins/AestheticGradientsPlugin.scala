@@ -7,6 +7,7 @@ import java.nio.file.Paths
 
 /** Infotext keys of the Aesthetic Gradients extension, so its PNGs restore and NUI PNGs paste back into it. */
 object AestheticGradientsPlugin:
+  val WeightHelp = "SDXL: strong weights can distort images. Try Aesthetic weight 0.3–0.5 first, then adjust for your result."
   val EmbeddingKey = "Aesthetic embedding"
   val FingerprintKey = "Aesthetic embedding SHA256"
   val InfotextKeys: Seq[String] = Seq("Aesthetic LR", "Aesthetic weight", "Aesthetic steps", EmbeddingKey,
@@ -67,6 +68,7 @@ class AestheticGradientsPlugin extends HookPlugin:
     Text("embedding", "Aesthetic embedding (name or path of a .pt / .safetensors file)", placeholder = "e.g. sunset"),
     Text("embedding_sha256", "Embedding SHA-256 (optional: require an exact match)"),
     Slider("weight", "Aesthetic weight", 0, 1, 0.01, 0.9),
+    Note("sdxl_weight_help", WeightHelp),
     IntField("steps", "Aesthetic steps", 0, 200, 20),
     Text("lr", "Aesthetic learning rate", "0.0001"),
     Check("slerp", "Slerp interpolation of the embedding with an aesthetic text"),

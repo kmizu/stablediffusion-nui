@@ -4,7 +4,7 @@ import javafx.application.Platform
 import javafx.embed.swing.SwingFXUtils
 import javafx.scene.control.*
 import javafx.stage.Stage
-import sdfx.core.config.{AppHome, Settings}
+import sdfx.core.config.{AppHome, LocalizationPreferences, Settings}
 import sdfx.engine.{AppServices, EngineLaunch, EngineTimeouts}
 import sdfx.plugins.StandardPlugins
 import sdfx.ui.vm.{Mode, UiState}
@@ -60,6 +60,43 @@ object RealAestheticEmbeddingCheck:
       def node[A](id: String): A = fx(window.scene.lookup("#" + id).asInstanceOf[A])
       def status: String = fx(node[Label]("aesthetic-status").getText)
       def fire(id: String): Unit = fx(node[Button](id).fire())
+      val helpEnglish = "SDXL: strong weights can distort images. Try Aesthetic weight 0.3–0.5 first, then adjust for your result."
+      val helpJapanese = "SDXL では重みが強いと画像が崩れることがあります。Aesthetic の重みを 0.3〜0.5 から試し、結果を見ながら調整してください。"
+      def helpLabels: Vector[String] = fx(window.scene.getRoot.lookupAll(".label").asScala.collect {
+        case label: Label => label.getText
+      }.toVector)
+      require(helpLabels.contains(helpEnglish), "creation tab must show the guidance")
+      fx { window.select(Mode.Txt2Img); window.panels(Mode.Txt2Img).node.lookup("#plugin-aesthetic_gradients-section").asInstanceOf[TitledPane].setExpanded(true) }
+      require(helpLabels.contains(helpEnglish), "generation form must show the guidance")
+      fx { require(window.localization.apply(LocalizationPreferences(pack = "builtin/ja_JP")).isEmpty); window.localization.localizer.sweepNow() }
+      eventually("Japanese generation guidance")(helpLabels.contains(helpJapanese))
+      fx {
+        val pane = window.panels(Mode.Txt2Img).node.lookup("#plugin-aesthetic_gradients-section").asInstanceOf[TitledPane]
+        pane.setAnimated(false); pane.setExpanded(true)
+        window.root.applyCss(); window.root.layout()
+        val scroll = window.panels(Mode.Txt2Img).node
+        val y = scroll.getContent.sceneToLocal(pane.localToScene(0, 0)).getY
+        val range = (scroll.getContent.getLayoutBounds.getHeight - scroll.getViewportBounds.getHeight).max(1)
+        scroll.setVvalue(((y - scroll.getViewportBounds.getHeight * 0.45) / range).max(0).min(1))
+      }
+      Thread.sleep(300)
+      fx {
+        val pane = window.panels(Mode.Txt2Img).node.lookup("#plugin-aesthetic_gradients-section").asInstanceOf[TitledPane]
+        require(pane.isExpanded, "generation guidance section must be open")
+        window.root.applyCss(); window.root.layout()
+        require(ImageIO.write(SwingFXUtils.fromFXImage(window.scene.snapshot(null), null), "png", output.resolve("aesthetic-guidance-plugin-ja.png").toFile))
+      }
+      fx {
+        val tabs = window.scene.lookup("#main-tabs").asInstanceOf[TabPane]
+        tabs.getTabs.asScala.find(_.getId == "aesthetic-embedding-tab").foreach(tabs.getSelectionModel.select)
+        window.localization.localizer.sweepNow()
+      }
+      eventually("Japanese creation guidance")(helpLabels.contains(helpJapanese))
+      fx {
+        window.root.applyCss(); window.root.layout()
+        require(ImageIO.write(SwingFXUtils.fromFXImage(window.scene.snapshot(null), null), "png", output.resolve("aesthetic-guidance-creation-ja.png").toFile))
+      }
+      fx { require(window.localization.apply(LocalizationPreferences()).isEmpty); window.localization.localizer.sweepNow() }
       // Capture the unpopulated real JavaFX form without machine-specific paths.
       fx {
         window.root.applyCss(); window.root.layout()
@@ -88,10 +125,12 @@ object RealAestheticEmbeddingCheck:
       eventually("creation after cancellation")(status.startsWith("Created "))
       require(Files.isRegularFile(output.resolve("images/aesthetic_embeddings/recovered.pt")))
       fx(node[ComboBox[String]]("aesthetic-embeddings").setValue(selected))
-      fire("aesthetic-use")
       val form = window.plugins(Mode.Txt2Img).form("aesthetic_gradients").get
+      fx(form.prop("weight").get.set("0.37"))
+      fire("aesthetic-use")
       require(fx(form.prop("embedding").get.get) == selected)
       require(fx(form.prop("enabled").get.get) == "true")
+      require(fx(form.prop("weight").get.get) == "0.37", "Use must preserve the user's weight")
       val handDir = Files.createDirectories(output.resolve("handpicked"))
       val handFile = Files.writeString(handDir.resolve("handpicked.pt"), "hand-picked fixture")
       fx { form.prop("embedding").get.set(handFile.toString); form.prop("enabled").get.set("true") }

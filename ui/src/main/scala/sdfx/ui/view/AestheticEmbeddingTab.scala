@@ -85,7 +85,9 @@ final class AestheticEmbeddingTab(ctx: UiContext, applyEmbedding: String => Eith
   private val help = W.label("Create a style embedding from one or more reference images, then use it with Aesthetic Gradients. " +
     "The first creation downloads CLIP ViT-L/14. Images marked as protected and protected image sessions cannot be used.", "muted")
   help.setWrapText(true)
-  val node = new VBox(9, W.label("Aesthetic Embeddings", "section-title"), help, references,
+  private val weightHelp = W.label(sdfx.plugins.AestheticGradientsPlugin.WeightHelp, "muted")
+  weightHelp.setWrapText(true)
+  val node = new VBox(9, W.label("Aesthetic Embeddings", "section-title"), help, weightHelp, references,
     W.hbox(8, add, remove), name, overwrite, W.hbox(8, create, cancel), progress,
     embeddings, W.hbox(8, refresh, use), status)
   node.setPadding(new Insets(14)); node.setMinWidth(0)

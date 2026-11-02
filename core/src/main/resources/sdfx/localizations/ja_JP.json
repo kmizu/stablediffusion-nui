@@ -905,6 +905,7 @@
  "Aesthetic embedding (name or path of a .pt / .safetensors file)": "Aesthetic エンベディング（.pt / .safetensors の名前またはパス）",
  "e.g. sunset": "例: sunset",
  "Aesthetic weight": "Aesthetic の重み",
+ "SDXL: strong weights can distort images. Try Aesthetic weight 0.3–0.5 first, then adjust for your result.": "SDXL では重みが強いと画像が崩れることがあります。Aesthetic の重みを 0.3〜0.5 から試し、結果を見ながら調整してください。",
  "Aesthetic steps": "Aesthetic のステップ数",
  "Aesthetic learning rate": "Aesthetic の学習率",
  "Slerp interpolation of the embedding with an aesthetic text": "エンベディングと aesthetic テキストの Slerp 補間",

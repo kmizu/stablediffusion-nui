@@ -10,6 +10,16 @@ class AlwaysOnFilePolicySuite extends munit.FunSuite:
     def kind = PluginKind.AlwaysOn
     override def controls = Seq(Control.Text("head", "Head file"), Control.Text("image_encoder", "Encoder"))
 
+  test("aesthetic guidance is not an MCP input and explicit weights are preserved") {
+    val aesthetic = new sdfx.plugins.AestheticGradientsPlugin
+    val input = new AlwaysOnInputs(() => Seq(aesthetic), _ => Nil, (v, _) => v, (v, _) => v)
+    val properties = input.schema(aesthetic)("properties").obj
+    assert(!properties.contains("sdxl_weight_help"))
+    assertEquals(properties("weight")("default").num, 0.9)
+    for weight <- Seq(0.0, 0.3, 0.9) do
+      assertEquals(input.validate(aesthetic, ujson.Obj("embedding" -> "sunset", "weight" -> weight)).double("weight"), weight)
+  }
+
   test("aesthetic embedding names and paths all go through the local file policy") {
     val aesthetic = new sdfx.plugins.AestheticGradientsPlugin
     var checked = Vector.empty[String]
