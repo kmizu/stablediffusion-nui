@@ -37,12 +37,16 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       assertEquals(vaes.map(_.name),Seq("diffusion_pytorch_model"))
       assert(vaes.head.sizeMb>0)
       assertEquals(Await.result(client.systemStatus(),10.seconds)("device")("active").str,"cpu")
+      val requestedVaeDevice=sys.env.getOrElse("SDFX_SCALATORCH_VAE_DEVICE","cpu")
+      val expectedVaeDevice=if requestedVaeDevice=="cuda" then "cuda:0" else requestedVaeDevice
+      assertEquals(Await.result(client.systemStatus(),10.seconds)("runtime")("vae_device").str,expectedVaeDevice)
       val loaded=Await.result(client.loadModel(LoadModelRequest(root.toString,dtype="fp32",vramMode="cpu")),30.seconds)
       assertEquals(loaded.path,root.toRealPath().toString)
       assert(loaded.hash.matches("[0-9a-f]{64}"))
       val swapped=Await.result(client.setVae(Some(root.resolve("vae/diffusion_pytorch_model.safetensors").toString)),20.seconds)
       assert(swapped.vaeHash.exists(_.matches("[0-9a-f]{64}")))
       assertEquals(Await.result(client.setVae(None),20.seconds).vaeName,None)
+      assertEquals(Await.result(client.systemStatus(),10.seconds)("runtime")("vae_device").str,expectedVaeDevice)
       def mapping(action: String)=Await.result(client.raw("model_keyword",ujson.Obj("action"->action,
         "kind"->"checkpoint","model_path"->root.toString,"mapping_dir"->temp.toString,"keywords"->"a red")),10.seconds)
       assertEquals(mapping("check")("source").str,"no match")

@@ -27,12 +27,38 @@ $env:SDFX_SCALATORCH_JAVA = 'C:/path/to/jdk-25/bin/java.exe'
 
 The Java override is optional when NUI itself runs on Java 25. This matters for
 packaged NUI runtimes that use an older Java version. Classpath entries must be
-absolute existing paths. Selecting any native variable skips Python bootstrap;
+absolute existing paths. Selecting any of the four launch variables above skips Python bootstrap;
 incomplete configuration fails explicitly rather than starting Python. Remove
 all four variables to restore the default engine choice. Native dry-run is not
 implemented. Set model loading to CPU/Float32 for this initial native backend.
 This launch route is experimental: the default remains Python when no native
 variables are set, and the remaining unsupported operations below still apply.
+
+### Optional CUDA VAE decoding
+
+With the native launch configured, the worker can use CUDA for VAE decoding:
+
+```powershell
+$env:SDFX_SCALATORCH_VAE_DEVICE = 'cuda' # also accepts cuda:0, cuda:1, ...
+$env:SDFX_SCALATORCH_VAE_MAX_BYTES = '1073741824' # optional; default 1 GiB
+```
+
+Keep model loading at CPU/Float32: CLIP and U-Net denoising still run on CPU.
+Only decoding uses resident GPU Float32 weights/activations. Each decode uploads
+the VAE weights and releases its CUDA context and allocations when it finishes,
+fails, or is cancelled. Cancellation is checked between operations, not inside a
+running kernel. GPU errors produce the normal exact-latent VAE recovery artifact;
+there is no silent CPU fallback. `system_status.runtime.vae_device` reports the
+configured placement; GPU memory telemetry is not yet available.
+
+Set `SDFX_SCALATORCH_VAE_DEVICE=cpu` (or remove it) for CPU decoding. These two
+optional variables alone do not select the native engine; the launch variables
+above are still required. The same optional variables apply to the integration
+test below, which checks that VAE replacement preserves the selected placement.
+On 2026-11-03 the integration test passed with CUDA VAE decoding on GTX 1650
+SUPER (4 GiB): Java worker handshake, VAE replacement/restore, typed generation,
+preview and PNG workflow completed in 14 seconds. CLIP and U-Net remained on CPU;
+this does not establish full GPU inference or normal-model quality.
 
 First build scala-torch with Java 25. Its `models/Test/javaOptions` contains the
 resolved `-Dscalatorch.worker.classpath=...` value. Save only the value after `=`
@@ -57,7 +83,7 @@ and output after the assertion checks.
 
 This is integration infrastructure, not a completed engine replacement. The
 application still defaults to Python. General catalog operations, production packaging and
-packaging, normal SD checkpoints, GPU inference, SDXL, batching, LoRA, img2img,
+normal SD checkpoints, complete GPU denoising, FP16/offload, SDXL, batching, LoRA, img2img,
 Hires and the existing extension feature set still need native implementation
 and verification. Unsupported active generation settings currently return errors.
 Keep changes on `feat/scala-torch-native-engine` until integration is ready for review.
