@@ -205,7 +205,8 @@ object VramModes:
     case x if Modes.exists(_._1 == x) => x
     case _                            => "gpu"
   def index(v: String): Int = Modes.indexWhere(_._1 == normalize(v))
-  def normalizeSettings(s: Settings): Settings = s.copy(vramMode = normalize(s.vramMode))
+  def normalizeSettings(s: Settings, nativeEngine: Boolean = false): Settings =
+    s.copy(vramMode = if nativeEngine && Option(s.vramMode).exists(_.trim.equalsIgnoreCase("cpu")) then "cpu" else normalize(s.vramMode))
 
 /** Idempotent cleanup which attempts every owned resource even when one release fails. */
 private[ui] final class UiCleanup:

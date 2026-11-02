@@ -40,7 +40,7 @@ final class SdfxApp extends Application:
     val home = opts.home.map(h => AppHome(Paths.get(h).toAbsolutePath.normalize())).getOrElse(AppHome.detect())
     // legacy VRAM modes (medvram / lowvram / cpu) are mapped to the engine's values
     val loaded = sdfx.core.config.Settings.loadResult(home.settingsFile)
-    val normalized = loaded.copy(settings = VramModes.normalizeSettings(loaded.settings))
+    val normalized = loaded.copy(settings = VramModes.normalizeSettings(loaded.settings, nativeEngine = ScalaTorchLaunch.requested()))
     val settings = normalized.settings
     Platform.setImplicitExit(true)
     val needsSetup = !ScalaTorchLaunch.requested() && !opts.dryRun && settings.pythonExe.forall(_.trim.isEmpty) &&
