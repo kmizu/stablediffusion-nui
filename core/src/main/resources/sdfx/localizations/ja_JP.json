@@ -905,6 +905,7 @@
  "Aesthetic embedding (name or path of a .pt / .safetensors file)": "Aesthetic エンベディング（.pt / .safetensors の名前またはパス）",
  "e.g. sunset": "例: sunset",
  "Aesthetic weight": "Aesthetic の重み",
+ "Completion delay (ms)": "補完の待ち時間（ミリ秒）",
  "Wildcard Tab completion": "ワイルドカードの Tab 補完",
  "To first difference": "候補の分岐まで",
  "To next folder": "次のフォルダまで",

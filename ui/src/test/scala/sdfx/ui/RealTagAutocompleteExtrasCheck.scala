@@ -126,6 +126,7 @@ object RealTagAutocompleteExtrasCheck:
         field("tac-tags").setText(tagCsv.toString); field("tac-translation").setText(translationCsv.toString)
         field("tac-extra").setText(extraCsv.toString); field("tac-chants-file").setText(chantsJson.toString)
         root.lookup("#tac-colormap").asInstanceOf[TextArea].setText("""{"tags":{"4":["red","blue"],"1":["gold","purple"]},"extra":{"0":["lime","orange"]}}""")
+        root.lookup("#tac-delay").asInstanceOf[javafx.scene.control.Spinner[Integer]].getEditor.setText("250")
         root.lookup("#tac-wildcard-path-mode").asInstanceOf[javafx.scene.control.ComboBox[String]].getSelectionModel.select(1)
         check("dialog exposes the new options")(Seq("tac-underscores", "tac-escape", "tac-comma", "tac-alias", "tac-wildcards",
           "tac-networks", "tac-chants", "tac-trigger", "tac-preview", "tac-legacy", "tac-extra-after").forall(id => root.lookup("#" + id).isInstanceOf[CheckBox]))
@@ -138,6 +139,14 @@ object RealTagAutocompleteExtrasCheck:
         services.settings.tagAutocompleteCsv.contains(tagCsv.toString) && services.settings.tagComplete.chantsJson.contains(chantsJson.toString))
       fx { area.requestFocus() }
       eventually("prompt focus") { fx { area.isFocused } }
+      fx {
+        check("completion delay saved")(services.settings.tagComplete.completionDelayMs == 250)
+        area.setText("__co"); area.positionCaret(area.getLength)
+        check("delayed completion is not immediate")(!editor.completionVisible)
+      }
+      eventually("delayed wildcard results") { fx { editor.completionItems.exists(_.label == "colors/warm") } }
+      check("delayed completion appears after quiet period")(fx(editor.completionVisible))
+      services.updateSettings(s => s.copy(tagComplete = s.tagComplete.copy(completionDelayMs = 0)))
 
       // The real dictionary scans the real wildcard roots and reads the chosen file asynchronously.
       fx {

@@ -3,7 +3,7 @@ package sdfx.ui
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
 import javafx.application.Platform
-import javafx.scene.control.{ComboBox, TextArea}
+import javafx.scene.control.{ComboBox, Spinner, TextArea}
 import javafx.stage.Stage
 import sdfx.core.config.TagCompleteSettings
 import sdfx.ui.view.TagSettingsPane
@@ -19,6 +19,10 @@ object NativeTagColorSettingsCheck:
           .getOrElse(throw new IllegalStateException("custom colour settings are unavailable"))
         val valid = """{"dataset":{"4":["red","blue"]}}"""
         field.setText(valid)
+        val delay = pane.node.lookup("#tac-delay").asInstanceOf[Spinner[Integer]]
+        require(pane.read()._2.completionDelayMs == 0, "old settings default to immediate completion")
+        delay.getEditor.setText("350")
+        require(pane.read()._2.completionDelayMs == 350, "edited delay is retained")
         val modes = pane.node.lookup("#tac-wildcard-path-mode").asInstanceOf[ComboBox[String]]
         require(modes.getSelectionModel.getSelectedIndex == 0, "old settings default to first difference")
         modes.getSelectionModel.select(1)

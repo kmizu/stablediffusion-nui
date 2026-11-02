@@ -29,6 +29,10 @@ text around it stay.
 Wildcard folders: `wildcards/` and `models/wildcards/` of the app home, plus the Dynamic Prompts plugin's
 "Extra wildcard folders". LoRA and embedding names come from the model lists.
 
+The **Completion delay (ms)** setting waits after the last edit or caret move before querying
+suggestions. Its default is 0 (immediate); the supported range is 0–5000 ms. A delayed query hides
+outdated rows and is cancelled by Escape, focus loss or IME composition.
+
 Wildcard Tab completion has three modes in the Tags settings. The default, **To first difference**,
 extends the shared prefix and an arrow-key selection followed by Tab chooses that file. **To next
 folder** follows the highlighted candidate to its next `/`; **Always fully** chooses the highlighted
@@ -85,6 +89,6 @@ file is reported and the default markers are used; the invalid value is not rewr
 Provided: everything above plus the v0.03 behaviour (positive and negative prompt, keyboard and mouse insertion,
 IME composition guards). Not provided: hypernetworks (`<h:` offers nothing, the app has no hypernetwork loader),
 embedding v1/v2 filter, the model-keyword trigger lists, the upstream next-folder and always-full Tab modes,
-Umi AI wildcards, live translation preview, wiki links, completion delay, remappable hotkeys,
+Umi AI wildcards, live translation preview, wiki links, remappable hotkeys,
 per-model black/whitelist, built-in danbooru/e621 lists. A physical Japanese IME was not
 exercised (synthetic composition events only). See [tag-autocomplete-verification.md](tag-autocomplete-verification.md).

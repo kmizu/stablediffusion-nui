@@ -21,6 +21,7 @@ final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: Strin
   private val tagEditors = Seq(promptArea, negativeArea).map(a => new TagAutocomplete(a, ctx.tagDictionary))
   def isComposingInput: Boolean = tagEditors.exists(_.isComposing)
   def completionVisible: Boolean = tagEditors.exists(_.isShowing)
+  def completionPending: Boolean = tagEditors.exists(_.isPending)
   def previewVisible: Boolean = tagEditors.exists(_.previewShowing)
   def previewImage: Option[javafx.scene.image.Image] = tagEditors.find(_.previewShowing).flatMap(_.previewImage)
   /** Rows of the popup currently shown by either prompt editor (for checks). */

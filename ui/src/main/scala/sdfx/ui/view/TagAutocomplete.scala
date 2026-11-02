@@ -185,6 +185,8 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
   private val preview = box("tac-preview", "Show extra network preview images", cfg.extraNetworkPreview)
   private val max = new Spinner[Integer](1, 50, cfg.maxResults)
   max.setId("tac-max"); max.setEditable(true)
+  private val delay = new Spinner[Integer](0, 5000, cfg.completionDelayMs.max(0).min(5000), 50)
+  delay.setId("tac-delay"); delay.setEditable(true)
   private val pathModes = Vector("first-difference", "next-folder", "always-full")
   private val pathMode = new ComboBox[String]()
   pathMode.setId("tac-wildcard-path-mode")
@@ -224,7 +226,7 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
       new Label("Local files only; nothing is downloaded. Leave a path empty to turn that source off."),
       row("Tag CSV", tags, csv), row("Translation CSV", translation, csv), row("Extra tag CSV", extra, csv),
       row("Chants JSON", chantsField, new FileChooser.ExtensionFilter("JSON", "*.json")),
-      options, maxRow, new HBox(6, new Label("Wildcard Tab completion"), pathMode), new Label("Category colours JSON (source: category: [dark, light])"),
+      options, maxRow, new HBox(6, new Label("Completion delay (ms)"), delay), new HBox(6, new Label("Wildcard Tab completion"), pathMode), new Label("Category colours JSON (source: category: [dark, light])"),
       missingHelp, colors, colorError, help)
     v.setPadding(new Insets(4))
     v
@@ -233,13 +235,14 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
   def read(): (Option[String], TagCompleteSettings) =
     TagCategoryColors.parse(colors.getText)
     val n = try max.getEditor.getText.trim.toInt.max(1).min(50) catch case _: NumberFormatException => cfg.maxResults
+    val ms = try delay.getEditor.getText.trim.toInt.max(0).min(5000) catch case _: NumberFormatException => cfg.completionDelayMs
     (opt(tags), TagCompleteSettings(
       translationCsv = opt(translation), translationLegacy = legacy.isSelected, extraCsv = opt(extra), extraAfter = extraAfter.isSelected,
       chantsJson = opt(chantsField), maxResults = n, replaceUnderscores = underscores.isSelected, escapeParens = escape.isSelected,
       appendComma = comma.isSelected, searchByAlias = alias.isSelected, onlyShowAlias = onlyAlias.isSelected,
       wildcards = wildcards.isSelected, extraNetworks = networks.isSelected, chants = chantsBox.isSelected,
       loraTriggerWords = trigger.isSelected, extraNetworkPreview = preview.isSelected, categoryColorMap = colors.getText,
-      wildcardPathMode = pathModes.lift(pathMode.getSelectionModel.getSelectedIndex).getOrElse(cfg.wildcardPathMode)))
+      wildcardPathMode = pathModes.lift(pathMode.getSelectionModel.getSelectedIndex).getOrElse(cfg.wildcardPathMode), completionDelayMs = ms))
 
 /** What the popup needs from its owner. */
 trait CompletionSource:
@@ -253,6 +256,7 @@ trait CompletionSource:
   def wildcardError(error: Throwable): Unit = ()
   def maxResults: Int = 12
   def wildcardPathMode: String = "first-difference"
+  def completionDelayMs: Int = 0
 
 /** Popup does not take focus, so native text editing and IME stay in the TextArea. */
 final class TagAutocomplete(area: TextArea, source: CompletionSource):
@@ -272,7 +276,8 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
       override def wildcardContext: Any = dictionary.wildcardContext
       override def wildcardError(error: Throwable): Unit = dictionary.wildcardError(error)
       override def maxResults: Int = dictionary.config.maxResults
-      override def wildcardPathMode: String = dictionary.config.wildcardPathMode)
+      override def wildcardPathMode: String = dictionary.config.wildcardPathMode
+      override def completionDelayMs: Int = dictionary.config.completionDelayMs)
   private val popup = new Popup()
   private val list = new ListView[Suggestion]()
   private val linePrevious = new Button("Previous")
@@ -325,17 +330,20 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
   private var suppressed = false
   private var selectedByKeyboard = false
   private var revision = 0L
+  private val delayTimer = new javafx.animation.PauseTransition()
   private var lineItems = Vector.empty[Suggestion]
   private var linePage = 0
   private var lineTruncated = false
   private var current: Option[(String, CompletionResult)] = None
   def isComposing: Boolean = composing || imeCommitGuard
   def isShowing: Boolean = popup.isShowing
+  def isPending: Boolean = delayTimer.getStatus == javafx.animation.Animation.Status.RUNNING
   /** True while the extra-network preview image window is up (for checks). */
   def previewShowing: Boolean = previewPopup.isShowing
   def previewImage: Option[Image] = Option(previewView.getImage)
   def suggestions: Vector[Suggestion] = current.map(_._2.items).getOrElse(Vector.empty)
   def hide(): Unit =
+    delayTimer.stop()
     revision += 1
     popup.hide(); previewPopup.hide(); current = None; lineItems = Vector.empty
     lineNavigation.setVisible(false); lineNavigation.setManaged(false)
@@ -455,15 +463,27 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
           true
     }
 
+  private def scheduleUpdate(): Unit =
+    val ms = source.completionDelayMs.max(0).min(5000)
+    if ms == 0 then update()
+    else if !accepting then
+      hide()
+      if !suppressed && !isComposing && area.isFocused && area.getScene != null then
+        val ticket = revision
+        delayTimer.setDuration(javafx.util.Duration.millis(ms.toDouble))
+        delayTimer.setOnFinished(_ => if ticket == revision then update())
+        delayTimer.playFromStart()
+
   area.textProperty.addListener((_, _, _) =>
     revision += 1
     if !accepting then
       if !isComposing then suppressed = false
       val ticket = revision
-      Platform.runLater(() => if ticket == revision then update())
+      if source.completionDelayMs > 0 then scheduleUpdate()
+      else Platform.runLater(() => if ticket == revision then update())
   )
-  area.caretPositionProperty.addListener((_, _, _) => { revision += 1; update() })
-  area.selectionProperty.addListener((_, _, _) => { revision += 1; update() })
+  area.caretPositionProperty.addListener((_, _, _) => { revision += 1; scheduleUpdate() })
+  area.selectionProperty.addListener((_, _, _) => { revision += 1; scheduleUpdate() })
   area.focusedProperty.addListener((_, _, focused) =>
     if focused then source.ensureLoaded()
     else
@@ -481,7 +501,7 @@ final class TagAutocomplete(area: TextArea, source: CompletionSource):
   )
   area.addEventFilter(KeyEvent.KEY_RELEASED, (_: KeyEvent) => if !composing then imeCommitGuard = false)
   area.addEventFilter(KeyEvent.KEY_PRESSED, (e: KeyEvent) =>
-    if e.getCode == KeyCode.ESCAPE && !popup.isShowing then revision += 1
+    if e.getCode == KeyCode.ESCAPE && !popup.isShowing then { revision += 1; delayTimer.stop() }
     if !isComposing && popup.isShowing && !e.isControlDown && !e.isMetaDown && !e.isAltDown && !e.isShiftDown then
       e.getCode match
         case KeyCode.DOWN => selectedByKeyboard = true; list.getSelectionModel.select((list.getSelectionModel.getSelectedIndex + 1).min(list.getItems.size - 1)); e.consume()

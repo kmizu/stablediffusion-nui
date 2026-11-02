@@ -1052,7 +1052,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     if k == KeyCode.ENTER && e.isShortcutDown && !promptEditor.isComposingInput then
       generate(queueOnly = e.isShiftDown)
       e.consume()
-    else if k == KeyCode.ESCAPE && progress.get.running && !promptEditor.isComposingInput && !promptEditor.completionVisible then
+    else if k == KeyCode.ESCAPE && progress.get.running && !promptEditor.isComposingInput && !promptEditor.completionVisible && !promptEditor.completionPending then
       interrupt()
       e.consume()
     else if e.isShortcutDown && k == KeyCode.V && !typing && activeMode.usesInitImage && tabs.getSelectionModel.getSelectedItem == modeTabs(activeMode) then
