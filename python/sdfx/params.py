@@ -232,6 +232,10 @@ class PreprocessRequest:
     image_path: str = ""
     output_dir: str = ""
     args: Dict[str, float] = field(default_factory=dict)
+    # Extras-tab mode (ControlNet Preprocessor in Extras): apply the processor resolution and write generation info.
+    standalone: bool = False
+    processor_res: int = -1
+    pixel_perfect: bool = False
 
 
 # --------------------------------------------------------------------------- parsing

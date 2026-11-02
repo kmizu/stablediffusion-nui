@@ -240,6 +240,83 @@ def run_preprocessor(name: str, img, args: Optional[dict] = None):
     raise ValueError(f"unknown preprocessor '{name}'")
 
 
+# Preprocessors whose detector takes a resolution (the others ignore it, like the ControlNet unit does).
+STANDALONE_RESOLUTION = ("canny",) + tuple(AUX_DETECTORS)
+
+
+def standalone_preprocess(name: str, img, args: Optional[dict] = None, processor_res: int = -1, pixel_perfect: bool = False):
+    """ControlNet preprocessor as an Extras step. Returns (image, info) where info is the ordered dict that is
+    written to the output as `ControlNet Preprocessor: {...}` (module, processor_res, threshold_a, threshold_b)
+    and `notes` lists values that were ignored.
+
+    Pixel perfect uses the input size as the target, so the resolution is the short side of the image."""
+    require_pil()
+    args = dict(args or {})
+    notes: list[str] = []
+    res = -1
+    if name in STANDALONE_RESOLUTION:
+        if pixel_perfect:
+            res = min(img.width, img.height)
+        elif 64 <= processor_res <= 2048:
+            res = int(processor_res)
+        else:
+            res = SOURCE_DEFAULT_RESOLUTION
+    elif pixel_perfect or processor_res != -1:
+        notes.append(f"preprocessor '{name}' has no resolution; processor_res and pixel_perfect are ignored")
+    if name == "canny":
+        out = source_canny(img, res, args)
+    else:
+        if name in AUX_DETECTORS:
+            args["resolution"] = res
+        out = run_preprocessor(name, img, args)
+    a_key, b_key = THRESHOLD_KEYS.get(name, (None, None))
+    info = {"module": name, "processor_res": res,
+            "threshold_a": args.get(a_key, THRESHOLD_DEFAULTS.get(a_key, 0)) if a_key else 0,
+            "threshold_b": args.get(b_key, THRESHOLD_DEFAULTS.get(b_key, 0)) if b_key else 0}
+    return out, info, notes
+
+
+# The keys of `args` that the two threshold sliders of the original extension map to.
+THRESHOLD_KEYS = {
+    "canny": ("low_threshold", "high_threshold"),
+    "recolor_luminance": ("gamma_correction", None), "recolor_intensity": ("gamma_correction", None),
+    "tile_resample": ("down_sampling_rate", None), "tile_colorfix": ("variation", None),
+    "blur_gaussian": ("sigma", None), "depth_marigold": ("steps", None), "normal_marigold": ("steps", None),
+}
+# What the module uses when an argument is not given (the defaults of `run_preprocessor` / `pil_preprocess`).
+THRESHOLD_DEFAULTS = {"low_threshold": 100, "high_threshold": 200, "gamma_correction": 1.0, "down_sampling_rate": 1.0,
+                      "variation": 8, "sigma": 9.0, "steps": 4}
+
+
+def preprocess_infotext(info: dict, size) -> str:
+    """`ControlNet Preprocessor: "{...}", Size: WxH` -- the field the original extension adds to the extras infotext."""
+    return f'ControlNet Preprocessor: "{info}", Size: {size[0]}x{size[1]}'
+
+
+def save_preprocessed(img, path: str, info: dict, source_path: str = "") -> str:
+    """Write the preprocessor output as PNG with the infotext; the input's own parameters are kept as
+    `Source parameters` (never overwritten)."""
+    from PIL.PngImagePlugin import PngInfo
+    meta = PngInfo()
+    meta.add_text("parameters", preprocess_infotext(info, img.size))
+    try:
+        with Image.open(source_path) as src:
+            text = getattr(src, "text", {}) or {}
+            if text.get("parameters"):
+                meta.add_text("Source parameters", text["parameters"])
+    except Exception:
+        pass
+    try:
+        img.save(path, format="PNG", compress_level=4, pnginfo=meta)
+    except BaseException:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        raise
+    return path
+
+
 def load_controlnet(path: str, dtype):
     """ControlNetModel from a diffusers directory or a single .safetensors/.pth file."""
     from diffusers import ControlNetModel  # type: ignore

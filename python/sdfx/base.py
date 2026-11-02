@@ -222,7 +222,7 @@ class BaseEngine:
         }
 
     def features(self) -> list[str]:
-        return ["clip_interrogator", "controlnet_fastload_data", "embedding_merge", "metadata_utils", "prevent_interrupt", *self._batch_features()]
+        return ["clip_interrogator", "controlnet_preprocess_extras", "controlnet_fastload_data", "embedding_merge", "metadata_utils", "prevent_interrupt", *self._batch_features()]
 
     def _batch_features(self) -> list[str]:
         if self.dry_run:

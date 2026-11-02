@@ -765,6 +765,7 @@ final class McpTools(
     new InspectGenerationMetadataTool(pathPolicy, outputsDir),
     new ModelPresetsTool(services),
     new ClipInterrogatorTool(services, pathPolicy, outputsDir, tempFile, ctx => ready(ctx)),
+    new ControlNetPreprocessTool(services, pathPolicy, outputsDir.toAbsolutePath.normalize(), tempFile, ctx => ready(ctx)),
     tool("list_always_on", "List AlwaysOn extensions",
       "Discover enabled AlwaysOn extensions, control defaults, dynamic choices, and typed values_schema for generation always_on. Layout-only controls are omitted from values_schema.",
       Schema.obj(Seq("tab" -> Schema.str("Generation mode", Seq("txt2img", "img2img"), Some("txt2img")))), ro = true)((a, ctx) => {

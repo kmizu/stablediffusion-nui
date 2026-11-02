@@ -5,6 +5,7 @@ emits progress for each step of each pass, 1-2 previews per pass, and honours in
 """
 from __future__ import annotations
 
+import importlib.util
 import os
 import random
 import shutil
@@ -84,7 +85,7 @@ class FakeEngine(BaseEngine):
             nsfw += ["aesthetic_score"] if aesthetic_available() else []
             from .chara_searcher import available as chara_available
             nsfw += ["chara_searcher"] if chara_available() else []
-        return (["inpaint_difference"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + nsfw + ["clip_interrogator", "controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "pag", "controlnet", "apg", "mahiro", "rescale_cfg", "semantic_guidance", "agent_attention", "cd_tuner", "incantations", "sonar", "llul", "aesthetic_gradients", "characteristic_guidance",
+        return (["inpaint_difference"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + nsfw + ["clip_interrogator", "controlnet_preprocess_extras", "controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "pag", "controlnet", "apg", "mahiro", "rescale_cfg", "semantic_guidance", "agent_attention", "cd_tuner", "incantations", "sonar", "llul", "aesthetic_gradients", "characteristic_guidance",
                 "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier", "soft_inpainting", "sag", "neveroom",
                 "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint", "photomaker", "img2imgalt",
                 "face_restore", "caption", "img2vid", "novel_view", "ldsr", "marigold", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "clip_io", "system_info", "prevent_interrupt"] + list(SAMPLING_HOOKS) + (
@@ -416,6 +417,14 @@ class FakeEngine(BaseEngine):
             shutil.copyfile(req.image_path, out)
             return {"path": out}
         img = load_rgb(req.image_path)
+        if req.standalone and req.preprocessor not in ("depth", "depth_marigold", "normal_marigold") and (
+                req.preprocessor != "canny" or importlib.util.find_spec("cv2")):
+            from . import controlnet as cn_mod
+            out_img, info, notes = cn_mod.standalone_preprocess(req.preprocessor, img, req.args, req.processor_res, req.pixel_perfect)
+            for note in notes:
+                ctx.warn(note)
+            cn_mod.save_preprocessed(out_img, out, info, req.image_path)
+            return {"path": out, "info": info, "notes": notes}
         if req.preprocessor == "canny":
             img = img.convert("L").filter(ImageFilter.FIND_EDGES).point(
                 lambda v: 255 if v > int(req.args.get("low_threshold", 100)) // 4 else 0).convert("RGB")

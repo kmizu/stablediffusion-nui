@@ -1,5 +1,13 @@
 # Plugin coverage vs. reForge built-ins
 
+**ControlNet Preprocessor in Extras** (ledger target `core:controlnet_preprocess_extras`) runs a
+ControlNet preprocessor on an image or a folder without generating: the **ControlNet Preprocessor** card of the
+**Extras** tab (module, Pixel perfect or a 64-2048 resolution, the module's threshold sliders, run on the source or on
+the current Extras result, folder run with cancel, send to a ControlNet unit) and the `controlnet_preprocess` MCP tool.
+Results record `ControlNet Preprocessor: "{...}"` in the PNG parameters. It is part of the Extras tab, not a generation
+plugin, so it has no AlwaysOn or Script entry. See
+[source behavior and verification status](controlnet-preprocess-extras-verification.md).
+
 **Interrogator** (CLIP Interrogator, ledger target `core:clip_interrogator`) works out a prompt
 for an image: a BLIP caption plus the artist, flavor, medium, movement, trending and
 negative label lists ranked by CLIP similarity, in the best, fast, classic, negative and

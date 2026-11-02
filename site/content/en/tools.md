@@ -28,7 +28,7 @@ For a PNG without parameters, the tab shows the PNG's other text chunks. If ther
 
 ## Extras
 
-Upscales images and corrects their colours.
+Upscales images, corrects their colours and runs ControlNet preprocessors.
 
 ![Extras tab](shots/extras.png)
 
@@ -50,6 +50,20 @@ The **Color correction** box matches the colours of the upscaled result (or the 
 
 A1111 matches the histogram and luminosity, AdaIN matches the global colour statistics, and Wavelet matches local colour. Wavelet can produce halos when the reference has a different layout. Output is RGB.
 
+### ControlNet Preprocessor
+
+The **ControlNet Preprocessor** box runs a ControlNet preprocessor on an image without generating anything, like the "ControlNet Preprocessor in extras tab" extension. The result is a control image you can inspect, keep or hand to a ControlNet unit.
+
+1. Choose a **Module**. The list is the one a ControlNet unit offers, without `none` and `inpaint` (which needs a mask).
+2. **Pixel perfect** uses the short side of the image as the resolution. Otherwise set **Preprocessor resolution** (64 to 2048, default 512). Only canny and the detector modules (openpose, lineart, softedge, mlsd, normal) have a resolution; for the other modules the control is hidden.
+3. The sliders depend on the module: canny has **Low threshold** and **High threshold**; the recolor modules **Gamma correction**; tile_resample **Down sampling rate**; tile_colorfix **Variation**; blur_gaussian **Sigma**; the Marigold modules **Steps**.
+4. Press **◉ Run preprocessor**. By default the source image is used; tick **Use the current result as input** to run it on the upscaled or colour-corrected result instead, like running the extension after the other Extras steps.
+5. The PNG records `ControlNet Preprocessor: "{'module': ..., 'processor_res': ..., 'threshold_a': ..., 'threshold_b': ...}", Size: WxH` as its parameters; the parameters of the input image are kept as `Source parameters`.
+
+To process a whole folder, choose an **input folder** and an **output folder** and press **▶ Run on folder**. Every `.png`, `.jpg`, `.jpeg`, `.webp` and `.bmp` is processed in name order and saved as `<name>-<module>.png` (never overwriting; a repeat run adds `-1`, `-2`). A failing file is counted and reported without stopping the others, and **Cancel** stops after the current image. The output folder must differ from the input folder.
+
+**⇢ txt2img ControlNet** and **⇢ img2img ControlNet** put the result into the control image of the chosen unit (0 to 2) and set that unit's preprocessor to `none`, because the image is already processed. Depth and Marigold download their weights the first time they run; the detector modules (openpose, lineart, ...) appear only when `controlnet_aux` is installed.
+
 ### Using the result
 
 The buttons in the **Result** box pass the result on:
@@ -59,7 +73,7 @@ The buttons in the **Result** box pass the result on:
 - **⧉** copies the result. **▤** opens its folder.
 
 !!! note "Face restoration"
-    The Extras tab itself only upscales and corrects colours. Restore faces, captions, flipped copies and similar steps are applied to generated images by the generation tabs' plugins in the **Extras** group.
+    The Extras tab itself only upscales, corrects colours and runs ControlNet preprocessors. Restore faces, captions, flipped copies and similar steps are applied to generated images by the generation tabs' plugins in the **Extras** group.
 
 ## Comparison
 

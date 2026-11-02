@@ -159,6 +159,7 @@ claude mcp add --transport http stablediffusion-nui-gui http://127.0.0.1:7861/mc
 | `inspect_generation_metadata` | PNG に埋め込まれたパラメータを読み、`txt2img` の引数、AlwaysOn の再現候補、適用できなかった項目を返します。何も実行しません。 |
 | `controlnet_fastload` | `operation: "inspect"` で Fastload 画像や `.cni` ファイルに保存された ControlNet 設定を読み、`operation: "version"` で形式のバージョンを返します。 |
 | `clip_interrogate` | CLIP Interrogator で画像からプロンプトを推定します。`operation` は `prompt`（`mode` は best・fast・classic・negative・caption）、`analyze`（媒体・作家・芸術運動・流行・フレーバーの上位 5 件）、`batch`（許可フォルダ `folder` に `.txt`、`batch.txt`、`batch.csv` を書き出します。`overwrite: true` でない限り上書きしません）、`models`、`unload` です。`keep_loaded: true` でない限り、呼び出しごとにモデルを解放します。初回は Hugging Face からモデルをダウンロードします。 |
+| `controlnet_preprocess` | 画像生成なしで、画像またはフォルダに ControlNet プリプロセッサを実行します（拡張機能 ControlNet Preprocessor の Extras 相当）。`preprocessor` は `operation=list` で確認できるモジュール（canny、invert、recolor_*、tile_*、blur_gaussian、depth、Marigold、検出系）、`processor_res`（64〜2048）または `pixel_perfect` は canny と検出系に効き、`args` でモジュールのスライダーを指定します。結果は `<名前>-<preprocessor>.png` として、パラメータに `ControlNet Preprocessor: "{...}"` を付けて保存され、上書きされません。 |
 | `vae_tools` | 読み込み中の VAE で、ローカルファイル（`input_paths`、最大 64 個）をエンコード、デコード、または往復変換します。TAESD や Approx NN の重みは `allow_download: true` のときだけダウンロードします。 |
 
 ## 生成の引数

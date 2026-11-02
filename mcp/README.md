@@ -77,6 +77,7 @@ Development: `sbt "mcp/runMain sdfx.mcp.McpMain --dry-run"` (no GPU needed).
 | `inspect_generation_metadata` | Inspect a PNG without resaving it; returns generation arguments, AlwaysOn replay candidates, and unapplied metadata. Nothing executes automatically. |
 | `model_keyword_lookup` / `model_presets` | Look up checkpoint/LoRA keywords and manage model-bound preset libraries. |
 | `clip_interrogate` | CLIP Interrogator: `prompt` (best/fast/classic/negative/caption), `analyze`, folder `batch`, `models`, `unload`. Downloads CLIP and caption models on first use. |
+| `controlnet_preprocess` | ControlNet Preprocessor in Extras: run a module (canny, invert, recolor, tile, blur, depth, ...) on an image or a folder; `processor_res` / `pixel_perfect` / `args`; `operation=list`. |
 | `list_scripts` / `run_script` | Script plugins (X/Y/Z plot, prompt matrix, loopback, SD upscale...) with their controls; `async: true` returns a job_id. |
 
 Generation results: `content` = one `image` block per image (downscaled to `max_image_side`, default 1024;

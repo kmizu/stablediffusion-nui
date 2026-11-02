@@ -878,9 +878,36 @@ final class Generator(
 
   def preprocess(image: Path, preprocessor: String, args: Map[String, Double] = Map.empty,
       secret: Option[sdfx.core.png.ImageScrambleSecret] = None, warn: String => Unit = _ => ()): Path =
+    preprocessWith(image, preprocessor, args, secret, warn)
+
+  /** Extras step: the resolution rules of the ControlNet unit apply (`processorRes` 64..2048, or the short side of the
+    * image with `pixelPerfect`, else 512) and the result carries `ControlNet Preprocessor: "{...}"` as its parameters.
+    * With `outputDir` the result is moved there as `<input name>-<module>.png` (never overwriting). */
+  def preprocessExtras(image: Path, preprocessor: String, args: Map[String, Double], processorRes: Int, pixelPerfect: Boolean,
+      outputDir: Option[Path] = None, secret: Option[sdfx.core.png.ImageScrambleSecret] = None, warn: String => Unit = _ => ()): Path =
+    PreprocessorControls.validate(preprocessor, args).left.foreach(m => throw new IllegalArgumentException(m))
+    require(processorRes == -1 || (processorRes >= PreprocessorControls.MinResolution && processorRes <= PreprocessorControls.MaxResolution),
+      s"processor resolution must be ${PreprocessorControls.MinResolution}..${PreprocessorControls.MaxResolution}")
+    val made = preprocessWith(image, preprocessor, args, secret, warn, standalone = true, processorRes, pixelPerfect)
+    outputDir.fold(made) { dir =>
+      Files.createDirectories(dir)
+      val stem = Option(image.getFileName).map(_.toString).getOrElse("image").replaceAll("""\.[^.]*$""", "")
+      var n = 0
+      def candidate = dir.resolve(if n == 0 then s"$stem-$preprocessor.png" else s"$stem-$preprocessor-$n.png")
+      var target = candidate
+      while Files.exists(target) do { n += 1; target = candidate }
+      Files.move(made, target)
+      target
+    }
+
+  private def preprocessWith(image: Path, preprocessor: String, args: Map[String, Double],
+      secret: Option[sdfx.core.png.ImageScrambleSecret], warn: String => Unit, standalone: Boolean = false,
+      processorRes: Int = -1, pixelPerfect: Boolean = false): Path =
     val s = settings()
     ScrambledInput.withPlain(image, home.tmpDir(s), secret, warn) { plain =>
-      val output = Paths.get(await(client.preprocess(PreprocessRequest(preprocessor, plain.toAbsolutePath.toString, home.tmpDir(s).toAbsolutePath.toString, args)), timeouts.upscale, "preprocess").path)
+      val request = PreprocessRequest(preprocessor, plain.toAbsolutePath.toString, home.tmpDir(s).toAbsolutePath.toString, args,
+        standalone, processorRes, pixelPerfect)
+      val output = Paths.get(await(client.preprocess(request), timeouts.upscale, "preprocess").path)
       protectToolOutput(output, plain, secret)
     }
 

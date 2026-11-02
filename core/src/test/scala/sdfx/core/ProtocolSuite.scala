@@ -218,6 +218,8 @@ class ProtocolSuite extends munit.FunSuite:
     rt(SamplerInfo("x"), "default_scheduler")
     rt(UpscaleRequest("i.png", "R-ESRGAN 4x+", 2.0, "o", Map("R-ESRGAN 4x+" -> "p")), "image_path", "output_dir", "upscaler_paths")
     rt(PreprocessRequest("canny", "i.png", "o", Map("low_threshold" -> 100.0)), "image_path", "output_dir")
+    rt(PreprocessRequest("canny", "i.png", "o", Map("low_threshold" -> 100.0), standalone = true, processorRes = 640, pixelPerfect = true),
+      "image_path", "output_dir", "standalone", "processor_res", "pixel_perfect")
     rt(ImagePathResult("x.png"), "path")
     rt(MemoryInfo(1, 2, 3, 4), "allocated_mb", "reserved_mb", "total_mb", "ram_used_mb")
   }

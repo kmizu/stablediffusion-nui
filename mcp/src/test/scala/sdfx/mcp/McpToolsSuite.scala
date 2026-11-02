@@ -91,6 +91,27 @@ class McpToolsSuite extends munit.FunSuite:
     finally Files.deleteIfExists(outside)
   }
 
+  test("ControlNet Preprocessor is discoverable, lists modules and rejects bad input and protected sessions") {
+    val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
+    val tool = ts.find(_("name").str == "controlnet_preprocess").getOrElse(fail("ControlNet Preprocessor tool missing"))
+    val props = tool("inputSchema")("properties").obj
+    assertEquals(props("operation")("enum").arr.map(_.str).toSeq, Seq("run", "list"))
+    assertEquals(props("processor_res")("minimum").num.toInt, 64)
+    assertEquals(props("processor_res")("maximum").num.toInt, 2048)
+    val listed = ok("controlnet_preprocess", ujson.Obj("operation" -> "list"))
+    assert(listed("structuredContent").obj.contains("preprocessors"))
+    assert(call("controlnet_preprocess", ujson.Obj("operation" -> "bogus"))("isError").bool)
+    val unknown = call("controlnet_preprocess", ujson.Obj("operation" -> "run", "preprocessor" -> "no-such-module", "image" -> "x"))
+    assert(unknown("isError").bool)
+    assert(textOf(unknown).contains("unknown preprocessor"), textOf(unknown))
+    services.imageScrambleSession.unlock("private-test-password")
+    try
+      val blocked = call("controlnet_preprocess", ujson.Obj("operation" -> "run", "preprocessor" -> "canny", "image" -> "x"))
+      assert(blocked("isError").bool)
+      assert(textOf(blocked).contains("protected image session"), textOf(blocked))
+    finally services.imageScrambleSession.lock()
+  }
+
   test("ControlNet Fastload rejects protected sessions and out-of-policy files") {
     val outside = Files.createTempFile("fastload-outside-", ".cni")
     try

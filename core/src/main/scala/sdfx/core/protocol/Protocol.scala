@@ -181,7 +181,8 @@ case class GenerationResult(
 
 case class UpscaleRequest(imagePath: String, upscaler: String, scale: Double, outputDir: String, upscalerPaths: Map[String, String] = Map.empty,
     hardwareInfo: HardwareInfo.Options = HardwareInfo.Options()) derives RW
-case class PreprocessRequest(preprocessor: String, imagePath: String, outputDir: String, args: Map[String, Double] = Map.empty) derives RW
+case class PreprocessRequest(preprocessor: String, imagePath: String, outputDir: String, args: Map[String, Double] = Map.empty,
+    standalone: Boolean = false, processorRes: Int = -1, pixelPerfect: Boolean = false) derives RW
 case class ImagePathResult(path: String, hardwareInfo: Option[HardwareInfo.Record] = None) derives RW
 case class MemoryInfo(allocatedMb: Double = 0, reservedMb: Double = 0, totalMb: Double = 0, ramUsedMb: Double = 0) derives RW
 

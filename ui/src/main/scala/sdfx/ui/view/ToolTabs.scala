@@ -97,6 +97,7 @@ final class ExtrasTab(ctx: UiContext, initialUpscaler: String, initialScale: Dou
   resultView.setMinHeight(240)
   resultView.getStyleClass.add("result-view")
   private val resultInfo = W.label("", "hint")
+  resultInfo.setId("extras-result-info")
   private val correctionOutputs = new ComboBox[String]()
   private var correctionPaths = Map.empty[String, Path]
   private var inputRevision = 0L
@@ -105,6 +106,7 @@ final class ExtrasTab(ctx: UiContext, initialUpscaler: String, initialScale: Dou
   correctionOutputs.valueProperty.addListener((_, _, selected) => correctionPaths.get(selected).foreach(showResult))
   image.addListener((_, _, _) => {
     inputRevision += 1
+    cnCard.clearResult()
     result.set("")
     resultInfo.setText("")
     resultView.setImage(null)
@@ -251,6 +253,15 @@ final class ExtrasTab(ctx: UiContext, initialUpscaler: String, initialScale: Dou
     W.iconButton("▤", "Show in folder")(Option(result.get).filter(_.nonEmpty).foreach(p => ImageActions.openFolder(Paths.get(p))))
   )
 
+  private val cnUseResult = new javafx.beans.property.SimpleBooleanProperty(false)
+  private val cnUseResultBox = W.check("Use the current result as input", cnUseResult,
+    "Run the ControlNet preprocessor on the upscaled / corrected result instead of the source image")
+  cnUseResultBox.setId("extras-cn-use-result")
+  private val cnCard: ControlNetExtrasCard = new ControlNetExtrasCard(ctx,
+    () => (if cnUseResult.get then Option(result.get).filter(_.nonEmpty) else None).orElse(Option(image.get).filter(_.nonEmpty)).map(Paths.get(_)),
+    out => showResult(out),
+    on => { run.setDisable(on); correct.setDisable(on) }, cnUseResultBox)
+
   private val correctionHint = W.label("A1111: histogram + luminosity. AdaIN: global color statistics. Wavelet: local color; different reference layouts can cause halos. Outputs are RGB.", "hint")
   correctionHint.setWrapText(true)
   correctionHint.setMaxWidth(540)
@@ -259,6 +270,7 @@ final class ExtrasTab(ctx: UiContext, initialUpscaler: String, initialScale: Dou
     val v = new VBox(
       10,
       W.card("Image", drop.node, f.grid, W.hbox(8, run, spinner)),
+      cnCard.node,
       W.card("Color correction", correctionDrop.node, correctionForm.grid,
         correctionHint,
         correctionAll, correct),

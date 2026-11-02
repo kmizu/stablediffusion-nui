@@ -28,7 +28,7 @@ PNG に埋め込まれた生成パラメータを読み出し、生成タブに�
 
 ## Extras
 
-画像のアップスケールと色補正を行うタブです。
+画像のアップスケール、色補正、ControlNet プリプロセッサの実行を行うタブです。
 
 ![Extras タブ](shots/extras.png)
 
@@ -49,6 +49,20 @@ PNG に埋め込まれた生成パラメータを読み出し、生成タブに�
 3. **Apply color correction** を押します。**Also output other methods** をオンにすると、ほかの方法の結果も保存され、**Result** 欄の一覧から切り替えて見られます。
 
 A1111 はヒストグラムと明るさ、AdaIN は画像全体の色の統計、Wavelet は局所的な色を合わせます。Wavelet は、参照画像の構図が違うとハロが出ることがあります。出力は RGB です。
+
+### ControlNet Preprocessor
+
+**ControlNet Preprocessor** 欄では、画像を生成せずに ControlNet のプリプロセッサだけを実行します（拡張機能「ControlNet Preprocessor in extras tab」に相当）。結果は、確認したり保存したり、ControlNet ユニットに渡したりできる制御画像です。
+
+1. **Module** を選びます。ControlNet ユニットと同じ一覧から `none` と `inpaint`（マスクが必要）を除いたものです。
+2. **Pixel perfect** は画像の短辺を解像度にします。使わないときは **Preprocessor resolution**（64〜2048、既定 512）を指定します。解像度があるのは canny と検出系（openpose、lineart、softedge、mlsd、normal）だけで、ほかのモジュールでは非表示です。
+3. スライダーはモジュールごとに変わります。canny は **Low threshold** と **High threshold**、recolor 系は **Gamma correction**、tile_resample は **Down sampling rate**、tile_colorfix は **Variation**、blur_gaussian は **Sigma**、Marigold 系は **Steps** です。
+4. **◉ Run preprocessor** を押します。既定では元の画像を使い、**Use the current result as input** をオンにすると、アップスケールや色補正の結果に対して実行します（拡張機能を Extras の最後に動かすのと同じ順序です）。
+5. PNG のパラメータには `ControlNet Preprocessor: "{'module': ..., 'processor_res': ..., 'threshold_a': ..., 'threshold_b': ...}", Size: WxH` が記録されます。入力画像のパラメータは `Source parameters` として残ります。
+
+フォルダごと処理するときは、**入力フォルダ**と**出力フォルダ**を選んで **▶ Run on folder** を押します。`.png`・`.jpg`・`.jpeg`・`.webp`・`.bmp` を名前順に処理し、`<名前>-<module>.png` として保存します（上書きせず、再実行すると `-1`、`-2` が付きます）。失敗したファイルは数えて報告し、残りは続行します。**Cancel** は処理中の画像の後で止まります。出力フォルダは入力フォルダと別にしてください。
+
+**⇢ txt2img ControlNet** と **⇢ img2img ControlNet** は、結果を選んだユニット（0〜2）の制御画像に入れ、処理済みなのでそのユニットのプリプロセッサを `none` にします。Depth と Marigold の重みは初回実行時にダウンロードされます。検出系（openpose、lineart など）は `controlnet_aux` が入っているときだけ一覧に出ます。
 
 ### 結果の利用
 

@@ -195,7 +195,7 @@ class Engine(BaseEngine):
 
     def features(self) -> list[str]:
         # Temperature guard uses step callbacks and does not alter model weights.
-        f = ["clip_interrogator", "controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "system_info", "vae_tools", "prevent_interrupt"]
+        f = ["clip_interrogator", "controlnet_preprocess_extras", "controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "system_info", "vae_tools", "prevent_interrupt"]
         f += self._batch_features()
         if cn_mod._has("cv2"):
             f.append("inpaint_difference")
@@ -2284,13 +2284,22 @@ class Engine(BaseEngine):
     def preprocess(self, params: dict, ctx: JobContext) -> dict:
         req = self.parse_preprocess(params)
         img = load_rgb(req.image_path)
+        info, notes = None, []
         try:
-            out = cn_mod.run_preprocessor(req.preprocessor, img, req.args)
+            if req.standalone:
+                out, info, notes = cn_mod.standalone_preprocess(req.preprocessor, img, req.args, req.processor_res, req.pixel_perfect)
+            else:
+                out = cn_mod.run_preprocessor(req.preprocessor, img, req.args)
         except Exception as e:
             raise EngineError(INVALID_PARAMS, f"preprocessor '{req.preprocessor}' failed: {e}", traceback.format_exc())
         path = next_output_path(req.output_dir, f"pre-{req.preprocessor}")
-        save_png(out, path)
-        return {"path": path}
+        if info is None:
+            save_png(out, path)
+            return {"path": path}
+        for note in notes:
+            ctx.warn(note)
+        cn_mod.save_preprocessed(out, path, info, req.image_path)
+        return {"path": path, "info": info, "notes": notes}
 
     def upscale(self, params: dict, ctx: JobContext) -> dict:
         hardware_started = time.perf_counter()

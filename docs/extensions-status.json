@@ -1659,7 +1659,7 @@
 "index": 276,
 "name": "ControlNet Preprocessor in extras tab",
 "url": "https://github.com/light-and-ray/sd-webui-cn-in-extras-tab.git",
-"status": "todo:controlnet_preprocess_extras"
+"status": "done:core:controlnet_preprocess_extras"
 },
 {
 "index": 277,
