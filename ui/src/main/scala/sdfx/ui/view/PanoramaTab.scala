@@ -206,6 +206,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   empty.getStyleClass.add("empty-preview")
   empty.setId("panorama-empty")
   private var busy = false
+  private[ui] def perspectivePending: Boolean = busy
   private val actions = scala.collection.mutable.ArrayBuffer.empty[Control]
   private var player: Option[PanoramaVideoPlayback] = None
   private var videoProbe: Option[PanoramaFrameDecoder] = None
@@ -424,7 +425,9 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     val src = model.raster.get
     if src == null then None
     else
-      val h = math.max(2, (width * math.max(1.0, viewport.getHeight) / math.max(1.0, viewport.getWidth)).toInt)
+      val dimensions = PanoramaViewSize.forViewport(viewport.getWidth, viewport.getHeight, width)
+      if dimensions.isLeft then { say(dimensions.swap.toOption.get); return None }
+      val (_, h) = dimensions.toOption.get
       val projection = model.projection.get
       val view = model.view
       val sourcePath = Option(model.path.get)
@@ -436,6 +439,55 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
         target
       }(t => { say(s"Saved the current view (${width}x$h) to $t"); ctx.success("Saved " + t.getFileName) })(e => say("Cannot save the view: " + Fx.message(e)))
       Some(target)
+  /** Render a snapshot of the current perspective before handing its path to another tab. */
+  private def sendView(send: (Path, Option[String]) => Unit): Unit =
+    val src = model.raster.get
+    if src == null || busy || disposed then return
+    val dimensions = PanoramaViewSize.forViewport(viewport.getWidth, viewport.getHeight)
+    if dimensions.isLeft then { say(dimensions.swap.toOption.get); return }
+    val (width, height) = dimensions.toOption.get
+    val projection = model.projection.get
+    val view = model.view
+    val sourcePath = Option(model.path.get)
+    val session = ctx.services.imageScrambleSession
+    val captured = session.state
+    val password = captured.secret.map(_.use(identity))
+    val dir = saveDir()
+    busy = true; controls()
+    say("Rendering the view…")
+    Fx.async {
+      val raster = Panorama.render(src, projection, view, width, height)
+      session.synchronized {
+        if session.state.revision != captured.revision then throw new IllegalStateException("Image protection session changed; try again")
+        Files.createDirectories(dir)
+        val target = Files.createTempFile(dir, "panorama-view-", ".png")
+        try
+          PanoramaFiles.savePng(raster, target, sourcePath, password)
+          (target, PngMetadata.readParameters(target))
+        catch
+          case NonFatal(e) =>
+            try Files.deleteIfExists(target) catch case NonFatal(cleanup) => e.addSuppressed(cleanup)
+            throw e
+      }
+    } { (target, metadata) =>
+      busy = false
+      session.synchronized {
+        if disposed || session.state.revision != captured.revision then
+          try Files.deleteIfExists(target) catch case NonFatal(e) => System.err.println("[sdfx] panorama view cleanup failed: " + e)
+          if !disposed then { controls(); say("Cannot send the view: image protection session changed; try again") }
+        else
+          controls()
+          try
+            send(target, metadata)
+            say(s"Sent the current view; saved to $target")
+          catch case NonFatal(e) =>
+            say(s"Cannot send the view: ${Fx.message(e)}; saved to $target")
+      }
+    } { error =>
+      busy = false
+      if !disposed then { controls(); say("Cannot send the view: " + Fx.message(error)) }
+    }
+
   /** Last path handed to saveView (test seam). */
   var saved: Option[Path] = None
 
@@ -516,13 +568,22 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   private val toEqui = action("→ Equirectangular", "Convert the cubemap net back to an equirectangular picture, save it and show it", "panorama-to-equirect")(convert(toCube = false))
   private def sendOn(f: Path => Unit): Unit =
     Option(model.path.get).foreach(f)
-  private val toImg2img = action("⇢ img2img", "Send this picture and its parameters to img2img", "panorama-to-img2img")(
+  private val toImg2img = action("Source → img2img", "Send this picture and its parameters to img2img", "panorama-to-img2img")(
     sendOn(p => ctx.sendToTab(Mode.Img2Img, p, PngMetadata.readParameters(p))))
-  private val toInpaint = action("⇢ Inpaint", "Send this picture to Inpaint, e.g. to repair the seams or the poles", "panorama-to-inpaint")(
+  private val toInpaint = action("Source → Inpaint", "Send this picture to Inpaint, e.g. to repair the seams or the poles", "panorama-to-inpaint")(
     sendOn(p => ctx.sendToTab(Mode.Inpaint, p, PngMetadata.readParameters(p))))
-  private val toExtras = action("⇢ Extras", "Send this picture to Extras, e.g. to upscale it", "panorama-to-extras")(sendOn(ctx.sendToExtras))
+  private val toExtras = action("Source → Extras", "Send this picture to Extras, e.g. to upscale it", "panorama-to-extras")(sendOn(ctx.sendToExtras))
+  private val viewToImg2img = action("View → img2img", "Render the current perspective and send it to img2img", "panorama-view-to-img2img") {
+    sendView((p, metadata) => ctx.sendToTab(Mode.Img2Img, p, metadata))
+  }
+  private val viewToInpaint = action("View → Inpaint", "Render the current perspective and send it to Inpaint", "panorama-view-to-inpaint") {
+    sendView((p, metadata) => ctx.sendToTab(Mode.Inpaint, p, metadata))
+  }
+  private val viewToExtras = action("View → Extras", "Render the current perspective and send it to Extras", "panorama-view-to-extras") {
+    sendView((p, _) => ctx.sendToExtras(p))
+  }
   private val pathButtons = Seq(prevButton, nextButton, toImg2img, toInpaint, toExtras)
-  private val pictureButtons = Seq(resetButton, fullButton, saveViewButton, toCube, toEqui) ++ directionButtons
+  private val pictureButtons = Seq(resetButton, fullButton, saveViewButton, toCube, toEqui, viewToImg2img, viewToInpaint, viewToExtras) ++ directionButtons
   private val autoRotate = new CheckBox("Auto-rotate")
   autoRotate.setId("panorama-autorotate")
   W.tip(autoRotate, "Turn slowly to the right while the tab is open")
@@ -583,7 +644,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   private val toolbar2 = W.hbox(8, W.label("Yaw"), yawSpinner, W.label("Pitch"), pitchSpinner, W.label("FOV"), W.hgrow(fovBox), resetButton, autoRotate, speedSpinner)
   private val toolbar3 = W.hbox(6, fullButton, saveViewButton, toCube, toEqui, W.spacer(), toImg2img, toInpaint, toExtras)
   private val videoToolbar = W.hbox(6, ffmpegButton, videoPlay, videoStop, W.label("Speed"), videoSpeed, W.label("Video position"), W.hgrow(videoSeek))
-  private val directionsToolbar = W.hbox(6, (Seq(W.label("Look")) ++ directionButtons)*)
+  private val directionsToolbar = W.hbox(6, (Seq(W.label("Look")) ++ directionButtons ++ Seq(W.spacer(), viewToImg2img, viewToInpaint, viewToExtras))*)
   private val stage = new StackPane(viewport, empty)
   VBox.setVgrow(stage, Priority.ALWAYS)
   val node: VBox = new VBox(8, toolbar1, toolbar2, toolbar3, directionsToolbar, videoToolbar, stage, W.hbox(12, readout, W.hgrow(hintLabel)), status)

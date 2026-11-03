@@ -11,7 +11,7 @@ import sdfx.core.config.{AppHome, Settings}
 import sdfx.core.panorama.{Panorama, Projection, Raster, View}
 import sdfx.engine.{AppServices, EngineLaunch, EngineTimeouts}
 import sdfx.plugins.StandardPlugins
-import sdfx.ui.vm.UiState
+import sdfx.ui.vm.{Mode, UiState}
 import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 
@@ -105,6 +105,17 @@ object RealPanoramaVideoCheck:
         window.panorama.node.applyCss()
         window.panorama.node.layout()
         require(ImageIO.write(SwingFXUtils.fromFXImage(window.scene.snapshot(null), null), "png", out.resolve("video.png").toFile))
+      }
+      val previousImage = fx(window.vms(Mode.Img2Img).initImage.get)
+      fx(window.panorama.node.lookup("#panorama-view-to-img2img").asInstanceOf[Button].fire())
+      eventually("paused video perspective sent") { fx(window.vms(Mode.Img2Img).initImage.get) != previousImage }
+      val sent = Paths.get(fx(window.vms(Mode.Img2Img).initImage.get))
+      val sentImage = ImageIO.read(sent.toFile)
+      val pixel = sentImage.getRGB(sentImage.getWidth / 2, sentImage.getHeight / 2)
+      require((pixel & 255) > 170 && ((pixel >> 16) & 255) < 80, "sent view must capture paused blue frame")
+      fx {
+        val tabs = window.scene.lookup("#main-tabs").asInstanceOf[TabPane]
+        tabs.getSelectionModel.select(tabs.getTabs.asScala.find(_.getId == "panorama-tab-page").get)
       }
       fx(window.panorama.seekVideo(0.4))
       eventually("seeked") { fx(math.abs(window.panorama.videoSeconds - 0.4) < 0.25) }
