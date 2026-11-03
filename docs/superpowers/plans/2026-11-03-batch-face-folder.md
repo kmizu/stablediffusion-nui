@@ -1,5 +1,7 @@
 # #6 Img2Img フォルダ入力（実装途中）
 
+> 以下は各時点の履歴。顔用別 checkpoint と MediaPipe は後に実装済み。最新の範囲と残る結合検証は [監査記録](../../batch-face-audit-ja.md) を参照。
+
 main に部分統合時、`VerifiedFolderInputSuite`、`Img2ImgFolderManifestSuite`、`Img2ImgFolderRunnerSuite`、`JobQueueSuite` 計44件、`McpToolsSuite` 43件、`ui/assembly` が exit 0。JAR SHA-256 は `c2ffb54da092c4930dadaab039da41c872e292d6ce710d786ecfd4afacede70f`。下記の実モデル試験は分離 worktree の JAR と source によるもので、main JAR と配布版の実測ではない。#6 は別 checkpoint などが残り open。
 
 Windows helper の非表示指定を追加後、分離 worktree で SD1.5/SDXL の公式 MCP・2入力・顔処理・grid と元パスを再確認。main では handle／runner 14件と assembly が exit 0、JAR SHA-256 `e5e516124ca75f812d7be7520dc943e02c50e4df000caf1d6a8e1dc5b667529c`。main JAR 自体の実モデル検証ではない。

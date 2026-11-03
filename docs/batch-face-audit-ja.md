@@ -4,6 +4,8 @@
 
 検出と顔 pass は AlwaysOn プラグイン、フォルダ入力は img2img ジョブに実装した。MediaPipe、YOLO、OpenCV の選択を提供し、顔用モデルを指定しなければ元モデルを使う。フォルダ入力、MediaPipe、顔用 checkpoint それぞれの実測と制約は `docs/superpowers/plans/2026-11-03-batch-face-folder.md`、`docs/batch-face-mediapipe-wip.md`、`docs/batch-face-checkpoint-ja.md` を参照。
 
+現時点で個別機能の実測はあるが、フォルダ入力と顔用別 checkpoint の同時利用は実モデル検証の証拠を確認できていない。複数入力それぞれの顔処理・記録 hash・途中失敗後の復帰を両モデル系統で確認する必要がある。SDXL の native folder GUI、最終 ZIP を展開した配布版の実モデル生成も未確認。フォルダ処理中の途中失敗の部分結果と復帰は追加検証が必要。上記は検証不足であり、動作不良が確認されたことを意味しない。
+
 ライセンスについては `scripts/third_party.py` と同梱の notices に記録。MediaPipe Tasks と BlazeFace は Apache-2.0、YOLO 実行用の ultralytics は AGPL-3.0 で任意導入。モデルは初回に別途取得し、再配布しない。ユーザーが用意する生成モデル・LoRA の利用条件は各配布元による。
 
 2026-11-03 に新規 Python 3.10 venv で `requirements-torch.txt` の PyTorch 2.7.1+cu128、`requirements.txt` の固定依存、MediaPipe 1.2.0 を通常インストールし、`pip check` と SDXL 画像の CPU 顔検出が成功。pip 23.0.1 のまま PyTorch 専用 index を使うと `flit_core` の取得に失敗し、PyPI を追加 index にするとインストールできた。アプリの bootstrap は先に pip を更新する。別の新規 venv を pip 26.3 に更新し PyTorch 専用 index だけで dry-run したところ、依存解決は成功したが実インストールはしていない。インストール後は OpenCV headless 4.11.0 と opencv-contrib 5.0.0.93 の両 distribution が入っているため、同じ `cv2` 名前空間のパッケージ共存には注意が必要（実行時の cv2 は 4.11.0）。この環境で SDXL 元モデル・SD1.5 顔モデルを公式 MCP SDK から実生成し、PNG 復元、hash 不一致の拒否と元モデルへの復帰まで確認した。テストした組み合わせ以外の依存環境やモデルでの動作を保証するものではない。

@@ -1,5 +1,7 @@
 # #6 MediaPipe 検出器の作業記録（未完成）
 
+> この文書は初期の部分実装時の記録。後に顔用 checkpoint とフォルダ入力も実装されている。最新の範囲と配布候補の制約は [batch-face-audit-ja.md](batch-face-audit-ja.md) を参照。#6 は引き続き open。
+
 main への部分統合時、`python/.venv-smoke/Scripts/python.exe -m pytest -q python/tests/test_mediapipe_face.py python/tests/test_batch_face_swap.py python/tests/test_adetailer.py` は CUDA 無効で41件成功。JDK 21 の `plugins/testOnly sdfx.plugins.BatchFaceSwapSuite` 8件と `ui/assembly` も成功し、JAR SHA-256 は `b7b3c1798315e06d6f5cf05a5364e8dbafb9f76cdbd3f932e4cd30dc11880dac`。以下の実モデル実測は分離 worktree の候補 JAR・Python によるもので、main の JAR や配布版 GUI による実測ではない。#6 は open のまま。
 
 上流 `kex0/batch-face-swap` の README は mediapipe を依存に挙げる。元拡張は無許諾のためコードを読まず、Google が公開する MediaPipe Tasks の顔検出 API から `mediapipe_face` を再実装した。既存の YOLO や OpenCV は変更しない。選択すると BlazeFace short-range v1 の 229,746 バイトのモデルを Google Storage から初回取得し、SHA-256 `b4578f35940bf5a1a655214a1cce5cab13eba73c1297cd78e1a04c2380b0152f` を確認する。モデルカードは Apache-2.0、MediaPipe コードも Apache-2.0。モデルは同梱しない。`SDFX_MEDIAPIPE_DIR` でキャッシュ先を変更できる。`HF_HUB_OFFLINE=1` または `SDFX_MEDIAPIPE_OFFLINE=1` では未取得のモデルをダウンロードしない。不正なキャッシュファイルは黙って上書きせず拒否する。
