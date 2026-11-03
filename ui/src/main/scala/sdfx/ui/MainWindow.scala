@@ -834,12 +834,18 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       noticeHardware(t)
     }
     select(mode)
-    ctx.info(s"Sent to ${mode.label}")
+    val corridorNotice = if infotext.exists(t => sdfx.plugins.CorridorCrawlerPlugin.replay(sdfx.core.infotext.Infotext.parse(t).fields).nonEmpty) then
+      (if mode == Mode.Img2Img then " · Corridor Crawler: this image is the new input, not the original; select a custom prefab again if needed"
+       else " · Corridor Crawler settings apply in Img2Img; this destination keeps its own script")
+    else ""
+    ctx.info(s"Sent to ${mode.label}$corridorNotice")
 
   def restore(infotext: String): Unit =
     val parsed = sdfx.core.infotext.Infotext.parse(infotext)
     noticeHardware(infotext)
-    val mode = if activeMode == Mode.Txt2Img && sdfx.plugins.LatentUpscalePlugin.replay(parsed.fields).nonEmpty then Mode.Img2Img else activeMode
+    val corridor = sdfx.plugins.CorridorCrawlerPlugin.replay(parsed.fields)
+    val corridorTarget = sdfx.ui.vm.CorridorRestore.prepare(parsed.fields, vms)
+    val mode = corridorTarget.getOrElse(if activeMode == Mode.Txt2Img && sdfx.plugins.LatentUpscalePlugin.replay(parsed.fields).nonEmpty then Mode.Img2Img else activeMode)
     restorePlugins(mode, infotext, vms(mode).restoreInfotext(infotext, ctx.styles.asScala.toSeq,
       services.settings.hiresFixTweaks.restoreTemplate))
     select(mode)
@@ -851,14 +857,15 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
         case None => s" · VAE '$requested' was not found; current selection retained"
     }.getOrElse("")
     val parsedModel = sdfx.core.infotext.Infotext.parse(infotext).get("Model").filter(_.nonEmpty)
+    val corridorNotice = if corridor.nonEmpty then " · Corridor Crawler: select the initial image again; custom prefabs must also be selected again" else ""
     parsedModel.flatMap(services.catalog.findCheckpoint).filter(_.name != model.checkpoint.get) match
       case Some(e) =>
         loadCheckpoint(e.name)
-        ctx.info(s"Parameters restored · switching checkpoint to ${e.name}$vaeNotice")
+        ctx.info(s"Parameters restored · switching checkpoint to ${e.name}$vaeNotice$corridorNotice")
       case None =>
         val modelNotice = parsedModel.filter(name => services.catalog.findCheckpoint(name).isEmpty)
           .map(name => s" · Checkpoint '$name' was not found; current selection retained").getOrElse("")
-        ctx.success(s"Parameters restored into ${mode.label}$vaeNotice$modelNotice")
+        ctx.success(s"Parameters restored into ${mode.label}$vaeNotice$modelNotice$corridorNotice")
 
   private val hardwareNotices = new HardwareInfo.PasteNotices
   private var disposed = false
@@ -882,6 +889,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     plugins(mode).restoreOldSdFirstpasser(sdfx.core.infotext.Infotext.parse(infotext).fields)
     plugins(mode).restoreAnimateDiff(sdfx.core.infotext.Infotext.parse(infotext).fields)
     plugins(mode).restoreCnAnimation(sdfx.core.infotext.Infotext.parse(infotext).fields)
+    if mode == Mode.Img2Img then plugins(mode).restoreCorridorCrawler(sdfx.core.infotext.Infotext.parse(infotext).fields)
     restoreComposable(mode, params)
 
   /** A PNG contains a name, never an executable local path. Resolve it only in explicitly configured directories. */

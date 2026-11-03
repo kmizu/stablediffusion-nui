@@ -23,6 +23,40 @@ class CorridorCrawlerSuite extends munit.FunSuite:
     assertEquals(Settings.parse(values()).window(512, 512), Rect(127, 81, 254, 254))
   }
 
+  test("versioned corridor settings round-trip without embedding image paths") {
+    val v = values("steps" -> "5", "prefab" -> CustomPrefab, "prefab_image" -> "C:/private/prefab.png",
+      "window_width" -> "40.1", "window_height" -> "30.2", "window_x" -> "17.3", "window_y" -> "13.4",
+      "placement" -> PreserveAspect, "mask_shrink" -> "4", "make_grid" -> "false", "animation" -> "true",
+      "frames_per_step" -> "8", "frame_ms" -> "70", "animation_size" -> "320")
+    val serialized = replayValue(Settings.parse(v))
+    assert(!serialized.contains("private"))
+    val result = replay(Map(ReplayKey -> serialized)).get
+    assertEquals(result.str("steps"), "5")
+    assertEquals(result.str("prefab"), CustomPrefab)
+    assertEquals(result.str("prefab_image"), "")
+    assertEquals(result.str("window_width"), "40.1")
+    assertEquals(result.str("placement"), PreserveAspect)
+    assertEquals(result.str("animation"), "true")
+    assertEquals(result.str("frame_ms"), "70")
+    assertEquals(result.str("animation_size"), "320")
+  }
+
+  test("replay rejects missing, malformed, unknown and unsafe corridor configuration") {
+    assertEquals(replay(Map.empty), None)
+    assertEquals(replay(Map(ReplayKey -> "{")), None)
+    assertEquals(replay(Map(ReplayKey -> ("x" * 4097))), None)
+    val serialized = replayValue(Settings.parse(values()))
+    val bad = ujson.read(serialized).obj
+    bad("placement") = ujson.Str("invalid")
+    assertEquals(replay(Map(ReplayKey -> ujson.Obj.from(bad).render())), None)
+    val unknown = ujson.read(serialized).obj
+    unknown("prefab_image") = ujson.Str("C:/private/injected.png")
+    assertEquals(replay(Map(ReplayKey -> ujson.Obj.from(unknown).render())), None)
+    val invalidVersion = ujson.read(serialized).obj
+    invalidVersion("version") = ujson.Num(2)
+    assertEquals(replay(Map(ReplayKey -> ujson.Obj.from(invalidVersion).render())), None)
+  }
+
   test("the window scales with the canvas and must stay inside it") {
     assertEquals(Settings.parse(values()).window(1024, 1024), Rect(254, 162, 508, 508))
     intercept[IllegalArgumentException](Settings.parse(values("window_x" -> "60", "window_width" -> "50")).window(512, 512))

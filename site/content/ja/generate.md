@@ -287,4 +287,4 @@ img2img のスクリプト「Img2Img Workflow」で Phase 1〜3 の寸法・枚�
 
 ### Corridor Crawler の画像配置
 
-img2img の Corridor Crawler では、前の画像の配置を「Stretch」と「Preserve aspect」から選べます。後者は縦横比を保ち、窓より小さい画像は拡大しません。GIF は既存ファイルを上書きしません。保存に失敗したとき、生成済み画像や途中の GIF が残る場合があります。
+img2img の Corridor Crawler では、前の画像の配置を「Stretch」と「Preserve aspect」から選べます。後者は縦横比を保ち、窓より小さい画像は拡大しません。生成 PNG の設定を復元できますが、初期画像と custom prefab は再指定が必要です。GIF は既存ファイルを上書きしません。保存に失敗したとき、生成済み画像や途中の GIF が残る場合があります。

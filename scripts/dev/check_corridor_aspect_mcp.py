@@ -50,6 +50,18 @@ async def run(args):
         first = records[0]["infotext"]
         assert "Corridor Crawler placement: Preserve aspect" in first, first
         assert "160,80" in first, first
+        inspected = await call("inspect_generation_metadata", {"image": records[0]["path"]})
+        candidate = inspected["scripts"]["corridor_crawler"]
+        assert candidate["steps"] == 2 and candidate["placement"] == "Preserve aspect", candidate
+        assert candidate["prefab_image"] == "" and any("initial image" in w for w in inspected["warnings"]), inspected
+        assert "init_image" not in inspected["generation_args"]
+        repeated = await call("run_script", {"script_id": "corridor_crawler", "values": candidate,
+            "params": dict(common, init_image=str(crop), denoising_strength=0.9), "return_images": False})
+        assert len(repeated["images"]) == 2, repeated
+        for original, replayed in zip(records, repeated["images"]):
+            with Image.open(original["path"]) as a, Image.open(replayed["path"]) as b:
+                assert a.convert("RGB").tobytes() == b.convert("RGB").tobytes(), "restored settings changed image pixels"
+        receipt["replay_images"] = [item["path"] for item in repeated["images"]]
         target = Path(records[-1]["path"])
         gif = target.with_name(target.stem + "-corridor.gif")
         with Image.open(gif) as animation:
@@ -57,7 +69,7 @@ async def run(args):
             receipt["gif_frames"] = animation.n_frames
         receipt.update(source=str(source), initial=str(crop), outputs=[item["path"] for item in records], gif=str(gif))
     (out / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
-    print("CORRIDOR_ASPECT_REAL_MCP_OK", flush=True)
+    print("CORRIDOR_REPLAY_REAL_MCP_OK", flush=True)
 
 
 if __name__ == "__main__":

@@ -396,6 +396,26 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("incantations"))
   }
 
+  test("corridor replay is a typed candidate with missing inputs and no local paths") {
+    val p = new sdfx.plugins.CorridorCrawlerPlugin
+    val cfg = sdfx.core.plugins.api.Values(sdfx.core.plugins.api.Values.defaults(p.controls).map ++ Map(
+      "prefab" -> sdfx.plugins.CorridorCrawlerPlugin.CustomPrefab, "prefab_image" -> "C:/private/secret.png",
+      "steps" -> "4", "placement" -> sdfx.plugins.CorridorCrawlerPlugin.PreserveAspect))
+    val payload = sdfx.plugins.CorridorCrawlerPlugin.replayValue(sdfx.plugins.CorridorCrawlerPlugin.Settings.parse(cfg))
+    val text = "cat\nSteps: 20, Seed: 4, Size: 512x512, Corridor Crawler settings: " + sdfx.core.infotext.Infotext.quote(payload)
+    val dir = Files.createTempDirectory("mcp-corridor-replay-")
+    val path = dir.resolve("image.png")
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, new PathPolicy(() => Seq(dir)), dir)
+    val script = result("scripts")("corridor_crawler")
+    assertEquals(script("steps").num, 4.0)
+    assertEquals(script("placement").str, "Preserve aspect")
+    assertEquals(script("prefab_image").str, "")
+    assert(result("warnings").arr.exists(_.str.contains("initial image")))
+    assert(!result.render().contains("private"))
+    assert(!result("unapplied_fields").obj.contains("Corridor Crawler settings"))
+  }
+
   test("Old SD firstpasser infotext becomes a typed script candidate and its keys are consumed") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("firstpass.png")

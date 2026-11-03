@@ -95,6 +95,46 @@ object CorridorCrawlerPlugin:
         frameMs = integer(v, "frame_ms", 50, 10, 1000), animSize = integer(v, "animation_size", 256, 64, 1024),
         placement = placement)
 
+  /** Versioned, path-free settings; image inputs must be explicitly supplied again. */
+  val ReplayKey = "Corridor Crawler settings"
+  private val ReplayKeys = Set("steps", "prefab", "window_width", "window_height", "window_x", "window_y",
+    "placement", "mask_shrink", "make_grid", "animation", "frames_per_step", "frame_ms", "animation_size")
+
+  def replayValue(s: Settings): String = ujson.Obj(
+    "version" -> 1, "steps" -> s.steps, "prefab" -> s.prefab,
+    "window_width" -> s.widthPct, "window_height" -> s.heightPct, "window_x" -> s.xPct, "window_y" -> s.yPct,
+    "placement" -> s.placement, "mask_shrink" -> s.maskShrink, "make_grid" -> s.makeGrid,
+    "animation" -> s.animate, "frames_per_step" -> s.framesPerStep, "frame_ms" -> s.frameMs,
+    "animation_size" -> s.animSize).render()
+
+  def replay(fields: Map[String, String]): Option[Values] =
+    fields.get(ReplayKey).filter(_.length <= 4096).flatMap { text =>
+      scala.util.Try {
+        val obj = ujson.read(text).obj
+        require(obj.keySet == ReplayKeys + "version")
+        require(obj("version") == ujson.Num(1))
+        val numeric = Set("steps", "window_width", "window_height", "window_x", "window_y", "mask_shrink",
+          "frames_per_step", "frame_ms", "animation_size")
+        val bools = Set("make_grid", "animation")
+        val entries = ReplayKeys.toSeq.map { key =>
+          val value = obj(key)
+          val str = if numeric(key) then value match
+            case ujson.Num(d) if d.isFinite => Values.fmt(d)
+            case _ => throw new IllegalArgumentException("invalid number")
+          else if bools(key) then value match
+            case ujson.Bool(b) => b.toString
+            case _ => throw new IllegalArgumentException("invalid boolean")
+          else value match
+            case ujson.Str(s) => s
+            case _ => throw new IllegalArgumentException("invalid text")
+          key -> str
+        }.toMap
+        val result = Values(entries.updated("prefab_image", ""))
+        Settings.parse(if result.str("prefab") == CustomPrefab then Values(result.map.updated("prefab_image", "required")) else result)
+        result
+      }.toOption
+    }
+
   // ------------------------------------------------------------------------------------------- images
 
   private def rgb(w: Int, h: Int): BufferedImage = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
@@ -442,7 +482,7 @@ class CorridorCrawlerPlugin extends Plugin:
     val seed = Support.fixSeed(p0.seed)
     val prefabName = if s.prefab == BuiltInPrefab then "Brick corridor" else Path.of(s.prefabImage).getFileName.toString
     val extra0 = p0.extra ++ Seq("Corridor Crawler steps" -> s.steps.toString, "Corridor Crawler prefab" -> prefabName,
-      "Corridor Crawler window" -> win.text, "Corridor Crawler placement" -> s.placement) ++ (if s.maskShrink > 0 then Seq("Corridor Crawler mask shrink" -> s.maskShrink.toString) else Nil)
+      "Corridor Crawler window" -> win.text, "Corridor Crawler placement" -> s.placement, ReplayKey -> replayValue(s)) ++ (if s.maskShrink > 0 then Seq("Corridor Crawler mask shrink" -> s.maskShrink.toString) else Nil)
     val outputs = ArrayBuffer[OutputImage]()
     val images = ArrayBuffer[BufferedImage](start) // oldest first, the start image included
     val placedWindows = ArrayBuffer[Rect]()

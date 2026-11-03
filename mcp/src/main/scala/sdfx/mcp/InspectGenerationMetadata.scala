@@ -6,7 +6,7 @@ import java.util.Base64
 import sdfx.core.infotext.Infotext
 import sdfx.core.plugins.api.{Control, Plugin, Values}
 import sdfx.core.png.PngMetadata
-import sdfx.plugins.{CompilePlugin, DeepCachePlugin, ClipIoPlugin, CnAnimationPlugin, AnimateDiffPlugin, BatchFaceSwapPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
+import sdfx.plugins.{CompilePlugin, DeepCachePlugin, ClipIoPlugin, CnAnimationPlugin, AnimateDiffPlugin, BatchFaceSwapPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, CorridorCrawlerPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
 import scala.util.control.NonFatal
 
 /** Inspect only: no model load, plugin execution, script execution or generation. */
@@ -243,7 +243,8 @@ object InspectGenerationMetadata:
     val scriptCandidates: Seq[(String, Values, Seq[String])] =
       OldSdFirstpasserPlugin.replay(f).map(v => (OldSdFirstpasserPlugin.Id, v, OldSdFirstpasserPlugin.InfotextKeys)).toSeq ++
         AnimateDiffPlugin.replay(f).map(v => (AnimateDiffPlugin.Id, v, AnimateDiffPlugin.InfotextKeys)).toSeq ++
-        CnAnimationPlugin.replay(f).map(v => (CnAnimationPlugin.Id, v, CnAnimationPlugin.InfotextKeys)).toSeq
+        CnAnimationPlugin.replay(f).map(v => (CnAnimationPlugin.Id, v, CnAnimationPlugin.InfotextKeys)).toSeq ++
+        CorridorCrawlerPlugin.replay(f).map(v => ("corridor_crawler", v, Seq(CorridorCrawlerPlugin.ReplayKey))).toSeq
     val scripts = ujson.Obj.from(scriptCandidates.flatMap { case (id, v, _) =>
       StandardPlugins.scripts(() => Nil).find(_.id == id).map(pl => id -> typed(pl, v)) })
     val scriptKeys = scriptCandidates.filter { case (id, _, _) => scripts.value.contains(id) }.flatMap(_._3).toSet
@@ -251,5 +252,7 @@ object InspectGenerationMetadata:
     ujson.Obj("infotext" -> text, "generation_args" -> args, "always_on" -> on, "scripts" -> scripts,
       "unapplied_fields" -> ujson.Obj.from(unconsumed.map((k, v) => k -> ujson.Str(v))),
       "warnings" -> ujson.Arr.from(Seq("Review candidates and missing model, LoRA, image, mask and unsupported plugin settings before replay; nothing was executed.") ++ aestheticError ++
+        Option.when(scripts.value.contains("corridor_crawler"))(
+          "Corridor Crawler requires an initial image; custom prefabs also require an explicitly supplied image. Recorded inputs are not restored.") ++
         Option.when(f.contains("Face checkpoint hash") && !on.value.contains("batch_face_swap"))(
           "Face checkpoint fingerprint or settings are invalid; Batch Face Swap was not restored.")))

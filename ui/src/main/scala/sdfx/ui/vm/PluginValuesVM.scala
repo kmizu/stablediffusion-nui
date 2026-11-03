@@ -47,6 +47,14 @@ object PluginValuesVM:
     case dc: Control.DynamicChoice  => (if dc.allowNone then Seq("None") else Nil) ++ choices(dc.source)
     case _                          => Nil
 
+/** Corridor PNGs contain settings but do not contain their original img2img source. */
+object CorridorRestore:
+  def prepare(fields: Map[String, String], vms: Map[Mode, GenerationVM]): Option[Mode] =
+    sdfx.plugins.CorridorCrawlerPlugin.replay(fields).map { _ =>
+      vms(Mode.Img2Img).initImage.set("")
+      Mode.Img2Img
+    }
+
 /** Plugins of one tab: the selected script and every AlwaysOn plugin, with their values. */
 final class PluginsVM(val mode: Mode, scripts: Seq[Plugin], alwaysOnPlugins: Seq[Plugin], initial: Plugin => Values):
   val scriptForms: Seq[PluginValuesVM] = scripts.map(p => new PluginValuesVM(p, initial(p)))
@@ -88,6 +96,14 @@ final class PluginsVM(val mode: Mode, scripts: Seq[Plugin], alwaysOnPlugins: Seq
         selectedScript.set("cn_animation")
       }
       case None => if selectedScript.get == "cn_animation" then selectedScript.set("")
+
+  def restoreCorridorCrawler(fields: Map[String, String]): Unit =
+    sdfx.plugins.CorridorCrawlerPlugin.replay(fields) match
+      case Some(values) => form("corridor_crawler").foreach { f =>
+        f.load(values)
+        selectedScript.set("corridor_crawler")
+      }
+      case None => if selectedScript.get == "corridor_crawler" then selectedScript.set("")
 
   def scriptJob: Option[(Plugin, Values)] =
     scriptForms.find(_.plugin.id == selectedScript.get).map(f => f.plugin -> f.values)
