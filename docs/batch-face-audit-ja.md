@@ -4,7 +4,9 @@
 
 検出と顔 pass は AlwaysOn プラグイン、フォルダ入力は img2img ジョブに実装した。MediaPipe、YOLO、OpenCV の選択を提供し、顔用モデルを指定しなければ元モデルを使う。フォルダ入力、MediaPipe、顔用 checkpoint それぞれの実測と制約は `docs/superpowers/plans/2026-11-03-batch-face-folder.md`、`docs/batch-face-mediapipe-wip.md`、`docs/batch-face-checkpoint-ja.md` を参照。
 
-現時点で個別機能の実測はあるが、フォルダ入力と顔用別 checkpoint の同時利用は実モデル検証の証拠を確認できていない。複数入力それぞれの顔処理・記録 hash・途中失敗後の復帰を両モデル系統で確認する必要がある。SDXL の native folder GUI、最終 ZIP を展開した配布版の実モデル生成も未確認。フォルダ処理中の途中失敗の部分結果と復帰は追加検証が必要。上記は検証不足であり、動作不良が確認されたことを意味しない。
+フォルダ入力と顔用別 checkpoint の結合を、main の source-built JAR `67f74674f9f15e14f761a18306b6b87f2b57f46a48022c7d4fef9eb4ba64cb3e` と公式 MCP SDK で実測した。SD1.5 `animekawa_v10` の元画像を SDXL `waiIllustriousSDXL_v170` で顔処理、逆の組合せでもそれぞれ異なる2入力を処理し、各画像の顔モデル hash、元モデルへの復帰時に baseline と RGB が一致することを確認。4枚の結果画像を目視した。結果は `outputs/face-folder-checkpoint-sd15-final/receipt.json` と `outputs/face-folder-checkpoint-sdxl-final/receipt.json`。処理中、分離コピーの第2入力を変更すると、両系統とも2枚目は変更を検出して失敗し、1枚目は出力先に残った。MCP の failed job は `images: []` であり、その先行ファイルを結果として返さない。入力を戻して再試行すると2枚を新たに生成するため、利用者は再試行前に出力先を確認する必要がある。
+
+最初の注入試験は manifest 固定前に入力を変更して画像 decode で失敗し、harness も failed job の `isError` を成功と誤認して停止した。1枚目の生成 step を確認した後に変更し、failed を検査するよう修正して両系統を再実施した。SDXL の native folder GUI、最終 ZIP を展開した配布版の実モデル生成、さまざまな途中失敗や大規模フォルダは未確認。
 
 ライセンスについては `scripts/third_party.py` と同梱の notices に記録。MediaPipe Tasks と BlazeFace は Apache-2.0、YOLO 実行用の ultralytics は AGPL-3.0 で任意導入。モデルは初回に別途取得し、再配布しない。ユーザーが用意する生成モデル・LoRA の利用条件は各配布元による。
 
