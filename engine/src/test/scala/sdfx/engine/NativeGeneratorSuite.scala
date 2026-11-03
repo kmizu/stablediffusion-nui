@@ -2,9 +2,10 @@ package sdfx.engine
 
 import sdfx.core.config.{AppHome,ModelDirs,Settings}
 import sdfx.core.infotext.Infotext
-import sdfx.core.model.{GenerationParams,Img2ImgParams}
+import sdfx.core.model.{GenerationParams,Img2ImgParams,LoraRef}
 import sdfx.core.png.PngMetadata
 import java.awt.image.BufferedImage
+import java.nio.{ByteBuffer,ByteOrder}
 import java.nio.file.{Files,Path}
 import javax.imageio.ImageIO
 import scala.concurrent.duration.*
@@ -12,6 +13,18 @@ import scala.concurrent.duration.*
 /** Real Generator saving/replay using a Java worker and an isolated app home. */
 class NativeGeneratorSuite extends munit.FunSuite:
   override val munitTimeout: Duration=90.seconds
+  private def writeLinearLora(path: Path,name: String,input: Int,output: Int): Unit =
+    val entries=Vector((s"$name.lora_down.weight",Vector(1,input),Array.fill(input)(1f/input)),
+      (s"$name.lora_up.weight",Vector(output,1),Array.fill(output)(8f)))
+    var offset=0
+    val header=entries.map { (key,dims,values) =>
+      val begin=offset;offset+=values.length*4
+      s"\"$key\":{\"dtype\":\"F32\",\"shape\":[${dims.mkString(",")}],\"data_offsets\":[$begin,$offset]}"
+    }.mkString("{",",","}").getBytes(java.nio.charset.StandardCharsets.UTF_8)
+    val data=ByteBuffer.allocate(offset).order(ByteOrder.LITTLE_ENDIAN)
+    entries.foreach((_,_,values)=>values.foreach(data.putFloat))
+    Files.write(path,ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(header.length.toLong).array()++header++data.array())
+
   test("native Generator saves img2img metadata and replays pixels with the same source") {
     val cpFile=sys.env.get("SCALATORCH_WORKER_CLASSPATH_FILE")
     val model=sys.env.get("SCALATORCH_TINY_MODEL")
@@ -30,6 +43,27 @@ class NativeGeneratorSuite extends munit.FunSuite:
     try
       assertEquals(services.start().python,"")
       services.loadCheckpoint(root.toString,remember=false)
+      val unet=ujson.read(Files.readString(root.resolve("unet/config.json")))
+      val input=unet("block_out_channels")(0).num.toInt
+      val outChannels=unet.obj.get("time_embedding_dim").filter(_!=ujson.Null).map(_.num.toInt).getOrElse(input*4)
+      val adapter=home.root.resolve("tiny-native.safetensors")
+      writeLinearLora(adapter,"lora_unet_time_embedding_linear_1",input,outChannels)
+      services.catalog.set(services.catalog.snapshot.copy(loras=Seq(
+        sdfx.core.protocol.FileEntry("tiny-native",adapter.toString))))
+      val loraParams=GenerationParams(prompt="a red cat",width=64,height=64,steps=1,seed=42)
+      val baseline=services.generator.generate(loraParams).head
+      val zeroLora=loraParams.copy(loras=Seq(LoraRef("tiny-native",weight=0.0,unet=Some(0.0))))
+      assertEquals(services.generator.prepare(zeroLora).request.loraPaths("tiny-native"),adapter.toString)
+      val zero=services.generator.generate(zeroLora).head
+      val smallPixels=(path: Path) => PngMetadata.readImage(path).getRGB(0,0,64,64,null,0,64).toVector
+      assertEquals(smallPixels(zero.path),smallPixels(baseline.path),"zero-scale NUI LoRA must be a no-op")
+      val active=services.generator.generate(loraParams.copy(loras=Seq(LoraRef("tiny-native",weight=1.0,unet=Some(1.0))))).head
+      val activePixels=smallPixels(active.path)
+      assert(activePixels!=smallPixels(baseline.path),"NUI Generator LoRA request must affect native output")
+      assertEquals(smallPixels(services.generator.generate(loraParams.copy(loras=Seq(LoraRef("tiny-native",weight=1.0,unet=Some(1.0))))).head.path),
+        activePixels,"native NUI LoRA replay must be deterministic")
+      assertEquals(smallPixels(services.generator.generate(loraParams).head.path),smallPixels(baseline.path),
+        "adapter-free NUI request must return to the base model")
       val source=services.generator.generate(GenerationParams(prompt="source",width=64,height=64,steps=1,seed=41)).head
       val params=GenerationParams(prompt="a red cat",negativePrompt="blurry",width=64,height=64,steps=4,seed=42,
         img2img=Some(Img2ImgParams(source.path.toString,denoisingStrength=0.5,resizeMode=2)))

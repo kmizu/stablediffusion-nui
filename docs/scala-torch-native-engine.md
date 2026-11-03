@@ -180,9 +180,10 @@ and output after the assertion checks.
 
 This is integration infrastructure, not a completed engine replacement. The
 application still defaults to Python. General catalog operations, production packaging and
-normal SD checkpoints, GPU CLIP/scheduler execution, FP16/offload, SDXL, batching, LoRA, remaining img2img modes,
-Hires and the existing extension feature set still need native implementation
-and verification. Unsupported active generation settings currently return errors.
+normal SD checkpoints, GPU CLIP/scheduler execution, FP16/offload, batching,
+nonstandard LoRA families and full NUI LoRA request-path acceptance, remaining
+img2img modes, Hires and the existing extension feature set still need native
+implementation and verification. Unsupported active generation settings currently return errors.
 Keep changes on `feat/scala-torch-native-engine` until integration is ready for review.
 
 ## SDXL EngineClient integration probe (2026-11-03)
@@ -294,6 +295,26 @@ changes to Generator, plugins, MCP, or the common request/response protocol.
 Backend-specific settings remain serialized in core configuration, but no
 inference library types cross that boundary. Keep future PyTorch/runtime-specific
 code inside this engine boundary so another implementation can replace it cleanly.
+
+## Native standard linear LoRA boundary (2026-11-03)
+
+LoRA names, resolved file paths and per-encoder/U-Net multipliers remain ordinary
+`GenerationRequest` data. The native worker consumes those JSON fields inside the
+scala-torch process; no LoRA tensor or model types are added to NUI `core`, UI,
+plugins or MCP. This keeps backend replacement confined to `engine` and the
+worker protocol. The current native slice accepts bounded safetensors with
+standard 2D linear factors and rejects unsupported adapter families and
+per-block/step options explicitly. Tiny SD1.5 worker coverage passes, including
+zero-scale no-op, nonzero output change, deterministic replay and base-weight
+restoration. A tiny SDXL worker accepts the typed adapter request, and the second
+encoder's alias changes its live CLIP linear output. The opt-in NUI
+`NativeGeneratorSuite` now also passes a synthetic standard LoRA through
+`Generator` and the Java worker (70.868s): zero-scale output matches baseline,
+nonzero output changes pixels, replay is deterministic, and the following
+adapter-free request returns to baseline. The test uses only NUI request types
+and a temporary worker classpath file; no scala-torch types enter NUI's SBT
+compile graph. This verifies the Generator/worker route, not JavaFX interaction
+or normal-checkpoint LoRA quality.
 
 The opt-in `NativeGeneratorSuite` SDXL Generator test now sends a local mask
 through the real `AppServices` and `Generator` path, with U-Net/VAE CUDA placement
