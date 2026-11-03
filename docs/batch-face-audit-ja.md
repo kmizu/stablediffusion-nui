@@ -1,4 +1,6 @@
-# Batch Face Swap 対応範囲の確認（#6、作業中）
+# Batch Face Swap 対応範囲と検証（#6）
+
+2026-11-03 受け入れ確認: README が明示する顔検出・顔のみの prompt／checkpoint・単一画像／フォルダを実装し、SD1.5／SDXL、MCP 両 transport、展開版 GUI と配布版 MCP で検証した。Python 全体は 3067 件成功・3 件 skip。Scala 全体は保護画像テストの旧パス前提 1 件で失敗、他は成功し、修正後の該当 2 件は成功した。修正後の全体一括再実行はしていない。別の MCP 読取経路の path-race 監査と同一ユーザーの一時領域変更はこの受け入れの保証範囲外。
 
 確認した上流は [README の固定版 942ebae](https://github.com/kex0/batch-face-swap/blob/942ebae6937d9ad7964f285a790e7721f712b9ec/README.md)。ライセンスが見つからないため、上流コードを読まず README で公開された動作を再実装した。README が明示する機能は、顔検出と描き直し、txt2img、img2img の単一画像とフォルダ、顔 pass だけの prompt と checkpoint の上書き。元拡張の内部の全オプションや画素単位の互換性は主張しない。
 
