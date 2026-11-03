@@ -90,6 +90,9 @@ trait PluginContext:
   def resourceHashesEnabled: Boolean = false
   /** Runs one generation (txt2img or img2img depending on params) and saves the images. */
   def generate(p: GenerationParams): Seq[OutputImage]
+  /** Generate from a temporary init image while recording the original input as provenance. */
+  def generateWithInputSnapshot(p: GenerationParams, original: String): Seq[OutputImage] =
+    throw new UnsupportedOperationException("This host cannot track snapshotted input provenance")
   /** Runs one generation without persisting it as a user output: images stay in the temp dir,
     * no gallery/ImageSaved event, caller deletes them.
     */
@@ -117,6 +120,8 @@ trait PluginContext:
   def saveImage(img: BufferedImage, kind: String, params: GenerationParams, infotext: String): OutputImage
   /** Reads a job image using the host image access policy. */
   def readImage(path: Path): BufferedImage = sdfx.core.png.PngMetadata.readImage(path)
+  /** Decode one immutable byte snapshot; protected hosts override to supply their secret. */
+  def readImageBytes(bytes: Array[Byte]): BufferedImage = sdfx.core.png.ScrambledPng.read(bytes, None).image
   def tempFile(suffix: String): Path
   /** Write a temporary image using the host protection policy; protected hosts must override this. */
   def writeTempImage(image: BufferedImage, path: Path): Unit =

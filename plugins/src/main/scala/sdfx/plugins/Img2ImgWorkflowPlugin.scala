@@ -52,9 +52,9 @@ class Img2ImgWorkflowPlugin extends Plugin:
 
   override def run(p: GenerationParams, v: Values, ctx: PluginContext): JobOutput =
     Support.requireImg2Img(p, name)
-    val next = phaseParams(p, v, ctx)
     val mode = v.str("quick_mask", "Default")
     if mode == "Default" then
+      val next = phaseParams(p, v, ctx, None)
       val invert = flag(v, "mask_invert")
       val withMask = if invert && next.img2img.exists(_.mask.nonEmpty) then
         next.copy(img2img = next.img2img.map(i => i.copy(inpaintingMaskInvert = !i.inpaintingMaskInvert)),
@@ -71,20 +71,35 @@ class Img2ImgWorkflowPlugin extends Plugin:
       case _ => throw new IllegalArgumentException(s"Workflow: unknown colour mask '$mode'")
     val threshold = integer(v, "mask_threshold", 1, 1, 256)
     val invert = flag(v, "mask_invert")
-    val source = ctx.readImage(Paths.get(p.img2img.get.initImage))
+    val original = p.img2img.get.initImage
+    val bytes = scala.util.Using.resource(Files.newInputStream(Paths.get(original)))(_.readNBytes(48 * 1024 * 1024 + 1))
+    Img2ImgWorkflowPlugin.requireSafePng(bytes)
+    val source = ctx.readImageBytes(bytes)
+    val next = phaseParams(p, v, ctx, Some(source))
     val mask = Img2ImgWorkflowPlugin.colorMask(source, color, threshold, invert)
     if ctx.isInterrupted then return JobOutput(Nil)
-    val temp = ctx.tempFile(".png")
+    val temps = scala.collection.mutable.ArrayBuffer.empty[Path]
+    def stage(image: BufferedImage): Path =
+      val path = ctx.tempFile(".png")
+      temps += path
+      Option(path.getParent).foreach(Files.createDirectories(_))
+      ctx.writeTempImage(image, path)
+      path
     try
-      Option(temp.getParent).foreach(Files.createDirectories(_))
-      ctx.writeTempImage(mask, temp)
+      val inputImage = if ctx.imageScramblingEnabled then Img2ImgWorkflowPlugin.protectedSource(source) else source
+      val input = stage(inputImage)
+      val maskPath = stage(mask)
       val settings = ujson.Obj("mode" -> mode, "color" -> f"#$color%06x", "threshold" -> threshold, "invert" -> invert).render()
-      val prepared = next.copy(img2img = next.img2img.map(_.copy(mask = Some(temp.toString), inpaintingMaskInvert = false)),
+      val prepared = next.copy(img2img = next.img2img.map(_.copy(initImage = input.toString,
+        mask = Some(maskPath.toString), inpaintingMaskInvert = false)),
         extra = next.extra + ("Img2Img Workflow mask" -> settings))
-      JobOutput(ctx.generate(prepared))
-    finally Support.deleteQuietly(temp)
+      JobOutput(ctx.generateWithInputSnapshot(prepared, original))
+    finally temps.foreach { path =>
+      try Files.deleteIfExists(path)
+      catch case scala.util.control.NonFatal(e) => ctx.log(s"Workflow temporary cleanup failed for $path: ${e.getMessage}")
+    }
 
-  private def phaseParams(p: GenerationParams, v: Values, ctx: PluginContext): GenerationParams =
+  private def phaseParams(p: GenerationParams, v: Values, ctx: PluginContext, captured: Option[BufferedImage]): GenerationParams =
     val phase = v.str("phase", "None")
     if phase == "None" then return p
     val (prefix, defaultWidth, defaultHeight, defaultCount, defaultDenoise) = phase match
@@ -105,7 +120,7 @@ class Img2ImgWorkflowPlugin extends Plugin:
     require(width >= 64 && width % 8 == 0, "Workflow: selected ratio requires a valid width divisible by 8")
     val orientation = v.str("orientation", "Guess") match
       case "Guess" =>
-        val image = ctx.readImage(Paths.get(p.img2img.get.initImage))
+        val image = captured.getOrElse(ctx.readImage(Paths.get(p.img2img.get.initImage)))
         if image.getWidth > image.getHeight then "Horizontal" else if image.getWidth < image.getHeight then "Vertical" else "Square"
       case s @ ("Vertical" | "Horizontal" | "Square") => s
       case s => throw new IllegalArgumentException(s"Workflow: unknown orientation '$s'")
@@ -121,6 +136,62 @@ class Img2ImgWorkflowPlugin extends Plugin:
 
 
 object Img2ImgWorkflowPlugin:
+  /** Conservative admission until Java and Python image-normalisation parity is proven. */
+  def requireSafePng(bytes: Array[Byte]): Unit =
+    val signature = Array[Byte](-119, 80, 78, 71, 13, 10, 26, 10)
+    require(bytes.length <= 48 * 1024 * 1024 && bytes.length >= 33 && bytes.take(8).sameElements(signature),
+      "Workflow: colour mask currently requires an 8-bit RGB PNG up to 48 MiB")
+    def u32(i: Int): Long = ((bytes(i).toLong & 255) << 24) | ((bytes(i + 1).toLong & 255) << 16) |
+      ((bytes(i + 2).toLong & 255) << 8) | (bytes(i + 3).toLong & 255)
+    require(u32(8) == 13 && new String(bytes, 12, 4, java.nio.charset.StandardCharsets.US_ASCII) == "IHDR" &&
+      bytes(24) == 8 && bytes(25) == 2 && bytes(26) == 0 && bytes(27) == 0 && bytes(28) == 0 && u32(16) > 0 && u32(20) > 0 && u32(16) <= 4096 && u32(20) <= 4096,
+      "Workflow: colour mask requires an 8-bit opaque RGB PNG up to 4096 pixels per side")
+    var pos = 8
+    var textBytes = 0L
+    var dataBytes = 0L
+    var seenHeader = false
+    var seenData = false
+    var dataClosed = false
+    var done = false
+    while pos < bytes.length && !done do
+      require(bytes.length - pos >= 12, "Workflow: malformed PNG chunk")
+      val length = u32(pos)
+      require(length <= bytes.length.toLong - pos - 12, "Workflow: malformed PNG chunk length")
+      val kind = new String(bytes, pos + 4, 4, java.nio.charset.StandardCharsets.US_ASCII)
+      require(Set("IHDR", "IDAT", "IEND", "tEXt").contains(kind),
+        s"Workflow: PNG chunk $kind is not supported for colour masks")
+      val crc = new java.util.zip.CRC32()
+      crc.update(bytes, pos + 4, length.toInt + 4)
+      require(crc.getValue == u32(pos + 8 + length.toInt), "Workflow: invalid PNG chunk CRC")
+      kind match
+        case "IHDR" =>
+          require(!seenHeader && pos == 8 && length == 13, "Workflow: invalid PNG header placement")
+          seenHeader = true
+        case "IDAT" =>
+          require(seenHeader && !dataClosed, "Workflow: invalid PNG image data placement")
+          seenData = true
+          dataBytes += length
+        case "tEXt" =>
+          require(seenHeader, "Workflow: PNG text before header")
+          if seenData then dataClosed = true
+          textBytes += length
+          require(textBytes <= 1024 * 1024, "Workflow: PNG metadata is too large")
+        case "IEND" =>
+          require(seenHeader && seenData && dataBytes > 0 && length == 0, "Workflow: incomplete PNG image data")
+          done = true
+      pos += length.toInt + 12
+    require(done && pos == bytes.length, "Workflow: incomplete PNG or extra trailing bytes")
+
+  /** Pixel protection accepts 8-bit RGB/RGBA; preserve visible pixels and alpha from 8-bit inputs. */
+  def protectedSource(src: BufferedImage): BufferedImage =
+    require(src.getColorModel.getComponentSize.forall(_ <= 8),
+      "Workflow: protected colour mask requires an input with at most 8 bits per channel")
+    val kind = if src.getColorModel.hasAlpha then BufferedImage.TYPE_INT_ARGB else BufferedImage.TYPE_INT_RGB
+    val out = new BufferedImage(src.getWidth, src.getHeight, kind)
+    val pixels = src.getRGB(0, 0, src.getWidth, src.getHeight, null, 0, src.getWidth)
+    out.setRGB(0, 0, src.getWidth, src.getHeight, pixels, 0, src.getWidth)
+    out
+
   /** Threshold 1 means exact RGB; larger values allow up to threshold - 1 per channel. */
   def colorMask(src: BufferedImage, color: Int, threshold: Int, invert: Boolean): BufferedImage =
     require(threshold >= 1 && threshold <= 256, "Workflow: threshold must be in 1..256")

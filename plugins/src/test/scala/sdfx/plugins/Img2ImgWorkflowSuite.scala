@@ -154,3 +154,57 @@ class Img2ImgWorkflowSuite extends munit.FunSuite:
     plugin.run(p, values("quick_mask" -> "White"), ctx)
     assert(observed.nonEmpty && !java.nio.file.Files.exists(observed.get))
   }
+
+  test("quick mask and generated init image use the same snapshot when source is replaced") {
+    var source: java.nio.file.Path = null
+    var replaced = false
+    var observedPixel = 0
+    val ctx = new FakeContext:
+      override def writeTempImage(image: java.awt.image.BufferedImage, path: java.nio.file.Path): Unit =
+        super.writeTempImage(image, path)
+        if !replaced then
+          replaced = true
+          val replacement = solid(64, 64, 0x224488)
+          javax.imageio.ImageIO.write(replacement, "png", source.toFile)
+      override def generate(p: GenerationParams): Seq[sdfx.core.plugins.api.OutputImage] =
+        observedPixel = javax.imageio.ImageIO.read(java.nio.file.Path.of(p.img2img.get.initImage).toFile).getRGB(0, 0) & 0xffffff
+        super.generate(p)
+    source = java.nio.file.Path.of(ctx.initImage(64, 64))
+    javax.imageio.ImageIO.write(ctx.solid(64, 64, 0xffffff), "png", source.toFile)
+    val p = GenerationParams(img2img = Some(Img2ImgParams(source.toString)))
+    plugin.run(p, values("quick_mask" -> "White"), ctx)
+    assert(replaced)
+    assertEquals(observedPixel, 0xffffff)
+  }
+
+  test("protected source conversion preserves grayscale pixels and rejects high bit depth") {
+    val gray = new java.awt.image.BufferedImage(2, 1, java.awt.image.BufferedImage.TYPE_BYTE_GRAY)
+    gray.getRaster.setSample(0, 0, 0, 20); gray.getRaster.setSample(1, 0, 0, 200)
+    val converted = Img2ImgWorkflowPlugin.protectedSource(gray)
+    assertEquals((0 until 2).map(x => converted.getRGB(x, 0)), (0 until 2).map(x => gray.getRGB(x, 0)))
+    val high = new java.awt.image.BufferedImage(2, 1, java.awt.image.BufferedImage.TYPE_USHORT_GRAY)
+    intercept[IllegalArgumentException](Img2ImgWorkflowPlugin.protectedSource(high))
+  }
+
+  test("quick mask rejects formats with unverified worker colour or orientation semantics") {
+    val input = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    val rgb = new java.io.ByteArrayOutputStream()
+    javax.imageio.ImageIO.write(input, "png", rgb)
+    Img2ImgWorkflowPlugin.requireSafePng(rgb.toByteArray)
+    val alpha = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+    val rgba = new java.io.ByteArrayOutputStream()
+    javax.imageio.ImageIO.write(alpha, "png", rgba)
+    intercept[IllegalArgumentException](Img2ImgWorkflowPlugin.requireSafePng(rgba.toByteArray))
+    val jpg = new java.io.ByteArrayOutputStream()
+    javax.imageio.ImageIO.write(input, "jpeg", jpg)
+    intercept[IllegalArgumentException](Img2ImgWorkflowPlugin.requireSafePng(jpg.toByteArray))
+    val bytes = rgb.toByteArray
+    val exif = Array[Byte](0, 0, 0, 1, 101, 88, 73, 102, 1, 0, 0, 0, 0)
+    val withExif = bytes.take(33) ++ exif ++ bytes.drop(33)
+    intercept[IllegalArgumentException](Img2ImgWorkflowPlugin.requireSafePng(withExif))
+    val duplicateHeader = bytes.take(33) ++ bytes.slice(8, 33) ++ bytes.drop(33)
+    intercept[IllegalArgumentException](Img2ImgWorkflowPlugin.requireSafePng(duplicateHeader))
+    val badCrc = bytes.clone()
+    badCrc(badCrc.length - 1) = (badCrc.last ^ 1).toByte
+    intercept[IllegalArgumentException](Img2ImgWorkflowPlugin.requireSafePng(badCrc))
+  }
