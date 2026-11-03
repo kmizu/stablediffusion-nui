@@ -225,6 +225,32 @@ class JobQueueSuite extends munit.FunSuite:
     finally java.nio.file.Files.deleteIfExists(source)
   }
 
+  test("script snapshots in a folder retain each original path") {
+    val folder = java.nio.file.Files.createTempDirectory(home.root, "snapshot-folder-")
+    val sourceA = folder.resolve("a.png"); val sourceB = folder.resolve("b.png")
+    val image = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.PngMetadata.write(image, sourceA, Nil)
+    sdfx.core.png.PngMetadata.write(image, sourceB, Nil)
+    val plugin = new Plugin:
+      def id = "test_folder_snapshot"
+      def name = "test folder snapshot"
+      def kind = PluginKind.Script
+      override def run(p: GenerationParams, values: Values, ctx: PluginContext): JobOutput =
+        val staged = ctx.tempFile(".png")
+        try
+          ctx.writeTempImage(ctx.readImage(java.nio.file.Path.of(p.img2img.get.initImage)), staged)
+          val request = p.copy(img2img = p.img2img.map(_.copy(initImage = staged.toString)))
+          JobOutput(ctx.generateWithInputSnapshot(request, p.img2img.get.initImage))
+        finally java.nio.file.Files.deleteIfExists(staged)
+    val params = base.copy(img2img = Some(sdfx.core.model.Img2ImgParams("")))
+    val result = await(queue.submit(Job(params).copy(script = Some(plugin -> Values.empty),
+      img2imgFolder = Some(Img2ImgFolderSpec(folder.toString)))))
+    assertEquals(result.images.map(_.params.img2img.get.initImage), Seq(sourceA.toRealPath().toString, sourceB.toRealPath().toString))
+    result.images.zip(Seq(sourceA, sourceB)).foreach { (output, source) =>
+      assertEquals(sdfx.core.png.PngMetadata.readTexts(output.path).get("NUI img2img source"), Some(source.toRealPath().toString))
+    }
+  }
+
   test("script context writes protected temporary images that round trip and clean up") {
     val session = new sdfx.core.png.ImageScrambleSession
     session.unlock("mask secret")

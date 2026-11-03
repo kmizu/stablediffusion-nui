@@ -26,3 +26,5 @@
 PNG parser の追補: 重複 IHDR の RED を確認し、chunk CRC、header の先頭・一意、IDAT の必須・連続、IEND の長さ・末尾と形式パラメータを検査。非 interlaced 8-bit opaque RGB PNG 以外を拒否する。更新版 source-class JAR SHA-256 `3942be498e63b3cfd2cf5b7c1fd1c38e2a9db2602c04af6d3b6bff561f38b2f1` と変更 class 24 件を照合。非表示 MainWindow の Quick Mask 選択→dry-run 生成も成功（`outputs/quickmask62-offscreen7`）。
 
 更新版を公式 MCP SDK と source-class 保護 session で SD1.5／SDXL の各 12 steps に再試験し、合成 PNG を入力に生成、暗号化結果と一時ファイル削除を確認。MCP で同一手書き mask の標準 img2img、保護 session での復号結果はいずれも同モデル・同 seed で全 RGB 一致。2 モデルの復号画像も目視した。SDXL での人工 fixture の背景は既存 inpaint の対照と同様ほぼ変化しない。記録は `outputs/quickmask62-snapshot-{sd15,sdxl}/receipt.json`、保護画像は `outputs/quickmask62-snapshot-protected-{sd15,sdxl}`。自然画像、上流との mask 画素比較、実際に表示した GUI、配布 EXE は未確認。MCP のユーザー指定元 path は事前 snapshot に変換されるため、その元 path の provenance は本作業で保証していない。
+
+追加で folder 入力の元ファイル 2 件を script がそれぞれ snapshot したとき、出力の params と独立 PNG chunk が各元ファイルを指すことを fake engine の queue テストで確認（1/1）。初回はテスト側の Scala `toRealPath()` 呼び出し漏れで compile failure、修正後 pass。実 GPU の folder 組合せは未確認。
