@@ -1,5 +1,13 @@
 # State Manager V2 保存データ読み取り（作業中）
 
+## MCP 履歴検索（2026-11-03）
+
+main 統合時も MCP 44件・履歴20件・`ui/assembly` が exit 0。生成 JAR の SHA-256 は `23b28fc8bb8d8414321f056632b9f5fe1ea19bdb91e2a96a995f47f9c0eb1102` で、下記 SDK transport 試験に使用した JAR と一致した。
+
+`generation_history` の一覧に `query`・`offset`・`limit` を追加し、GUI と共有した名前／prompt／negative prompt／checkpoint／sampler のカンマ区切り AND 検索を行う。既定 limit 1000、total と next_offset を返す。ページ間の履歴変更は snapshot されない。list は従来どおり名前と ID だけだが、検索一致や件数から保存値を推測できるため、その旨をツール説明と日本語文書に記載。get で list 専用引数を拒否し、元 JSON と画像は返さない。
+
+未実装時の RED は query 不明で失敗。変更後の `McpToolsSuite` 44/44、GUI 側 `GenerationHistorySuite` 20/20、source-built `ui/assembly` が成功。JAR SHA-256 `23b28fc8bb8d8414321f056632b9f5fe1ea19bdb91e2a96a995f47f9c0eb1102`。上流 JS fixture を GUI で取り込んだ library に合成レコードを追加し、公式 MCP SDK で stdio と HTTP の両方から 2 ページの検索、AND、0 件、詳細と library bytes 不変を確認（`outputs/search-pages-stdio/receipt.json`、`outputs/search-pages-http/receipt.json`）。stdio は読取り完了後の終了で非同期 engine 起動が中断されている。配布版・ページ間の実際の同時更新・実 A1111 データは未検証。
+
 ## 上流 JS を用いた再現 fixture（2026-11-03）
 
 main 統合時も `StateManagerV2Suite` 4件と `RealNamedGenerationStatesCheck`、`ui/assembly` が exit 0。JAR は `91c567ad2b0e1331c3590ae39082d7db261b5056e59207788091c5ff0a6e2c95` と一致。上流の周辺環境は模擬されている。

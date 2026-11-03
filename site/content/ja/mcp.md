@@ -167,6 +167,8 @@ claude mcp add --transport http stablediffusion-nui-gui http://127.0.0.1:7861/mc
 
 `generation_history` はデスクトップの履歴やお気に入りを読み取ります。`action: "list"`、`mode: "txt2img"`（または `img2img`、`inpaint`）、`collection: "history"`（または `favourites`）で名前と ID を一覧し、`action: "get"` と選んだ `id` で保存済み項目を取得できます。整数と小数の値は精度を保つため文字列として返り、各項目に型が付きます。履歴の名前や項目には個人情報が含まれ得ます。取り込んだ元データや画像は返さず、設定の復元・生成・履歴変更も行いません。
 
+一覧では `query` にカンマ区切りで語を指定すると、名前・prompt・negative prompt・checkpoint・sampler を大文字小文字を区別せず検索し、すべての語に一致する項目を返します。`limit`（1〜1000、既定1000）と `offset` で分割でき、`total` と次ページの `next_offset`（最後は `null`）を返します。ページ取得の間に履歴が変わると項目がずれることがあります。名前以外の値は一覧に出ませんが、検索結果や件数からその内容を推測できるため、検索も履歴を読む権限のあるクライアントで使ってください。
+
 ## 生成の引数
 
 `txt2img` には `prompt` が、`img2img` にはさらに `init_image` が必要です。ほかの引数は省略できます。

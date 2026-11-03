@@ -9,16 +9,19 @@ final class GenerationHistoryTool(services: AppServices) extends McpTool:
   override def title = "Generation history"
   override def readOnly = true
   override def idempotent = true
-  def description = "List local generation history or favourites and read the mapped fields of one selected entry. Names and fields may contain private information. Original imported metadata and images are not returned. This tool does not restore settings or generate images."
+  def description = "List or search local generation history or favourites and read the mapped fields of one selected entry. Names, fields and search matches may reveal private information. Original imported metadata and images are not returned. This tool does not restore settings or generate images."
   def inputSchema = Schema.obj(Seq(
     "action" -> Schema.str("list or get", Seq("list", "get")),
     "mode" -> Schema.str("Generation mode", Seq("txt2img", "img2img", "inpaint")),
     "collection" -> Schema.str("history or favourites", Seq("history", "favourites"), Some("history")),
-    "id" -> Schema.str("Entry UUID; required for get")
+    "id" -> Schema.str("Entry UUID; required for get"),
+    "query" -> Schema.str("List only: comma-separated AND terms matching name, prompt, negative prompt, checkpoint or sampler, ignoring case"),
+    "offset" -> Schema.int("List only: zero-based offset; concurrent history changes can shift pages", min = Some(0), max = Some(1000)),
+    "limit" -> Schema.int("List only: maximum results (default 1000)", min = Some(1), max = Some(1000), default = Some(1000))
   ), Seq("action", "mode"))
 
   def call(input: ujson.Obj, ctx: ToolContext): ToolResult =
-    val args = Args(input, Seq("action", "mode", "collection", "id"))
+    val args = Args(input, Seq("action", "mode", "collection", "id", "query", "offset", "limit"))
     val action = args.reqStr("action")
     val mode = args.reqStr("mode")
     val collection = args.str("collection").getOrElse("history")
@@ -27,12 +30,22 @@ final class GenerationHistoryTool(services: AppServices) extends McpTool:
     require(Set("history", "favourites")(collection), "Unknown history collection")
     val id = if action == "get" then Some(args.reqStr("id")) else None
     require(action == "get" || !args.has("id"), "id is only valid for get")
+    require(action == "list" || !Seq("query", "offset", "limit").exists(args.has), "query, offset and limit are only valid for list")
+    val query = args.str("query").getOrElse("")
+    require(query.length <= 1024, "query is too long")
+    val offset = args.int("offset", 0, 1000).getOrElse(0)
+    val limit = args.int("limit", 1, 1000).getOrElse(1000)
     val store = new PresetStore(services.home.configDir.resolve("generation-history"), PresetLimits(maxCollections = 6))
     val library = store.load().fold(e => throw ToolError(e.issues.map(_.message).mkString("; ")), _.library)
     val records = library.collections.find(_.id == s"$collection-$mode").toVector.flatMap(_.presets).reverse
     val result = ujson.Obj("mode" -> mode, "collection" -> collection)
     if action == "list" then
-      result("entries") = ujson.Arr.from(records.map(r => ujson.Obj("id" -> r.id.toString, "name" -> r.name)))
+      val matches = records.filter(HistorySearch.matches(_, query))
+      val page = matches.slice(offset, offset + limit)
+      result("entries") = ujson.Arr.from(page.map(r => ujson.Obj("id" -> r.id.toString, "name" -> r.name)))
+      result("total") = matches.size
+      result("offset") = offset
+      result("next_offset") = if offset + page.size < matches.size then ujson.Num(offset + page.size) else ujson.Null
     else
       val record = records.find(_.id.toString == id.get).getOrElse(throw ToolError("History entry not found"))
       val fields = record.fields.toVector.sortBy(_._1.render).map { (key, value) =>

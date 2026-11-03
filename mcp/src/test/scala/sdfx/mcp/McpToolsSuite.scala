@@ -80,6 +80,31 @@ class McpToolsSuite extends munit.FunSuite:
     assertEquals(store.load().toOption.get.library, library)
   }
 
+  test("generation history MCP searches saved fields and paginates without returning field values") {
+    import sdfx.core.presets.*
+    def rec(name: String, prompt: String, model: String) =
+      PresetRecord(java.util.UUID.randomUUID(), name, Map(FieldKey(Vector("generation", "prompt")) -> PresetAtom.Text(prompt),
+        FieldKey(Vector("model", "checkpoint")) -> PresetAtom.Text(model)), None, Set.empty, Vector.empty, Vector.empty)
+    val first = rec("first", "Blue fox", "XL one")
+    val second = rec("second", "blue forest", "XL two")
+    val third = rec("third", "red fox", "SD one")
+    val entries = Vector(first, second, third)
+    val library = PresetLibrary(1, Vector(PresetCollection("history-txt2img", entries.flatMap(_.fields.keys).toSet, Vector.empty, entries, Vector.empty)), Vector.empty)
+    val store = new PresetStore(home.configDir.resolve("generation-history"), PresetLimits(maxCollections = 6))
+    assert(store.save(store.load().toOption.get.revision, library).isRight)
+    val firstPage = ok("generation_history", ujson.Obj("action" -> "list", "mode" -> "txt2img", "query" -> " BLUE, xl", "limit" -> 1))("structuredContent")
+    assertEquals(firstPage("total").num.toInt, 2)
+    assertEquals(firstPage("entries").arr.head("id").str, second.id.toString)
+    assertEquals(firstPage("next_offset").num.toInt, 1)
+    assert(!firstPage.render().contains("blue forest"))
+    val secondPage = ok("generation_history", ujson.Obj("action" -> "list", "mode" -> "txt2img", "query" -> "blue,xl", "limit" -> 1, "offset" -> 1))("structuredContent")
+    assertEquals(secondPage("entries").arr.head("id").str, first.id.toString)
+    assertEquals(secondPage("next_offset"), ujson.Null)
+    assert(call("generation_history", ujson.Obj("action" -> "get", "mode" -> "txt2img", "id" -> first.id.toString, "query" -> "blue"))("isError").bool)
+    assert(call("generation_history", ujson.Obj("action" -> "list", "mode" -> "txt2img", "limit" -> 0))("isError").bool)
+    assertEquals(store.load().toOption.get.library, library)
+  }
+
   test("Aesthetic embedding creation is discoverable and refuses paths outside the permitted roots") {
     val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
     val tool = ts.find(_("name").str == "aesthetic_embedding").getOrElse(fail("aesthetic embedding tool missing"))
