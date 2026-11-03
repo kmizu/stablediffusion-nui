@@ -20,7 +20,12 @@ object PngMetadata:
 
   /** All text entries (tEXt, iTXt, zTXt) keyed by keyword. */
   def readTexts(path: Path): Map[String, String] =
-    val in = ImageIO.createImageInputStream(path.toFile)
+    readTextsFrom(ImageIO.createImageInputStream(path.toFile))
+
+  def readTexts(bytes: Array[Byte]): Map[String, String] =
+    readTextsFrom(ImageIO.createImageInputStream(new ByteArrayInputStream(bytes)))
+
+  private def readTextsFrom(in: javax.imageio.stream.ImageInputStream): Map[String, String] =
     if in == null then Map.empty
     else
       Using.resource(in) { in =>
@@ -38,6 +43,10 @@ object PngMetadata:
 
   def readParameters(path: Path): Option[String] =
     try readTexts(path).get(ParametersKey).filter(_.nonEmpty)
+    catch case _: Exception => None
+
+  def readParameters(bytes: Array[Byte]): Option[String] =
+    try readTexts(bytes).get(ParametersKey).filter(_.nonEmpty)
     catch case _: Exception => None
 
   private def children(n: Node): Iterator[Node] =

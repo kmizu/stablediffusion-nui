@@ -6,6 +6,33 @@ import java.util.Locale
 import javax.imageio.ImageIO
 
 class ImageInputRaceSuite extends munit.FunSuite:
+  test("get_image data and metadata come from the verified open file") {
+    assume(System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win"))
+    val root = Files.createTempDirectory("mcp-get-race-").toRealPath()
+    val directory = root.resolve("images")
+    val actual = Files.createDirectory(root.resolve("actual"))
+    val outside = Files.createTempDirectory("mcp-get-outside-").toRealPath()
+    val img = new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB)
+    img.setRGB(0, 0, 0x112233)
+    sdfx.core.png.PngMetadata.write(img, actual.resolve("input.png"), Seq("parameters" -> "inside metadata"))
+    img.setRGB(0, 0, 0xaabbcc)
+    sdfx.core.png.PngMetadata.write(img, outside.resolve("input.png"), Seq("parameters" -> "outside metadata"))
+    def junction(target: java.nio.file.Path): Unit =
+      val proc = new ProcessBuilder("cmd.exe", "/c", "mklink", "/J", directory.toString, target.toString)
+        .redirectErrorStream(true).start()
+      val message = new String(proc.getInputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+      assertEquals(proc.waitFor(), 0, message)
+    junction(actual)
+    val original = Files.readAllBytes(actual.resolve("input.png")).toSeq
+    val bytes = Images.readVerifiedBytes(directory.resolve("input.png"), new PathPolicy(() => Seq(root)), "image", () => {
+      Files.delete(directory)
+      junction(outside)
+    })
+    assertEquals(bytes.toSeq, original)
+    assertEquals(Images.encodeBytes(bytes, directory.resolve("input.png"), 0).width, 8)
+    assertEquals(sdfx.core.png.PngMetadata.readParameters(bytes), Some("inside metadata"))
+  }
+
   test("path snapshots retain original image bytes, format and metadata") {
     assume(System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win"))
     val root = Files.createTempDirectory("mcp-exact-bytes-").toRealPath()
@@ -32,6 +59,8 @@ class ImageInputRaceSuite extends munit.FunSuite:
     val temp: String => java.nio.file.Path = suffix => Files.createTempFile(root, "stage-", suffix)
     val error = intercept[ToolError](Images.materialize(input.toString, "init_image", policy, root, temp, "unsupported"))
     assert(error.getMessage.contains("base64"))
+    val pathOnly = intercept[ToolError](Images.readVerifiedBytes(input, policy, "path", platform = "unsupported"))
+    assert(!pathOnly.getMessage.contains("base64"))
     val encoded = java.util.Base64.getEncoder.encodeToString(Files.readAllBytes(input))
     val (result, owned) = Images.materialize(encoded, "init_image", policy, root, temp, "unsupported")
     assert(owned.contains(result) && Files.isRegularFile(result))

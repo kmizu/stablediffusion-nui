@@ -1,5 +1,6 @@
 """Linux stdio MCP dry-run check for verified local image inputs."""
 import json
+import base64
 import os
 from pathlib import Path
 import select
@@ -51,6 +52,12 @@ try:
     assert not result.get("isError"), result
     assert len(result["structuredContent"]["images"]) == 1, result
     assert image.is_file()
+    send({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "get_image", "arguments": {
+        "path": str(image), "max_side": 0}}})
+    returned = response(3)
+    assert not returned.get("isError"), returned
+    payload = next(x for x in returned["content"] if x["type"] == "image")
+    assert base64.b64decode(payload["data"]) == image.read_bytes()
     (home / "receipt.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     print("LINUX_MCP_SNAPSHOT_OK", home, flush=True)
 finally:

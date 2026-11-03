@@ -1066,10 +1066,11 @@ final class McpTools(
         val n = p.getFileName.toString.toLowerCase
         if !Seq(".png", ".jpg", ".jpeg", ".webp").exists(n.endsWith) then throw ToolError("only .png / .jpg / .webp files can be read")
         val side = args.int("max_side", 0, MaxSide).getOrElse(1024)
-        if Images.estimateBase64(p, side) > MaxInlineBytes then throw ToolError("image too large to return inline; use a smaller max_side")
-        val e = Images.encode(p, side)
+        val data = Images.readVerifiedBytes(p, pathPolicy, "path")
+        if Images.estimateBase64(data, side) > MaxInlineBytes then throw ToolError("image too large to return inline; use a smaller max_side")
+        val e = Images.encodeBytes(data, p, side)
         if e.base64.length > MaxInlineBytes then throw ToolError(s"image too large to return inline (${e.width}x${e.height}); use a smaller max_side")
-        val info = services.gallery.item(p).flatMap(_.parameters)
+        val info = sdfx.core.png.PngMetadata.readParameters(data)
         val structured = ujson.Obj("path" -> p.toString, "infotext" -> info.map(ujson.Str(_)).getOrElse(ujson.Null))
         ToolResult(
           Seq(Content.image(e.base64, e.mimeType), Content.text(s"$p\n${info.getOrElse("(no parameters)")}"), Content.text(ujson.write(structured))),

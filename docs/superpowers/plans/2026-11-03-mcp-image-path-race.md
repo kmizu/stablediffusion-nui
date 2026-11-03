@@ -8,8 +8,10 @@
 
 `Images.materialize` を利用する画像入力については、Windows または Linux の verified handle から読み取った内容を検証し、元バイトのまま一時ファイルにして以後の処理へ渡す部分修正を実装。親の差替えによる漏出の再現テストは修正後 GREEN。Linux は `/usr/bin/python3` の固定 helper が `openat` 相当と `O_NOFOLLOW`・`O_NONBLOCK`・`fstat` を使う。他 OS や helper を利用できない環境はローカル path を明示拒否し base64/data URI は利用可能。ローカル path は 48 MiB 以下。stage の変更を防ぐものではなく、同じユーザーでサーバーの `.tmp` を変更できるプロセスは引き続き対象外。既存 MCP suite 47 件、verified handle suite 8 件も通過。
 
-`get_image`、PNG metadata 検査、VAE、Fastload と folder 等の別経路は未修正で、全 MCP path の解決を意味しない。Workflow flip は保留する。
+PNG metadata 検査、VAE、Fastload と folder 等の別経路は未修正で、全 MCP path の解決を意味しない。Workflow flip は保留する。
 
 公式 MCP SDK を使い、path 指定で SD1.5 animekawa_v10 と SDXL waiIllustriousSDXL_v170 の各 2 枚を img2img Workflow 経由で生成した。修正前の同一 source・seed・条件の生成結果と RGB ピクセルを SHA-256 で比較し、4 枚とも一致。`outputs/workflow62-snapshot-sd15/receipt.json` と `outputs/workflow62-snapshot-sdxl/receipt.json` にローカル記録を残した。JAR SHA-256 は `2b769048dfd317e488926d12ada1bf93d1b32411c6b4301f0f40be1d74d354ca`、変更 class とビルド成果物の hash は一致。実モデル確認はこの経路に限り、JPEG の EXIF 向きやアニメーション GIF を使う実モデル試験は未実施。stage の元ファイルパスを新たに provenance として記録する仕組みもない。
 
 Linux は WSL Ubuntu ext4 上で、実際に JAR の `VerifiedFolderInput.copy` と `Images.materialize` を呼び、open 後の親 symlink 差替えに対する元バイト維持、open 前の外部 symlink 拒否、FIFO の非 blocking 拒否、通常 PNG のバイト完全一致を確認。さらに stdio JSON-RPC の img2img を dry-run engine で実行し `LINUX_MCP_SNAPSHOT_OK` を確認。検証プログラムは `scripts/dev/VerifiedLinuxJvmProbe.java`、`scripts/dev/check_verified_unix.py`、`scripts/dev/check_linux_mcp_snapshot.py`。Linux の実モデルは未検証。
+
+`get_image` も verified handle で単一の byte 列を取得し、画像と infotext の両方をその内容から読み出す。Windows で open 後の junction 差替えに対するテストを含む MCP focused 4/4、既存 MCP 47/47、PNG metadata 15/15 が通過。公式 SDK の実 get_image で原寸バイト・infotext・縮小寸法を確認。Linux WSL の stdio JSON-RPC でも get_image の返却 bytes を原本と比較し一致。入力は 48 MiB 以下に制限される。JAR SHA-256 `f2af670ea9de3ebba6434e7bb27cd1da28c3e8c0f4c649b358586e5071069a64`、変更 class と build 成果物の hash が一致。

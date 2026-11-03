@@ -106,12 +106,7 @@ object Images:
         writeDecoded(decodeB64(data, field), field, tempFile)
       case _ if PathPolicy.isNetworkPath(s) || looksLikePath(s) =>
         val p = policy.resolve(s, field, base)
-        val roots = policy.allowedRoots.flatMap(r => scala.util.Try(r.toRealPath()).toOption)
-        val bytes = new ByteArrayOutputStream()
-        try sdfx.engine.VerifiedFolderInput.copy(p, roots, bytes, platform = platform, maxBytes = MaxInputBytes.toLong)
-        catch
-          case NonFatal(_) => throw ToolError(s"$field: verified input could not be read inside an allowed folder; use base64 image data if verified file handles are unavailable")
-        val data = bytes.toByteArray
+        val data = readVerifiedBytes(p, policy, field, platform = platform, base64Alternative = true)
         checkDims(dimensions(data), field)
         rejectProtected(ImageIO.createImageInputStream(new ByteArrayInputStream(data)), field)
         val img = try ImageIO.read(new ByteArrayInputStream(data)) catch case NonFatal(_) => null
@@ -129,6 +124,17 @@ object Images:
             catch case cleanup: Throwable => error.addSuppressed(cleanup)
             throw error
       case _ => writeDecoded(decodeB64(s, field), field, tempFile)
+
+  private[mcp] def readVerifiedBytes(p: Path, policy: PathPolicy, field: String,
+      afterOpen: () => Unit = () => (), platform: String = System.getProperty("os.name"),
+      base64Alternative: Boolean = false): Array[Byte] =
+    val roots = policy.allowedRoots.flatMap(r => scala.util.Try(r.toRealPath()).toOption)
+    val out = new ByteArrayOutputStream()
+    try sdfx.engine.VerifiedFolderInput.copy(p, roots, out, afterOpen = afterOpen, platform = platform, maxBytes = MaxInputBytes.toLong)
+    catch case NonFatal(_) =>
+      val hint = if base64Alternative then "; use base64 image data if verified file handles are unavailable" else ""
+      throw ToolError(s"$field: verified input could not be read inside an allowed folder$hint")
+    out.toByteArray
 
   private def decodeB64(data: String, field: String): Array[Byte] =
     val clean = data.replaceAll("\\s", "")
@@ -247,6 +253,39 @@ object Images:
       val bos = new ByteArrayOutputStream()
       ImageIO.write(out, "png", bos)
       Encoded(Base64.getEncoder.encodeToString(bos.toByteArray), "image/png", nw, nh)
+
+  private[mcp] def encodeBytes(data: Array[Byte], name: Path, maxSide: Int): Encoded =
+    val (w, h) = dimensions(data).getOrElse(throw ToolError("not a readable image"))
+    rejectProtected(ImageIO.createImageInputStream(new ByteArrayInputStream(data)), "image")
+    if maxSide <= 0 || math.max(w, h) <= maxSide then
+      Encoded(Base64.getEncoder.encodeToString(data), mimeOf(name), w, h)
+    else if math.max(w, h) > MaxDecodeSide then throw ToolError(s"image is too large to preview (${w}x$h)")
+    else
+      val img = ImageIO.read(new ByteArrayInputStream(data))
+      if img == null then throw ToolError("not a readable image")
+      val s = maxSide.toDouble / math.max(w, h)
+      val nw = math.max(1, math.round(w * s).toInt)
+      val nh = math.max(1, math.round(h * s).toInt)
+      val out = new BufferedImage(nw, nh, if img.getColorModel.hasAlpha then BufferedImage.TYPE_INT_ARGB else BufferedImage.TYPE_INT_RGB)
+      val g = out.createGraphics()
+      try
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+        g.drawImage(img, 0, 0, nw, nh, null)
+      finally g.dispose()
+      val bos = new ByteArrayOutputStream()
+      ImageIO.write(out, "png", bos)
+      Encoded(Base64.getEncoder.encodeToString(bos.toByteArray), "image/png", nw, nh)
+
+  private[mcp] def estimateBase64(data: Array[Byte], maxSide: Int): Long =
+    rejectProtected(ImageIO.createImageInputStream(new ByteArrayInputStream(data)), "image")
+    dimensions(data) match
+      case None => Long.MaxValue
+      case Some((w, h)) =>
+        if maxSide <= 0 || math.max(w, h) <= maxSide then (data.length.toLong + 2) / 3 * 4
+        else
+          val s = maxSide.toDouble / math.max(w, h)
+          (math.round(w * s) * math.round(h * s) * 4 + 1024) * 4 / 3
 
   /** Upper bound of the base64 size [[encode]] would produce, without reading the pixels. */
   def estimateBase64(p: Path, maxSide: Int): Long =
