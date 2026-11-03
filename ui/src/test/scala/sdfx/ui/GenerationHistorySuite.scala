@@ -27,6 +27,16 @@ class GenerationHistorySuite extends munit.FunSuite:
   private def values(n: Int): Map[FieldKey, PresetAtom] =
     Map(FieldKey(Vector("generation", "steps")) -> PresetAtom.Integer(n))
 
+  test("capture current settings as a favourite without adding automatic history") {
+    val record = PresetRecord(java.util.UUID.randomUUID(), "Saved setup", values(42), None, Set.empty, Vector.empty, Vector.empty)
+    val saved = GenerationHistory.saveFavourite(empty, Mode.Txt2Img, record).toOption.get
+    assertEquals(GenerationHistory.entries(saved, Mode.Txt2Img), Vector.empty)
+    assertEquals(GenerationHistory.favourites(saved, Mode.Txt2Img), Vector(record))
+    assert(GenerationHistory.saveFavourite(saved, Mode.Txt2Img, record.copy(id = java.util.UUID.randomUUID())).isLeft)
+    assert(GenerationHistory.saveFavourite(saved, Mode.Txt2Img, record.copy(name = "different")).isLeft)
+    assert(GenerationHistory.saveFavourite(saved, Mode.Img2Img, record.copy(id = java.util.UUID.randomUUID())).isRight)
+  }
+
   test("State Manager import saves bounded inline preview without overwriting an existing thumbnail") {
     val image = new java.awt.image.BufferedImage(16, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)
     image.setRGB(0, 0, 0xffff0000)

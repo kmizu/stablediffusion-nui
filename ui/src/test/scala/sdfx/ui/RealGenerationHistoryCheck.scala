@@ -140,6 +140,29 @@ object RealGenerationHistoryCheck:
       // 1. Auto-record + thumbnail
       configure("1girl, red kimono, cherry blossoms", 7101, steps, 6.0)
       val paramsA = fx(window.vms(Mode.Txt2Img).toParams)
+      fx {
+        control[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        control[TextField]("generation-states-name").setText("saved before generation")
+      }
+      eventually("capture button ready") { fx(!control[Button]("generation-favourites-capture").isDisabled) }
+      val queuedBefore = events.asScala.count(_.isInstanceOf[JobEvent.JobQueued])
+      fx { control[Button]("generation-favourites-capture").fire() }
+      eventually("current favourite saved") { fx {
+        control[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.name == "saved before generation")
+      }}
+      require(events.asScala.count(_.isInstanceOf[JobEvent.JobQueued]) == queuedBefore, "saving favourite started generation")
+      fx {
+        val list = control[ListView[PresetRecord]]("generation-favourites-list")
+        list.getSelectionModel.clearAndSelect(0)
+        window.vms(Mode.Txt2Img).prompt.set("changed after saving")
+        control[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmFire("generation-states-restore-field")
+      require(fx(window.vms(Mode.Txt2Img).prompt.get) == paramsA.prompt)
+      confirmFire("generation-favourites-delete")
+      eventually("temporary favourite removed") { fx(control[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty) }
+      fx { control[TabPane]("generation-states-tabs").getSelectionModel.select(1) }
+      note("saved and restored current settings as a favourite without starting generation")
       val imageA = generate()
       eventually("first entry") { historyItems.size == 1 }
       val idA = historyItems.head.id

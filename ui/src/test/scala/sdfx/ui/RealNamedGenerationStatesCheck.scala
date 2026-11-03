@@ -310,6 +310,59 @@ object RealNamedGenerationStatesCheck:
       require(deleted.collections.flatMap(_.presets).isEmpty)
       noWork()
       checked("actual Delete confirmation removes the state from visible list and disk")
+      fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        node[TextField]("generation-states-name").setText("saved without generation")
+        window.vms(mode).prompt.set("current favourite prompt")
+      }
+      eventually("favourite capture ready") { fx(!node[Button]("generation-favourites-capture").isDisabled) }
+      val editor = fx(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor)
+      val oldDraft = fx(editor.getText)
+      val heightEditor = fx(window.stage.getScene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor)
+      val oldHeight = fx(window.vms(mode).height.get)
+      val oldHeightDraft = fx(heightEditor.getText)
+      fx { heightEditor.setText("768"); editor.setText("invalid draft"); node[Button]("generation-favourites-capture").fire() }
+      fx {
+        require(node[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty)
+        require(node[TextArea]("generation-states-status").getText.nonEmpty)
+        require(window.vms(mode).height.get == oldHeight, "invalid numeric draft committed another editor")
+        heightEditor.setText(oldHeightDraft)
+        editor.setText(oldDraft)
+        node[Button]("generation-favourites-capture").fire()
+        window.openGenerationStates(Mode.Txt2Img)
+        window.openGenerationStates(mode)
+      }
+      eventually("current favourite saved") { fx {
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.name == "saved without generation")
+      }}
+      val historyFile = home.configDir.resolve("generation-history/library-v1.json")
+      val captured = PresetJson.readNative(Files.readAllBytes(historyFile), PresetLimits(maxCollections = 6)).toOption.get
+      require(captured.collections.find(_.id == "favourites-img2img").exists(_.presets.exists(_.name == "saved without generation")))
+      require(!captured.collections.find(_.id == "favourites-txt2img").exists(_.presets.exists(_.name == "saved without generation")))
+      noWork()
+      fx {
+        require(node[ListView[PresetRecord]]("generation-history-list").getItems.isEmpty)
+        node[ListView[PresetRecord]]("generation-favourites-list").getSelectionModel.clearAndSelect(0)
+        window.vms(mode).prompt.set("changed after favourite save")
+        node[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmButton("generation-states-restore-field")
+      fx { require(window.vms(mode).prompt.get == "current favourite prompt") }
+      screenshot("favourite-current-saved")
+      fx {
+        node[TextField]("generation-states-name").setText("saved without generation")
+        editor.setText("22")
+        node[Button]("generation-favourites-capture").fire()
+      }
+      eventually("duplicate favourite rejected") { fx {
+        node[TextArea]("generation-states-status").getText.contains("already has that name") &&
+          node[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 1
+      }}
+      fx { require(window.vms(mode).steps.get == 22, "valid numeric draft was not committed before duplicate save failure") }
+      confirmButton("generation-favourites-delete")
+      eventually("captured favourite deleted") { fx(node[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty) }
+      noWork()
+      checked("save current settings directly to favourites without generation and restore")
       val fixtureHistory = new GenerationHistoryStore(home.configDir.resolve("generation-history"), 50, thunk => thunk())
       def historyRecord(prompt: String): Unit =
         val latch = new CountDownLatch(1)

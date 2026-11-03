@@ -144,6 +144,7 @@ final class NamedGenerationStatesPane(
     favouritesToggle.setDisable(historyPending || historyLoading || historySelected.isEmpty)
     historyRename.setDisable(historyPending || historyLoading || historySelected.size != 1)
     favouritesRename.setDisable(historyPending || historyLoading || historySelected.size != 1)
+    favouriteCapture.setDisable(historyPending || historyLoading || pending)
     historyClear.setDisable(historyPending || historyLoading || historyEntries.isEmpty)
     historyImport.setDisable(historyPending || historyLoading)
     reload.setDisable(pending)
@@ -347,6 +348,25 @@ final class NamedGenerationStatesPane(
   historyRename.setId("generation-history-rename")
   private val favouritesRename = W.button("Rename", "Rename the selected entry in history and favourites") { renameSelectedHistory() }
   favouritesRename.setId("generation-favourites-rename")
+  private val favouriteCapture = W.button("Save current as favourite", "Commit the numeric editors and save using the name below; no image is generated. Committed values remain applied if saving fails.") {
+    val target = mode
+    ctx.commitPresetEditors(target) match
+      case Left(error) => status.setText(error)
+      case Right(_) => NamedGenerationStates.capture(name.getText, fields(target)) match
+        case Left(error) => failure(error)
+        case Right(record) =>
+          historyPending = true
+          refreshButtons()
+          history.saveFavourite(target, record) { result =>
+            historyPending = false
+            if !closed then
+              result match
+                case Left(error) => failure(error)
+                case Right(_) => status.setText(s"Saved '${record.name}' to ${target.key} favourites; no image was generated.")
+              refreshButtons()
+          }
+  }
+  favouriteCapture.setId("generation-favourites-capture")
   private val historyClear = W.button("Clear history", "Remove non-favourite history entries of this mode") {
     val target = mode
     if confirm("Clear history?", s"Delete all non-favourite ${target.key} history entries, including those hidden by search? Favourites are kept.") then
@@ -460,7 +480,7 @@ final class NamedGenerationStatesPane(
     new FlowPane(8, 6, keep, historyRename, historyFavourite, historyDelete, historyClear, historyImport)))
   historyTab.setId("generation-states-tab-history")
   historyTab.setClosable(false)
-  private val favouritesTab = new Tab("Favourites", new VBox(8, favouritesSearch, favouritesList, new FlowPane(8, 6, favouritesRename, favouritesToggle, favouritesDelete)))
+  private val favouritesTab = new Tab("Favourites", new VBox(8, favouritesSearch, favouritesList, new FlowPane(8, 6, favouriteCapture, favouritesRename, favouritesToggle, favouritesDelete)))
   favouritesTab.setId("generation-states-tab-favourites")
   favouritesTab.setClosable(false)
   tabs.getTabs.addAll(namedTab, historyTab, favouritesTab)

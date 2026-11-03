@@ -1,5 +1,15 @@
 # State Manager history and category restore (#23, partial)
 
+## 2026-11-03 現在の設定をお気に入りに保存
+
+main 統合時に `GenerationHistorySuite` 19件、`RealNamedGenerationStatesCheck` と `ui/assembly` が exit 0。JAR SHA-256 は `02a7c789793acdcf579b5e1fc395785b420e184d1d0a82fd10d94daac9a2da01`。下記の実モデル試験は分離 worktree の source-class GUI によるもので、この main JAR や配布版の実測ではない。
+
+上流の Save current UI settings に対応し、Favourites の `Save current as favourite` から下の名前欄を使って現在の mode の設定を生成せずに保存できる。履歴には追加せず、画像サムネイルも付けない。重複名や ID を拒否し、履歴の操作ロック内で保存直前に再検証する。数値欄が無効なら他の数値を確定せず保存を中止する。数値が有効なら保存に先立って欄が確定され、後の重複名や I/O エラーでもその値は画面に残る。
+
+`GenerationHistorySuite` 19/19 と offline 実 MainWindow で、無効 draft、重複名、mode 切替、保存済み prompt の復元、生成ジョブが始まらないことを確認し、`outputs/favourite-capture-gui/favourite-current-saved.png` を目視した。追加 GUI 試験 `outputs/favourite-capture-disk` は mode 切替中の保存先を disk でも照合。配布 EXE、物理操作、別 JVM の同名同時保存は未確認。
+
+source-class 実 MainWindow と実エンジンで、画像生成前に現在の設定を favourite に保存し、ジョブが開始されないこと、prompt を変更後に復元して実生成できることを SD1.5 512×512 と SDXL 832×832 の各8 steps で確認（`HISTORY_REAL_OK`）。結果は `outputs/favourite-capture-sd15/history-real-12645717205594699804` と `outputs/favourite-capture-sdxl/history-real-908297879063682458`。生成画像 `00000-7101.png` は両方とも桜と赤い着物の人物と目視。SHA-256 は順に `de17c3627754f43bbaa7d35b0eb6d4d04f7e7bcfde7204941fa0d09dc9cbbac8`、`5e8ec8ff7caa72b1ebe19ff2955251598f2e1cd33cbed98a0705ec7b56990d42`。
+
 ## 2026-11-03 履歴とお気に入りの名前変更
 
 main 統合時、`GenerationHistorySuite` 16件、`RealNamedGenerationStatesCheck` と `ui/assembly` が exit 0。JAR SHA-256 は `df9adb4cca0cf98a664166002b09a7ea6b17fb8523e112b0b3d2c7d0bb8ec723`。下記の実モデル試験は分離 worktree の source-class GUI で、この JAR や配布版の実測ではない。

@@ -126,6 +126,16 @@ object GenerationHistory:
     storeFavourites(store(library, mode, entries(library, mode).filterNot(r => ids(r.id))), mode,
       favourites(library, mode).filterNot(r => ids(r.id)))
 
+  def saveFavourite(library: PresetLibrary, mode: Mode, record: PresetRecord): Either[PresetError, PresetLibrary] =
+    def problem(message: String) = PresetError(Vector(PresetIssue("favourite", mode.key, message)))
+    val name = Option(record.name).getOrElse("")
+    val existing = entries(library, mode) ++ favourites(library, mode)
+    if name.trim.isEmpty || name != name.trim || name.codePointCount(0, name.length) > 256 ||
+      name.codePoints().toArray.exists(Character.isISOControl) then Left(problem("Enter a printable name of 1–256 characters"))
+    else if library.collections.exists(_.presets.exists(_.id == record.id)) then Left(problem("A history entry with this ID already exists"))
+    else if existing.exists(_.name == name) then Left(problem("Another history entry already has that name"))
+    else Right(storeFavourites(library, mode, favourites(library, mode) :+ record))
+
   def rename(library: PresetLibrary, mode: Mode, id: UUID, expectedName: String, name: String): Either[PresetError, PresetLibrary] =
     def problem(code: String, message: String) = PresetError(Vector(PresetIssue(code, mode.key, message)))
     val clean = Option(name).getOrElse("").trim
@@ -356,6 +366,13 @@ final class GenerationHistoryStore(directory: Path, limit: Int, dispatch: (() =>
     run {
       val result = mutate(lib => (GenerationHistory.rename(lib, mode, id, expectedName, name).toOption.get, None, Vector.empty),
         lib => GenerationHistory.rename(lib, mode, id, expectedName, name).map(_ => ())).map(_ => ())
+      dispatch(() => { done(result); if result.isRight then listener() })
+    }
+
+  def saveFavourite(mode: Mode, record: PresetRecord)(done: Either[PresetError, Unit] => Unit): Unit =
+    run {
+      val result = mutate(lib => (GenerationHistory.saveFavourite(lib, mode, record).toOption.get, None, Vector.empty),
+        lib => GenerationHistory.saveFavourite(lib, mode, record).map(_ => ())).map(_ => ())
       dispatch(() => { done(result); if result.isRight then listener() })
     }
 
