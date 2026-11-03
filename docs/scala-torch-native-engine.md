@@ -64,19 +64,21 @@ dimensions follow the original canvas. scala-torch's worker suite passed a
 unchanged. The no-Python NUI `Generator` integration also passed with an 80x48
 source and 64x64 model request, returning an 80x48 PNG with unmasked pixels
 preserved. Mask blur currently uses scala-torch's separable box approximation;
-pixel-exact parity with Pillow's Gaussian blur is not established. Blurred-color
-fill mode 0 and nine-channel U-Nets remain open.
+pixel-exact parity with Pillow's Gaussian blur is not established. Exact Pillow
+parity for blurred-color fill mode 0 and nine-channel U-Nets remain open.
 
 ## Native masked content fills (2026-11-03)
 
-Four-channel masked img2img now supports fill mode 1 (original pixels), mode 2
+Four-channel masked img2img now supports fill mode 0 (blurred surrounding color
+with a separable box-blur approximation), mode 1 (original pixels), mode 2
 (seeded pixel noise), and mode 3 (RGB 127 gray). Noise bytes match CPython's
 `random.Random(seed).randbytes(...)`, including partial-word output. The Scala
 worker suite checks Python golden vectors and masked/unmasked pixels; the NUI
 `Generator` path passed full-resolution mode 2, while the worker path passed
-mode 3. Blurred surrounding-color fill mode 0 remains unsupported. Fill values
-are applied to model input; original pixels remain the source for preservation
-and final mask composition.
+modes 0 and 3. Mode 0 approximates Pillow's Gaussian blur with separable box
+filters; pixel-exact parity is not established. Fill values are applied to model
+input; original pixels remain the source for preservation and final mask
+composition.
 
 ## Native CUDA weight offload (2026-11-03)
 
@@ -369,8 +371,9 @@ pixels mean repaint; black pixels preserve the resized source exactly. Euler and
 DPM++ use latent preservation at each scheduler step and final pixel compositing.
 Mask inversion and bounded blur are supported; the worker uses three separable
 box-blur passes to approximate Gaussian blur, so edge values are not promised to
-match Pillow byte-for-byte. Nine-channel inpaint U-Nets, blurred-color fill mode
-0, and plugin inpaint integrations remain unsupported and fail explicitly.
+match Pillow byte-for-byte. Nine-channel inpaint U-Nets, exact Pillow parity for
+blurred-color fill mode 0, and plugin inpaint integrations remain unsupported
+or approximate.
 Normal-size model quality and the rest of NUI's
 Python feature set are still migration work.
 

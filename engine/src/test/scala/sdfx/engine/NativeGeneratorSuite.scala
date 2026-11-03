@@ -108,6 +108,13 @@ class NativeGeneratorSuite extends munit.FunSuite:
       assertEquals((restored.getWidth,restored.getHeight),(80,48),"full-resolution inpaint must restore the source canvas size")
       assertEquals((restored.getRGB(0,0)&0xffffff),0xff0000,"pixels outside the mask must remain from the source image")
       assert((restored.getRGB(40,24)&0xffffff)!=0xff0000,"the selected region must contain generated pixels")
+      val blurredFill=services.generator.generate(GenerationParams(prompt="blur-fill the selected region",
+        width=64,height=64,steps=1,seed=45,img2img=Some(Img2ImgParams(wideSource.toString,mask=Some(wideMask.toString),
+          denoisingStrength=1.0,resizeMode=0,maskBlur=0,inpaintingFill=0,inpaintFullRes=true,inpaintFullResPadding=8)))).head
+      val blurredImage=PngMetadata.readImage(blurredFill.path)
+      assertEquals((blurredImage.getWidth,blurredImage.getHeight),(80,48))
+      assertEquals((blurredImage.getRGB(0,0)&0xffffff),0xff0000,"blur-fill must preserve pixels outside the mask")
+      assert((blurredImage.getRGB(40,24)&0xffffff)!=0xff0000,"blur-fill request must generate the selected region")
       assert(!Files.exists(home.pythonDir))
     catch case error: Throwable =>
       failure=error
