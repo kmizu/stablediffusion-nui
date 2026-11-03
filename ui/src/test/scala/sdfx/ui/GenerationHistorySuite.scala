@@ -27,6 +27,21 @@ class GenerationHistorySuite extends munit.FunSuite:
   private def values(n: Int): Map[FieldKey, PresetAtom] =
     Map(FieldKey(Vector("generation", "steps")) -> PresetAtom.Integer(n))
 
+  test("clear keeps explicitly named history and favourites, deleting only unnamed entries") {
+    val (a, first, _) = GenerationHistory.append(empty, Mode.Txt2Img, values(1), at, 10)
+    val (b, second, _) = GenerationHistory.append(a, Mode.Txt2Img, values(2), at, 10)
+    val (c, third, _) = GenerationHistory.append(b, Mode.Txt2Img, values(3), at, 10)
+    val named = GenerationHistory.rename(c, Mode.Txt2Img, first.get.id, first.get.name, "keep this").toOption.get
+    val (favourited, _) = GenerationHistory.toggleFavourites(named, Mode.Txt2Img, Set(second.get.id))
+    val bytes = PresetJson.writeNative(favourited, PresetLimits(maxCollections = 6)).toOption.get
+    val loaded = PresetJson.readNative(bytes, PresetLimits(maxCollections = 6)).toOption.get
+    val (cleared, removed) = GenerationHistory.clearNonFavourites(loaded, Mode.Txt2Img)
+    assertEquals(GenerationHistory.entries(cleared, Mode.Txt2Img).map(_.id).toSet, Set(first.get.id, second.get.id))
+    assertEquals(removed, Vector(third.get.id))
+    val confirmed = GenerationHistory.rename(c, Mode.Txt2Img, third.get.id, third.get.name, third.get.name).toOption.get
+    assert(GenerationHistory.entries(GenerationHistory.clearNonFavourites(confirmed, Mode.Txt2Img)._1, Mode.Txt2Img).exists(_.id == third.get.id))
+  }
+
   test("capture current settings as a favourite without adding automatic history") {
     val record = PresetRecord(java.util.UUID.randomUUID(), "Saved setup", values(42), None, Set.empty, Vector.empty, Vector.empty)
     val saved = GenerationHistory.saveFavourite(empty, Mode.Txt2Img, record).toOption.get
@@ -183,6 +198,8 @@ class GenerationHistorySuite extends munit.FunSuite:
     val gz = new java.util.zip.GZIPOutputStream(buffer)
     gz.write(json.getBytes(java.nio.charset.StandardCharsets.UTF_8)); gz.close()
     val entries = StateManagerV2.decode(buffer.toByteArray).toOption.get
+    val namedOnly = GenerationHistory.importV2(empty, Vector(entries.head.copy(groups = Set("history"))), 50).toOption.get
+    assertEquals(GenerationHistory.entries(GenerationHistory.clearNonFavourites(namedOnly, Mode.Txt2Img)._1, Mode.Txt2Img).size, 1)
     val imported = GenerationHistory.importV2(empty, entries, 50).toOption.get
     val txt = GenerationHistory.entries(imported, Mode.Txt2Img)
     assertEquals(txt.size, 1)

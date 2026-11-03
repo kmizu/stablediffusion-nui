@@ -120,6 +120,9 @@ object RealNamedGenerationStatesCheck:
         val pane = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene))
           .map(_.getRoot).collectFirst { case dialog: DialogPane => dialog }
           .getOrElse(sys.error("Expected real confirmation dialog; status: " + node[TextArea]("generation-states-status").getText))
+        if id == "generation-history-clear" then
+          require(Option(pane.getContentText).exists(_.contains("earlier version")))
+          require(ImageIO.write(SwingFXUtils.fromFXImage(pane.getScene.snapshot(null), null), "png", output.resolve("history-clear-confirmation.png").toFile))
         pane.lookupButton(answer).asInstanceOf[Button].fire()
       }
       task.get(30, TimeUnit.SECONDS)
@@ -486,7 +489,7 @@ object RealNamedGenerationStatesCheck:
         node[TabPane]("generation-states-tabs").getSelectionModel.select(1)
         val entries = node[ListView[PresetRecord]]("generation-history-list")
         require(entries.getItems.size == 2)
-        entries.getSelectionModel.clearAndSelect(0)
+        entries.getSelectionModel.clearAndSelect(1)
         node[Button]("generation-history-favourite").fire()
       }
       eventually("one favourited") { fx {
@@ -495,8 +498,16 @@ object RealNamedGenerationStatesCheck:
       }}
       fx { node[TabPane]("generation-states-tabs").getSelectionModel.select(1) }
       confirmButton("generation-history-clear")
-      eventually("clear retains favourite") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 1) }
-      fx { node[ListView[PresetRecord]]("generation-history-list").getSelectionModel.clearAndSelect(0) }
+      eventually("clear retains named and favourite") { fx {
+        val entries = node[ListView[PresetRecord]]("generation-history-list")
+        entries.getItems.size == 2 && entries.getItems.asScala.exists(_.name == "new title") &&
+          node[TextArea]("generation-states-status").getText.contains("Cleared unnamed") &&
+          !node[Button]("generation-history-clear").isDisabled
+      }}
+      fx {
+        val entries = node[ListView[PresetRecord]]("generation-history-list")
+        entries.getSelectionModel.clearAndSelect(0); entries.getSelectionModel.select(1)
+      }
       confirmButton("generation-history-delete")
       eventually("delete removes both groups") { fx {
         node[TabPane]("generation-states-tabs").getSelectionModel.select(2)

@@ -1,5 +1,15 @@
 # State Manager history and category restore (#23, partial)
 
+## 2026-11-03 Clear history の名前付き項目保護
+
+main 統合時も `GenerationHistorySuite` 20件、`RealNamedGenerationStatesCheck`、`ui/assembly` が exit 0。JAR SHA-256 は `91c567ad2b0e1331c3590ae39082d7db261b5056e59207788091c5ff0a6e2c95`。下記の実モデル試験は分離 worktree の source-class GUI で、この main JAR や配布版の実測ではない。
+
+上流固定 revision `2af62ecd5287438bbc309f7e840d34aa5c8e3cb6` の `clearHistory` はお気に入りと明示的に名付けた項目を残す。NUI は自動生成された日時名も含め全履歴に名前があるため、新しい Rename の確定を native record の追加 metadata に記録し、Clear history ではその項目も残す。過去に取り込まれた上流の entry に非空 `name` がある場合も保護する。以前の NUI 版で Rename 済みの項目には記録がないので、再度 Rename を確定すれば保護される。確認画面と日本語文書に明示し、50 件上限による通常の古い項目の退避には保護を適用しない。
+
+修正前の回帰テストは名前付き項目が削除されて失敗。修正後の `GenerationHistorySuite` は 20/20、保存・読込後の名前付き項目とお気に入りの維持、未命名の削除、元の上流名の保護を確認。実 MainWindow の初回試験は clear 後も表示件数が同じため test が完了前に次へ進んで失敗し、完了状態を待つよう修正して再実行が成功。`outputs/history-clear-dialog-final/history-clear-confirmation.png` の注意文を目視した。
+
+source-class 実 MainWindow と実エンジンで、生成履歴を Rename し favourite を解除後、Clear でも名前と thumbnail が残ることを SD1.5 512×512 と SDXL 832×832 の各8 steps で確認（`HISTORY_REAL_OK`）。結果は `outputs/history-clear-real-sd15/history-real-6572943177763100084` と `outputs/history-clear-real-sdxl/history-real-10027898092565766905`。両 `00000-7101.png` は桜と赤い着物の人物と目視。SHA-256 は順に `de17c3627754f43bbaa7d35b0eb6d4d04f7e7bcfde7204941fa0d09dc9cbbac8`、`5e8ec8ff7caa72b1ebe19ff2955251598f2e1cd33cbed98a0705ec7b56990d42`。実上流ファイルと配布 EXE は未確認。
+
 ## 2026-11-03 現在の設定をお気に入りに保存
 
 main 統合時に `GenerationHistorySuite` 19件、`RealNamedGenerationStatesCheck` と `ui/assembly` が exit 0。JAR SHA-256 は `02a7c789793acdcf579b5e1fc395785b420e184d1d0a82fd10d94daac9a2da01`。下記の実モデル試験は分離 worktree の source-class GUI によるもので、この main JAR や配布版の実測ではない。
@@ -110,7 +120,7 @@ identical on the repeat), and the History tab with thumbnail and prompt text in 
 
 ## NOT provided
 
-Upstream IndexedDB / shared .txt storage import and format parity, the `/version` and other HTTP API endpoints, the docked
-side-drawer / modal browser UI, MCP exposure of the history. Multiple selection provides bulk favourite and delete actions,
+Upstream IndexedDB extraction and full shared .txt storage format parity, the `/version` and other upstream HTTP API endpoints, the docked
+side-drawer / modal browser UI. Partial V2 file import and read-only MCP history are available. Multiple selection provides bulk favourite and delete actions,
 and individual saved settings and the six categories can be applied as described above.
 Issue stays open (`Refs #23`).

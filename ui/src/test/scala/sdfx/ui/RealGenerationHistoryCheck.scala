@@ -317,6 +317,18 @@ object RealGenerationHistoryCheck:
               !Files.exists(home.configDir.resolve(s"generation-history/thumbs/${ids(1)}.png")), "deleted thumbnails remain")
       note("multi-select Delete removed two entries and their thumbnails")
       screenshot("02-after-delete.png")
+      selectHistory(0)
+      eventually("history favourite toggle ready") { fx(!control[Button]("generation-history-favourite").isDisabled) }
+      fx { control[Button]("generation-history-favourite").fire() }
+      eventually("favourite removed") { fx(control[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty) }
+      eventually("clear ready") { fx(!control[Button]("generation-history-clear").isDisabled) }
+      confirmFire("generation-history-clear")
+      eventually("named non-favourite survived clear") { fx {
+        control[TextArea]("generation-states-status").getText.contains("Cleared unnamed") &&
+          control[ListView[PresetRecord]]("generation-history-list").getItems.asScala.exists(_.name == "kimono favourite")
+      }}
+      require(Files.isRegularFile(thumbA), "named entry thumbnail was removed")
+      note("clear retained explicitly named history and thumbnail after removing favourite")
       val upstream = run.resolve("synthetic-history.txt")
       val previewUri = "data:image/png;base64," + java.util.Base64.getEncoder.encodeToString(thumbABytes)
       val upstreamJson = s"""{"defaults":{"d":{"txt2img/Prompt":"source default","txt2img/Sampling method":"Euler","txt2img/Sampling steps":$steps,"txt2img/Width":$side,"txt2img/Height":$side,"customscript/seed.py/txt2img/Seed":7109,"txt2img/Unsupported":"preserved"}},"entries":{"1700000000123":{"saveVersion":"2.0","type":"txt2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"txt2img/Prompt":"1girl, red kimono, cherry blossoms"},"preview":"$previewUri"}}}"""

@@ -66,6 +66,21 @@ private object ImportedHistoryPreview:
 /** Automatic, capped per-mode generation history kept apart from the manual named-state library. */
 object GenerationHistory:
   val DefaultLimit = 50
+  private val namedKey = "sdfxHistoryExplicitName"
+  private val namedValue = PresetJson.readSource("true".getBytes(UTF_8), PresetLimits()).toOption.get
+  private def isExplicitlyNamed(record: PresetRecord): Boolean =
+    val marker = record.extra.exists { (key, value) => key == namedKey && value.text == "true" }
+    val importedName = record.source.exists { source =>
+      if source.format != "state-manager-v2" then false
+      else try
+        ujson.read(source.originalFields.text).obj.get("entry").exists { entry =>
+          entry.obj.get("name").exists { case ujson.Str(name) => name.trim.nonEmpty; case _ => false }
+        }
+      catch case NonFatal(_) => false
+    }
+    marker || importedName
+  private def withExplicitName(record: PresetRecord, name: String): PresetRecord =
+    record.copy(name = name, extra = record.extra.filterNot(_._1 == namedKey) :+ (namedKey -> namedValue))
   private def sourceDigest(entry: StateManagerV2Entry): Array[Byte] =
     MessageDigest.getInstance("SHA-256").digest(
       (entry.mode.toString + "\u0000" + entry.sourceId + "\u0000" + entry.originalEntry.text + "\u0000" + entry.originalDefaults.text).getBytes(UTF_8))
@@ -148,10 +163,9 @@ object GenerationHistory:
       Left(problem("stale-selection", "The selected history entry changed or no longer exists"))
     else if (histories ++ favs).exists(r => r.id != id && r.name == clean) then
       Left(problem("duplicate-name", "Another history entry already has that name"))
-    else if clean == expectedName then Right(library)
     else
-      val updatedHistory = histories.map(r => if r.id == id then r.copy(name = clean) else r)
-      val updatedFavourites = favs.map(r => if r.id == id then r.copy(name = clean) else r)
+      val updatedHistory = histories.map(r => if r.id == id then withExplicitName(r, clean) else r)
+      val updatedFavourites = favs.map(r => if r.id == id then withExplicitName(r, clean) else r)
       val afterHistory = if histories.exists(_.id == id) then store(library, mode, updatedHistory) else library
       Right(if favs.exists(_.id == id) then storeFavourites(afterHistory, mode, updatedFavourites) else afterHistory)
 
@@ -168,7 +182,7 @@ object GenerationHistory:
   def clearNonFavourites(library: PresetLibrary, mode: Mode): (PresetLibrary, Vector[UUID]) =
     val fav = favourites(library, mode).map(_.id).toSet
     val previous = entries(library, mode)
-    val next = store(library, mode, previous.filter(r => fav(r.id)))
+    val next = store(library, mode, previous.filter(r => fav(r.id) || isExplicitlyNamed(r)))
     (next, unreferenced(next, previous.map(_.id)))
 
   /** Merge source entries atomically; no existing history is evicted to make room. */

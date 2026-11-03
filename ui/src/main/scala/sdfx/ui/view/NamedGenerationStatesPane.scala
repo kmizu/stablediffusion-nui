@@ -367,16 +367,16 @@ final class NamedGenerationStatesPane(
           }
   }
   favouriteCapture.setId("generation-favourites-capture")
-  private val historyClear = W.button("Clear history", "Remove non-favourite history entries of this mode") {
+  private val historyClear = W.button("Clear history", "Remove unnamed, non-favourite history entries of this mode") {
     val target = mode
-    if confirm("Clear history?", s"Delete all non-favourite ${target.key} history entries, including those hidden by search? Favourites are kept.") then
+    if confirm("Clear history?", s"Delete unnamed, non-favourite ${target.key} history entries, including those hidden by search? Explicitly named entries and favourites are kept. Names set in an earlier version must be confirmed again with Rename to be protected.") then
       historyPending = true
       refreshButtons()
       history.clear(target) { result =>
         historyPending = false
         result match
           case Left(error) => failure(error)
-          case Right(_) => status.setText(s"Cleared non-favourite ${target.key} history entries.")
+          case Right(_) => status.setText(s"Cleared unnamed, non-favourite ${target.key} history entries.")
         refreshButtons()
       }
   }
