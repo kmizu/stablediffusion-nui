@@ -1,5 +1,15 @@
 # State Manager V2 保存データ読み取り（作業中）
 
+## 上流原本の限定 export（2026-11-03）
+
+main 統合時、`StateManagerV2Suite` 5件、`RealNamedGenerationStatesCheck` と `ui/assembly` が exit 0。JAR SHA-256 は `10a83591df055c6df88467b5bfdaac49248228afca3ed36fda347cd9fe267d2b`。下記の実モデル・上流 JS 試験は分離 worktree によるもので、この main JAR や配布版の実測ではない。
+
+History / Favourites の複数選択から、取り込み済み State Manager V2 entry と参照 defaults の元 JSON token を gzip に書き出せる。名前・お気に入りなど NUI 内の編集は反映せず、native 独自項目は export しない。全選択が上流原本でない場合、原本 `createdAt` から元のキーを検証できない場合、timestamp 重複や同一 defaults key の内容衝突、サイズ超過は全体を拒否する。上流原本に含まれる画像・個人情報も出力され得るため確認画面に示す。
+
+既存 destination は上書きせず、同一 directory 内に書いた temp を flush してから新しい hard link 名を作る。hard link 非対応の filesystem は失敗する。協調しない第三者による親 directory の差替えや crash 後の temp 残存は保証しない。初回は method 配置誤りで compile failure、修正後は core 5/5 と実 MainWindow の上流 fixture import→export→decode が成功。Windows 実ファイルで既存 target と既存 symlink の参照先 bytes 不変、同一 target への 2 writer 競合で 1 件だけ成功を確認。symlink 試験は作成可能な環境で実施し、環境が許可しない場合はその検査を省く。`outputs/state-original-export-final/state-original-export-confirmation.png` を目視し、出力 `upstream-original-export.gz` の SHA-256 は `4d5d62e6c6e0a9a9e52449cc640774e7ff3cf447ff08329781c148251e4d0419`。固定 revision の上流 JS を模擬 API 環境で実行し、上流の解凍・memory storage 初期化で元 prompt・seed・未知項目を再読込みした（`UPSTREAM_EXPORT_READ_OK`）。これは実 A1111、配布版、OS file chooser 物理操作の検証ではない。
+
+source-class 実 MainWindow で合成上流 entry を import し、原本 gzip を export して未知項目を再読込み、設定を復元して画像生成した。SD1.5 512×512 と SDXL 832×832、各8 steps とも `HISTORY_REAL_OK`（`outputs/state-original-export-sd15/history-real-9213264370341606357`、`outputs/state-original-export-sdxl/history-real-602944522953993998`）。生成した `00007-7109.png` は両方とも桜と赤い着物の人物と目視し、SHA-256 は順に `214aeb334ff1a06e3dd3fb85488eb666c0d0063455c1825b7cfa0d1d5f7f42cd` と `ea98780bea283320740110a305c1ca98378347ec95d4ea0fb56481cdb01a6e47`。合成 entry と source-class GUI の検証で、実 A1111 や配布版での export ではない。
+
 ## MCP 履歴検索（2026-11-03）
 
 main 統合時も MCP 44件・履歴20件・`ui/assembly` が exit 0。生成 JAR の SHA-256 は `23b28fc8bb8d8414321f056632b9f5fe1ea19bdb91e2a96a995f47f9c0eb1102` で、下記 SDK transport 試験に使用した JAR と一致した。
@@ -59,6 +69,6 @@ main 統合後も `McpToolsSuite` 40件と `ui/assembly` は exit 0。JAR SHA-25
 
 - 選択ファイルは読み取りのみで、最終パスに対する symlink を追わず、圧縮後と展開後をそれぞれ最大 4,194,304 bytes に制限する。JSON の重複キー・不正 UTF-8・過大な深さ／ノード数や、展開設定の総数超過は拒否する。モデルのダウンロードや読み込み、生成は import 自体では行わない。
 - native の history store に確認後まとめて保存する。追加対象は mode ごとに history / favourites を分け、同一 ID は重複追加しない。既存履歴の上限を超えれば途中分を保存せず拒否する。保存は既存の revision 照合と cooperating process 間の history operation lock を使う。非協調ツールが JSON や lock file を変更する場合、ディレクトリ置換の競合は保証外。
-- 各 entry の元 JSON とその参照 defaults 全体を `PresetSource.originalFields` に埋め込む。未知項目や元の preview のデータも metadata として残るため、元ファイルに個人情報や画像があれば保存先の `config/generation-history/library-v1.json` にも含まれる。実画像の export、未対応設定の自動再現、source JSON の完全な再出力 UI は提供していない。
+- 各 entry の元 JSON とその参照 defaults 全体を `PresetSource.originalFields` に埋め込む。未知項目や元の preview のデータも metadata として残るため、元ファイルに個人情報や画像があれば保存先の `config/generation-history/library-v1.json` にも含まれる。上記の限定的な原本 export はあるが、実画像の個別 export、未対応設定の自動再現、任意の native 履歴の上流形式への変換は提供していない。
 - `generation.prompt` など事前に明示した key だけをマッピングし、未対応・型不一致は原本を保持して preview に列挙する。checkpoint / VAE / sampler 名が同じ意味であることは推測せず、復元時に現 catalog の preflight を通す。対応されない設定は適用されない。マッピングされた値でも個別のモデル・拡張での挙動は未検証。
 - 代表的な合成 gzip と破損・制限・キャンセル・同一文字列表現の再 import、GUI の部分復元、SD1.5/SDXL の生成を確認した。実 A1111 が生成したファイル、OS chooser の物理操作、複数拡張の値、巨大な履歴を含む実データ、実 IndexedDB、配布 EXE GUI、MCP によるこの import は未検証。

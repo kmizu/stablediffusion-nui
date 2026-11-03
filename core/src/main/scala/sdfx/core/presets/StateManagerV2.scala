@@ -23,6 +23,84 @@ object StateManagerV2:
     PresetJson.objectMembers(raw, limits).map(_.map(m => m.name -> m.value).toMap)
   private def required(map: Map[String, RawJson], name: String, path: String): Either[PresetError, RawJson] =
     map.get(name).toRight(error(path, s"Missing $name"))
+
+  /** Export only original imported source records; current native edits are not projected onto them. */
+  def exportOriginal(records: Vector[PresetRecord], limits: PresetLimits = PresetLimits()): Either[PresetError, Array[Byte]] =
+    if records.isEmpty || records.size > limits.maxRecords then return Left(error("$", "Select a bounded, non-empty set of imported records"))
+    type Exported = (Map[String, RawJson], Map[String, RawJson])
+    val parts = records.foldLeft[Either[PresetError, Exported]](Right((Map.empty, Map.empty))) { (acc, record) =>
+      for
+        previous <- acc
+        source <- record.source.filter(_.format == "state-manager-v2").toRight(error(record.name, "Only imported State Manager V2 originals can be exported"))
+        mode <- source.mode.toRight(error(record.name, "Original mode is missing"))
+        original <- obj(source.originalFields, limits)
+        _ <- Either.cond(original.keySet == Set("entry", "defaults"), (), error(record.name, "Invalid original metadata"))
+        entryRaw <- required(original, "entry", record.name)
+        defaultsRaw <- required(original, "defaults", record.name)
+        entry <- obj(entryRaw, limits)
+        createdRaw <- required(entry, "createdAt", record.name)
+        created <- PresetJson.scalarAtom(createdRaw, limits).flatMap {
+          case Some(PresetAtom.Integer(n)) if n >= 0 => Right(n.toString)
+          case _ => Left(error(record.name, "Original timestamp key is unavailable"))
+        }
+        defaultsKeyRaw <- required(entry, "defaults", record.name)
+        defaultsKey <- text(defaultsKeyRaw, record.name, limits)
+        digest = java.security.MessageDigest.getInstance("SHA-256").digest(
+          (mode.toString + "\u0000" + created + "\u0000" + entryRaw.text + "\u0000" + defaultsRaw.text).getBytes(java.nio.charset.StandardCharsets.UTF_8))
+        buffer = java.nio.ByteBuffer.wrap(digest)
+        expectedId = new java.util.UUID(buffer.getLong(), buffer.getLong())
+        _ <- Either.cond(record.id == expectedId, (), error(record.name, "Original timestamp key cannot be verified"))
+        (defaults, entries) = previous
+        _ <- Either.cond(!entries.contains(created), (), error(record.name, "Duplicate original timestamp"))
+        _ <- Either.cond(defaults.get(defaultsKey).forall(_ == defaultsRaw), (), error(record.name, "Conflicting defaults for the same key"))
+      yield (defaults.updated(defaultsKey, defaultsRaw), entries.updated(created, entryRaw))
+    }
+
+    parts.flatMap { (defaults, entries) =>
+      val lowerBound = (defaults.valuesIterator ++ entries.valuesIterator).map(_.text.length.toLong).sum
+      def members(values: Map[String, RawJson]): String = values.toVector.sortBy(_._1).map { (key, value) =>
+        ujson.Str(key).render() + ":" + value.text
+      }.mkString(",")
+      if limits.maxBytes < 1 || lowerBound > limits.maxBytes then Left(error("$", "Export exceeds the size limit"))
+      else
+        val bytes = s"{\"defaults\":{${members(defaults)}},\"entries\":{${members(entries)}}}".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        if bytes.length > limits.maxBytes then Left(error("$", "Export exceeds the size limit"))
+        else
+          try
+            val out = new java.io.ByteArrayOutputStream()
+            val gzip = new java.util.zip.GZIPOutputStream(out)
+            try gzip.write(bytes) finally gzip.close()
+            val compressed = out.toByteArray
+            if compressed.length > limits.maxBytes then Left(error("$", "Compressed export exceeds the size limit"))
+            else decode(compressed, limits).map(_ => compressed)
+          catch case NonFatal(_) => Left(error("$", "Cannot create gzip export"))
+    }
+
+  /** Write a new file only; never overwrite an existing target. */
+  def exportOriginalToNewFile(records: Vector[PresetRecord], destination: java.nio.file.Path,
+      limits: PresetLimits = PresetLimits()): Either[PresetError, Unit] =
+    exportOriginal(records, limits).flatMap { bytes =>
+      try
+        val target = destination.toAbsolutePath.normalize()
+        val parent = target.getParent
+        if parent == null || !java.nio.file.Files.isDirectory(parent) then Left(error("$", "Export directory is unavailable"))
+        else
+          val temp = java.nio.file.Files.createTempFile(parent, ".state-export-", ".tmp")
+          try
+            val channel = java.nio.channels.FileChannel.open(temp, java.nio.file.StandardOpenOption.WRITE,
+              java.nio.file.StandardOpenOption.TRUNCATE_EXISTING, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+            try
+              val buffer = java.nio.ByteBuffer.wrap(bytes)
+              while buffer.hasRemaining do channel.write(buffer)
+              channel.force(true)
+            finally channel.close()
+            // A hard link creates the final name only if it does not already exist.
+            // The temporary file is in the same directory, so a completed file is exposed at once.
+            java.nio.file.Files.createLink(target, temp)
+            Right(())
+          finally try java.nio.file.Files.deleteIfExists(temp) catch case NonFatal(_) => ()
+      catch case NonFatal(e) => Left(error("$", "Export failed: " + Option(e.getMessage).getOrElse(e.getClass.getSimpleName)))
+    }
   private def text(raw: RawJson, path: String, limits: PresetLimits): Either[PresetError, String] =
     PresetJson.scalarAtom(raw, limits).flatMap {
       case Some(PresetAtom.Text(s)) => Right(s)

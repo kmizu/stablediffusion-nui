@@ -147,6 +147,8 @@ final class NamedGenerationStatesPane(
     favouriteCapture.setDisable(historyPending || historyLoading || pending)
     historyClear.setDisable(historyPending || historyLoading || historyEntries.isEmpty)
     historyImport.setDisable(historyPending || historyLoading)
+    historyExport.setDisable(historyPending || historyLoading || historySelected.isEmpty)
+    favouritesExport.setDisable(historyPending || historyLoading || historySelected.isEmpty)
     reload.setDisable(pending)
     backup.setDisable(pending)
 
@@ -432,6 +434,35 @@ final class NamedGenerationStatesPane(
   }
   historyImport.setId("generation-history-import")
 
+  private def exportOriginalSelection(): Unit =
+    val targetMode = mode
+    val records = historySelected
+    if records.nonEmpty && confirm("Export original State Manager entries?",
+      s"Export ${records.size} selected original entries and their defaults. Original previews and private data may be included. " +
+      "All selected entries must be imported originals; native-only entries cannot be exported. NUI renames and favourite changes are not included. Select a new file on a filesystem that supports hard links; existing files cannot be overwritten.") then
+      val destination = ctx.chooseStateManagerExport()
+      if !closed && destination.nonEmpty then
+        if mode != targetMode || historySelected != records then
+          status.setText("Selection or mode changed; nothing was exported.")
+        else
+          historyPending = true
+          refreshButtons()
+          Fx.async { StateManagerV2.exportOriginalToNewFile(records, destination.get) } { result =>
+            historyPending = false
+            if !closed then
+              result match
+                case Left(error) => failure(error)
+                case Right(_) => status.setText(s"Exported ${records.size} original State Manager entries to ${destination.get}.")
+              refreshButtons()
+          } { error =>
+            historyPending = false
+            if !closed then { status.setText("Export failed: " + Fx.message(error)); refreshButtons() }
+          }
+  private val historyExport = W.button("Export originals…", "Export selected imported State Manager entries to a new gzip file") { exportOriginalSelection() }
+  historyExport.setId("generation-history-export")
+  private val favouritesExport = W.button("Export originals…", "Export selected imported State Manager entries to a new gzip file") { exportOriginalSelection() }
+  favouritesExport.setId("generation-favourites-export")
+
   autosave.selectedProperty.addListener((_, _, on) =>
     history.setAutosave(on) match
       case Left(error) =>
@@ -477,10 +508,10 @@ final class NamedGenerationStatesPane(
   namedTab.setId("generation-states-tab-named")
   namedTab.setClosable(false)
   private val historyTab = new Tab("History", new VBox(8, autosave, historySearch, historyList,
-    new FlowPane(8, 6, keep, historyRename, historyFavourite, historyDelete, historyClear, historyImport)))
+    new FlowPane(8, 6, keep, historyRename, historyFavourite, historyDelete, historyClear, historyImport, historyExport)))
   historyTab.setId("generation-states-tab-history")
   historyTab.setClosable(false)
-  private val favouritesTab = new Tab("Favourites", new VBox(8, favouritesSearch, favouritesList, new FlowPane(8, 6, favouriteCapture, favouritesRename, favouritesToggle, favouritesDelete)))
+  private val favouritesTab = new Tab("Favourites", new VBox(8, favouritesSearch, favouritesList, new FlowPane(8, 6, favouriteCapture, favouritesRename, favouritesToggle, favouritesDelete, favouritesExport)))
   favouritesTab.setId("generation-states-tab-favourites")
   favouritesTab.setClosable(false)
   tabs.getTabs.addAll(namedTab, historyTab, favouritesTab)

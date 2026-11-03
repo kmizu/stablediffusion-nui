@@ -123,6 +123,9 @@ object RealNamedGenerationStatesCheck:
         if id == "generation-history-clear" then
           require(Option(pane.getContentText).exists(_.contains("earlier version")))
           require(ImageIO.write(SwingFXUtils.fromFXImage(pane.getScene.snapshot(null), null), "png", output.resolve("history-clear-confirmation.png").toFile))
+        if id == "generation-history-export" then
+          require(Option(pane.getContentText).exists(text => text.contains("private data") && text.contains("not included")))
+          require(ImageIO.write(SwingFXUtils.fromFXImage(pane.getScene.snapshot(null), null), "png", output.resolve("state-original-export-confirmation.png").toFile))
         pane.lookupButton(answer).asInstanceOf[Button].fire()
       }
       task.get(30, TimeUnit.SECONDS)
@@ -604,6 +607,14 @@ object RealNamedGenerationStatesCheck:
       confirmButton("generation-states-restore-field")
       fx { require(window.vms(Mode.Txt2Img).prompt.get == "actual upstream saved prompt") }
       screenshot("upstream-stubbed-fixture-import")
+      val exported = output.resolve("upstream-original-export.gz")
+      fx { window.ctx.chooseStateManagerExport = () => Some(exported) }
+      confirmButton("generation-history-export")
+      eventually("upstream original exported") { Files.isRegularFile(exported) }
+      val roundTrip = sdfx.core.presets.StateManagerV2.decode(Files.readAllBytes(exported)).toOption.get
+      require(roundTrip.size == 1 && roundTrip.head.mapped(FieldKey(Vector("generation", "prompt"))) == PresetAtom.Text("actual upstream saved prompt"))
+      require(roundTrip.head.unmapped.contains("txt2img/Unknown extension"))
+      checked("exported imported upstream original to gzip")
       checked("actual upstream JavaScript fixture imports and restores prompt with simulated A1111 dependencies")
       Files.writeString(output.resolve("named-states-native-report.json"), ujson.write(ujson.Obj(
         "status" -> "passed", "home" -> home.root.toString, "library" -> library.toString,

@@ -62,3 +62,62 @@ class StateManagerV2Suite extends munit.FunSuite:
     assertEquals(entry.mapped(field("model.clipSkip")), PresetAtom.Integer(2))
     assert(entry.unmapped.contains("txt2img/Unknown extension"))
   }
+
+  test("original State Manager export preserves validated entry and defaults exactly") {
+    val in = getClass.getResourceAsStream("/fixtures/state-manager-v2-upstream-stubbed.gz")
+    val sourceBytes = try in.readAllBytes() finally in.close()
+    val entry = StateManagerV2.decode(sourceBytes).toOption.get.head
+    val original = PresetJson.readSource(s"{\"entry\":${entry.originalEntry.text},\"defaults\":${entry.originalDefaults.text}}".getBytes(UTF_8), PresetLimits()).toOption.get
+    val digest = java.security.MessageDigest.getInstance("SHA-256").digest(
+      (entry.mode.toString + "\u0000" + entry.sourceId + "\u0000" + entry.originalEntry.text + "\u0000" + entry.originalDefaults.text).getBytes(UTF_8))
+    val buffer = java.nio.ByteBuffer.wrap(digest)
+    val record = PresetRecord(new java.util.UUID(buffer.getLong(), buffer.getLong()), "renamed in NUI", entry.mapped,
+      Some(PresetSource("state-manager-v2", "source", Some(entry.mode), original)), Set.empty, Vector.empty, Vector.empty)
+    val exported = StateManagerV2.exportOriginal(Vector(record)).toOption.get
+    val recovered = StateManagerV2.decode(exported).toOption.get.head
+    assertEquals(recovered.sourceId, entry.sourceId)
+    assertEquals(recovered.originalEntry.text, entry.originalEntry.text)
+    assertEquals(recovered.originalDefaults.text, entry.originalDefaults.text)
+    assert(StateManagerV2.exportOriginal(Vector(record.copy(source = None))).isLeft)
+    assert(StateManagerV2.exportOriginal(Vector(record.copy(id = java.util.UUID.randomUUID()))).isLeft)
+    assert(StateManagerV2.exportOriginal(Vector(record, record)).isLeft)
+    val changedEntry = entry.originalEntry.text.replace("1700000000123", "1700000000124")
+    val changedDefaults = entry.originalDefaults.text.replace("upstream default", "different default")
+    val changedOriginal = PresetJson.readSource(s"{\"entry\":$changedEntry,\"defaults\":$changedDefaults}".getBytes(UTF_8), PresetLimits()).toOption.get
+    val changedHash = java.security.MessageDigest.getInstance("SHA-256").digest(
+      (entry.mode.toString + "\u0000" + "1700000000124" + "\u0000" + changedEntry + "\u0000" + changedDefaults).getBytes(UTF_8))
+    val changedBuffer = java.nio.ByteBuffer.wrap(changedHash)
+    val changed = record.copy(id = new java.util.UUID(changedBuffer.getLong(), changedBuffer.getLong()),
+      source = Some(PresetSource("state-manager-v2", "source", Some(entry.mode), changedOriginal)))
+    assert(StateManagerV2.exportOriginal(Vector(record, changed)).isLeft, "conflicting defaults must not be merged")
+    val withoutTime = entry.originalEntry.text.replace(",\"createdAt\":1700000000123", "")
+    val missingTime = PresetJson.readSource(s"{\"entry\":$withoutTime,\"defaults\":${entry.originalDefaults.text}}".getBytes(UTF_8), PresetLimits()).toOption.get
+    assert(StateManagerV2.exportOriginal(Vector(record.copy(source = Some(PresetSource("state-manager-v2", "source", Some(entry.mode), missingTime))))).isLeft)
+    val dir = java.nio.file.Files.createTempDirectory("sdfx-state-export-")
+    val occupied = dir.resolve("occupied.gz")
+    val sentinel = Array[Byte](4, 3, 2, 1)
+    java.nio.file.Files.write(occupied, sentinel)
+    assert(StateManagerV2.exportOriginalToNewFile(Vector(record), occupied).isLeft)
+    assertEquals(java.nio.file.Files.readAllBytes(occupied).toVector, sentinel.toVector)
+    val link = dir.resolve("existing-link.gz")
+    val symlinkCreated = try { java.nio.file.Files.createSymbolicLink(link, occupied); true }
+      catch case _: UnsupportedOperationException | _: java.io.IOException | _: SecurityException => false
+    if symlinkCreated then
+      assert(StateManagerV2.exportOriginalToNewFile(Vector(record), link).isLeft)
+      assert(java.nio.file.Files.isSymbolicLink(link))
+      assertEquals(java.nio.file.Files.readAllBytes(occupied).toVector, sentinel.toVector)
+    val fresh = dir.resolve("new.gz")
+    assert(StateManagerV2.exportOriginalToNewFile(Vector(record), fresh).isRight)
+    assert(StateManagerV2.decode(java.nio.file.Files.readAllBytes(fresh)).isRight)
+    val collision = dir.resolve("race.gz")
+    val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+    val start = new java.util.concurrent.CountDownLatch(1)
+    val jobs = Vector.fill(2)(pool.submit(new java.util.concurrent.Callable[Either[PresetError, Unit]]:
+      def call(): Either[PresetError, Unit] = { start.await(); StateManagerV2.exportOriginalToNewFile(Vector(record), collision) }))
+    start.countDown()
+    val outcomes = jobs.map(_.get(20, java.util.concurrent.TimeUnit.SECONDS))
+    pool.shutdown()
+    assertEquals(outcomes.count(_.isRight), 1)
+    assertEquals(outcomes.count(_.isLeft), 1)
+    assert(StateManagerV2.decode(java.nio.file.Files.readAllBytes(collision)).isRight)
+  }

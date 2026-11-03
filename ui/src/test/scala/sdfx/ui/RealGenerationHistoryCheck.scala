@@ -331,7 +331,7 @@ object RealGenerationHistoryCheck:
       note("clear retained explicitly named history and thumbnail after removing favourite")
       val upstream = run.resolve("synthetic-history.txt")
       val previewUri = "data:image/png;base64," + java.util.Base64.getEncoder.encodeToString(thumbABytes)
-      val upstreamJson = s"""{"defaults":{"d":{"txt2img/Prompt":"source default","txt2img/Sampling method":"Euler","txt2img/Sampling steps":$steps,"txt2img/Width":$side,"txt2img/Height":$side,"customscript/seed.py/txt2img/Seed":7109,"txt2img/Unsupported":"preserved"}},"entries":{"1700000000123":{"saveVersion":"2.0","type":"txt2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"txt2img/Prompt":"1girl, red kimono, cherry blossoms"},"preview":"$previewUri"}}}"""
+      val upstreamJson = s"""{"defaults":{"d":{"txt2img/Prompt":"source default","txt2img/Sampling method":"Euler","txt2img/Sampling steps":$steps,"txt2img/Width":$side,"txt2img/Height":$side,"customscript/seed.py/txt2img/Seed":7109,"txt2img/Unsupported":"preserved"}},"entries":{"1700000000123":{"saveVersion":"2.0","createdAt":1700000000123,"type":"txt2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"txt2img/Prompt":"1girl, red kimono, cherry blossoms"},"preview":"$previewUri"}}}"""
       val gz = new java.util.zip.GZIPOutputStream(Files.newOutputStream(upstream))
       gz.write(upstreamJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)); gz.close()
       fx {
@@ -364,6 +364,14 @@ object RealGenerationHistoryCheck:
         list.getSelectionModel.clearSelection(); list.getSelectionModel.select(imported)
         control[CheckBox]("generation-history-auto").setSelected(false)
       }
+      val exported = run.resolve("state-original-export.gz")
+      fx { window.ctx.chooseStateManagerExport = () => Some(exported) }
+      confirmFire("generation-favourites-export")
+      eventually("original export saved") { Files.isRegularFile(exported) }
+      val exportedEntry = sdfx.core.presets.StateManagerV2.decode(Files.readAllBytes(exported)).toOption.get.head
+      require(exportedEntry.originalEntry.text.contains("preserved") || exportedEntry.originalDefaults.text.contains("preserved"))
+      note("exported imported State Manager original including unknown setting")
+      eventually("restore enabled after export") { fx(!control[Button]("generation-states-restore").isDisabled) }
       confirmFire("generation-states-restore")
       fx {
         val p = window.vms(Mode.Txt2Img).toParams

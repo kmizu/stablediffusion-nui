@@ -16,6 +16,11 @@ final class UiContext(val services: AppServices, val catalog: CatalogVM, val sta
     val chooser = new FileChooser()
     chooser.setTitle("Import State Manager V2 history")
     Option(chooser.showOpenDialog(stage)).map(_.toPath)
+  var chooseStateManagerExport: () => Option[Path] = () =>
+    val chooser = new FileChooser()
+    chooser.setTitle("Export original State Manager V2 entries")
+    chooser.setInitialFileName("history-export.gz")
+    Option(chooser.showSaveDialog(stage)).map(_.toPath)
   val toaster = new Toaster
   lazy val imageCopyReads = new sdfx.ui.vm.ImageReadGate[ImageFiles.DisplayImage](services.imageScrambleSession,
     run => sdfx.ui.Fx.run(run()), (path, secret) => ImageFiles.readForDisplay(path, secret))(using sdfx.ui.Fx.bg)
