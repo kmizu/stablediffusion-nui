@@ -8,7 +8,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, StandardCopyOption}
 import javax.imageio.metadata.{IIOMetadata, IIOMetadataNode}
-import javax.imageio.stream.FileImageOutputStream
+import javax.imageio.stream.{FileImageOutputStream, ImageInputStream, MemoryCacheImageInputStream}
 import javax.imageio.{IIOImage, ImageIO, ImageTypeSpecifier}
 import java.util.zip.InflaterInputStream
 import scala.util.Using
@@ -23,9 +23,9 @@ object PngMetadata:
     readTextsFrom(ImageIO.createImageInputStream(path.toFile))
 
   def readTexts(bytes: Array[Byte]): Map[String, String] =
-    readTextsFrom(ImageIO.createImageInputStream(new ByteArrayInputStream(bytes)))
+    readTextsFrom(new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)))
 
-  private def readTextsFrom(in: javax.imageio.stream.ImageInputStream): Map[String, String] =
+  private def readTextsFrom(in: ImageInputStream): Map[String, String] =
     if in == null then Map.empty
     else
       Using.resource(in) { in =>

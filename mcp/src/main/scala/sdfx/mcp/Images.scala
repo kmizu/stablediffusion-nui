@@ -6,7 +6,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File}
 import java.nio.file.{Files, Path, Paths}
 import java.util.Base64
 import javax.imageio.ImageIO
-import javax.imageio.stream.ImageInputStream
+import javax.imageio.stream.{ImageInputStream, MemoryCacheImageInputStream}
 import org.w3c.dom.Element
 import scala.util.control.NonFatal
 
@@ -87,6 +87,10 @@ object Images:
     val count = try in.readNBytes(header, 0, header.length) finally in.close()
     if count == signature.length && java.util.Arrays.equals(header, signature) then
       rejectProtected(ImageIO.createImageInputStream(p.toFile), field)
+
+  /** Inspect already verified bytes without reopening a filesystem path. */
+  def rejectProtectedPng(bytes: Array[Byte], field: String): Unit =
+    rejectProtected(new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)), field)
 
   /** Heuristic: base64 never contains '\', ':' or '.'; PNG base64 starts with "iVBOR", JPEG with "/9j/". */
   def looksLikePath(s: String): Boolean =

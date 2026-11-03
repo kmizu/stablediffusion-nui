@@ -1,6 +1,7 @@
 package sdfx.mcp
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
+import java.io.ByteArrayOutputStream
 import java.util.Base64
 import sdfx.core.infotext.Infotext
 import sdfx.core.plugins.api.{Control, Plugin, Values}
@@ -25,15 +26,17 @@ object InspectGenerationMetadata:
   private val MaxBytes = 16 * 1024 * 1024
   private val signature = Array[Byte](-119, 80, 78, 71, 13, 10, 26, 10)
 
-  private def read(spec: String, policy: PathPolicy, base: Path): Array[Byte] =
+  private[mcp] def read(spec: String, policy: PathPolicy, base: Path, afterResolve: () => Unit = () => ()): Array[Byte] =
     val s = spec.trim
     if s.isEmpty then throw ToolError("image is empty")
     if PathPolicy.isNetworkPath(s) || Images.looksLikePath(s) && !s.startsWith("data:") then
       val path = policy.resolve(s, "image", base)
-      val in = Files.newInputStream(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)
-      val bytes = try in.readNBytes(MaxBytes + 1) finally in.close()
-      if bytes.length > MaxBytes then throw ToolError("image exceeds 16 MiB")
-      bytes
+      afterResolve()
+      val roots = policy.allowedRoots.flatMap(r => scala.util.Try(r.toRealPath()).toOption)
+      val out = new ByteArrayOutputStream()
+      try sdfx.engine.VerifiedFolderInput.copy(path, roots, out, maxBytes = MaxBytes.toLong)
+      catch case NonFatal(_) => throw ToolError("image: verified input could not be read inside an allowed folder or exceeds 16 MiB; use base64 image data if verified file handles are unavailable")
+      out.toByteArray
     else
       val data = if s.startsWith("data:") then
         if !s.startsWith("data:image/png;base64,") then throw ToolError("image must be a PNG base64 data URI")
@@ -102,12 +105,8 @@ object InspectGenerationMetadata:
   def inspect(spec: String, policy: PathPolicy, base: Path, aestheticRegistry: Option[Path] = None): ujson.Obj =
     val bytes = read(spec, policy, base)
     validateChunks(bytes)
-    val temp = Files.createTempFile("sdfx-mcp-infotext-", ".png")
-    val text = try
-      Files.write(temp, bytes)
-      Images.rejectProtectedPng(temp, "image")
-      PngMetadata.readParameters(temp).getOrElse(throw ToolError("PNG has no parameters infotext"))
-    finally Files.deleteIfExists(temp)
+    Images.rejectProtectedPng(bytes, "image")
+    val text = PngMetadata.readParameters(bytes).getOrElse(throw ToolError("PNG has no parameters infotext"))
     val parsed = Infotext.parse(text)
     val p = try Infotext.toParams(parsed) catch case NonFatal(_) => throw ToolError("invalid generation parameters")
     val workErrors = try

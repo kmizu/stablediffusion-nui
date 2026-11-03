@@ -179,7 +179,12 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     sdfx.core.png.ScrambledPng.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path,
       Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"), Some("private"))
     val error = intercept[ToolError](InspectGenerationMetadata.inspect(path.toString, new PathPolicy(() => Seq(dir)), dir))
+    assert(error.getMessage.contains("protected image"))
     assert(!error.getMessage.contains("private"))
+    val encoded = Base64.getEncoder.encodeToString(Files.readAllBytes(path))
+    val base64Error = intercept[ToolError](InspectGenerationMetadata.inspect(encoded, new PathPolicy(() => Seq(dir)), dir))
+    assert(base64Error.getMessage.contains("protected image"))
+    assert(!base64Error.getMessage.contains("private"))
   }
 
   test("compressed PNG parameters are read with a bounded expansion") {
