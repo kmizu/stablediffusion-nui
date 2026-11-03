@@ -3,7 +3,7 @@ package sdfx.ui
 import sdfx.core.model.*
 import sdfx.core.payload.SubmittedPayloadContext
 import sdfx.core.plugins.api.{Plugin, Values}
-import sdfx.engine.{CaptureOptions, Job, JobLimits}
+import sdfx.engine.{CaptureOptions, Img2ImgFolderSpec, Job, JobLimits}
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -117,9 +117,12 @@ object FrozenJobEvidence:
 
   private def capture(c: CaptureOptions): Node = obj("includeImageContents" -> bool(c.includeImageContents))
 
+  private def folder(f: Img2ImgFolderSpec): Node = obj("path" -> string(f.path), "allowedRoots" -> seq(f.allowedRoots)(string))
+
   def freeze(job: Job): FrozenJobEvidence =
     val node = obj(
       "id" -> string(job.id), "params" -> params(job.params), "script" -> option(job.script)(plugin),
       "alwaysOn" -> seq(job.alwaysOn)(plugin), "origin" -> string(job.origin), "limits" -> limits(job.limits),
-      "submittedContext" -> option(job.submittedContext)(context), "captureOptions" -> option(job.captureOptions)(capture))
+      "submittedContext" -> option(job.submittedContext)(context), "captureOptions" -> option(job.captureOptions)(capture),
+      "img2imgFolder" -> option(job.img2imgFolder)(folder))
     new FrozenJobEvidence(node.render(false), node.render(true), job.script.map(_._1), job.alwaysOn.iterator.map(_._1).toVector)
