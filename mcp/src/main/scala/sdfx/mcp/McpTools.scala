@@ -24,7 +24,8 @@ final class McpTools(
     awaitReady: FiniteDuration => Unit,
     readyTimeout: FiniteDuration = 10.minutes,
     allowedDirs: Seq[Path] = PathPolicy.fromEnv(),
-    limits: JobLimits = McpTools.StrictLimits
+    limits: JobLimits = McpTools.StrictLimits,
+    private[mcp] val vaeTimeout: FiniteDuration = 30.minutes
 ):
   import McpTools.*
 
@@ -879,15 +880,40 @@ final class McpTools(
         val args = Args(a, Seq("input_paths", "operation", "representation", "approximation", "seed", "tiled", "cmyk_format", "allow_download", "approx_nn_path"))
         val names = args.strList("input_paths").getOrElse(throw ToolError("input_paths is required"))
         if names.isEmpty || names.size > 64 then throw ToolError("input_paths must contain 1 to 64 files")
-        val paths = names.map(p => pathPolicy.resolve(p, "input_paths", outputsDir.toAbsolutePath))
-        paths.foreach(p => Images.rejectProtectedPng(p, "input_paths"))
-        val weights = args.str("approx_nn_path").filter(_.nonEmpty).map(p => pathPolicy.resolve(p, "approx_nn_path", outputsDir.toAbsolutePath).toString).getOrElse("")
-        ready(ctx)
-        val result = Await.result(new VaeToolsService(services).run(paths,
-          args.str("operation").getOrElse("encode"), args.str("representation").getOrElse("L"), args.str("approximation").getOrElse("Full"),
-          outputsDir, args.long("seed", 0, 0xffffffffL).getOrElse(0L), args.bool("tiled").getOrElse(false),
-          args.str("cmyk_format").getOrElse("TIFF"), args.bool("allow_download").getOrElse(false), weights), 30.minutes)
-        ToolResult.json(result)
+        val temps = scala.collection.mutable.ArrayBuffer.empty[Path]
+        var handedOff = false
+        def snapshot(raw: String, field: String, image: Boolean): (Path, String) =
+          if ctx.isCancelled then throw ToolError("cancelled")
+          VaeInputSnapshot.capture(raw, field, image, pathPolicy, outputsDir.toAbsolutePath, suffix => {
+            val staged = tempFile(suffix)
+            temps += staged
+            staged
+          })
+        try
+          val inputs = names.map(p => snapshot(p, "input_paths", true))
+          val weights = args.str("approx_nn_path").filter(_.nonEmpty).map(p => snapshot(p, "approx_nn_path", false))
+          ready(ctx)
+          if ctx.isCancelled then throw ToolError("cancelled")
+          val handle = new VaeToolsService(services).runOwned(inputs.map(_._1),
+            args.str("operation").getOrElse("encode"), args.str("representation").getOrElse("L"), args.str("approximation").getOrElse("Full"),
+            outputsDir, args.long("seed", 0, 0xffffffffL).getOrElse(0L), args.bool("tiled").getOrElse(false),
+            args.str("cmyk_format").getOrElse("TIFF"), args.bool("allow_download").getOrElse(false), weights.map(_._1.toString).getOrElse(""),
+            inputLabels = inputs.map(_._2), approxNnLabel = weights.map(_._2).getOrElse(""))
+          val completed = handle.result.transform { result =>
+            temps.foreach(Images.deleteQuietly)
+            result
+          }(scala.concurrent.ExecutionContext.parasitic)
+          handedOff = true
+          ctx.onCancel(() => { handle.interrupt(); () })
+          try ToolResult.json(Await.result(completed, vaeTimeout))
+          catch
+            case e: InterruptedException =>
+              handle.interrupt()
+              throw e
+            case e: TimeoutException =>
+              handle.interrupt()
+              throw e
+        finally if !handedOff then temps.foreach(Images.deleteQuietly)
       }),
     tool("txt2img", "Text to image",
       "Generate image(s) from a text prompt and wait for the result. Returns downscaled previews, the saved file paths, seeds and infotext. Long jobs: consider txt2img_async.",

@@ -9,24 +9,30 @@ final class VaeToolsService(services: AppServices):
           output: Path, seed: Long = 0, tiled: Boolean = false, cmykFormat: String = "TIFF",
           allowDownload: Boolean = false, approxNnPath: String = "", allowPlaintextLatent: Boolean = false,
           listener: sdfx.core.protocol.EngineEvent => Unit = _ => (),
-          imageSecret: Option[sdfx.core.png.ImageScrambleSecret] = None): Future[ujson.Value] =
+          imageSecret: Option[sdfx.core.png.ImageScrambleSecret] = None,
+          inputLabels: Seq[String] = Nil, approxNnLabel: String = ""): Future[ujson.Value] =
     runOwned(input, operation, representation, approximation, output, seed, tiled, cmykFormat,
-      allowDownload, approxNnPath, allowPlaintextLatent, listener, imageSecret).result
+      allowDownload, approxNnPath, allowPlaintextLatent, listener, imageSecret, inputLabels, approxNnLabel).result
 
   def runOwned(input: Seq[Path], operation: String, representation: String, approximation: String,
           output: Path, seed: Long = 0, tiled: Boolean = false, cmykFormat: String = "TIFF",
           allowDownload: Boolean = false, approxNnPath: String = "", allowPlaintextLatent: Boolean = false,
           listener: sdfx.core.protocol.EngineEvent => Unit = _ => (),
-          imageSecret: Option[sdfx.core.png.ImageScrambleSecret] = None): VaeToolsHandle =
+          imageSecret: Option[sdfx.core.png.ImageScrambleSecret] = None,
+          inputLabels: Seq[String] = Nil, approxNnLabel: String = ""): VaeToolsHandle =
     require(input.nonEmpty && input.size <= 64 && input.forall(Files.isRegularFile(_)), "Choose 1 to 64 existing input files")
     require(Set("encode", "decode", "encode+decode")(operation), "Unknown VAE operation")
     require(Set("L", "RGBA", "CMYK")(representation), "Unknown latent representation")
     require(Set("Full", "Approx NN", "Approx cheap", "TAESD")(approximation), "Unknown VAE approximation")
     require(seed >= 0 && seed <= 0xffffffffL, "Seed must be 0 to 4294967295")
     Files.createDirectories(output)
-    services.client.vaeToolsOwned(ujson.Obj(
+    require(inputLabels.isEmpty || inputLabels.size == input.size, "Input labels must match input files")
+    val payload = ujson.Obj(
       "input_paths" -> ujson.Arr.from(input.map(_.toAbsolutePath.toString)), "operation" -> operation,
       "representation" -> representation, "approximation" -> approximation, "output_dir" -> output.toAbsolutePath.toString,
       "seed" -> seed.toDouble, "tiled" -> tiled, "cmyk_format" -> cmykFormat, "allow_download" -> allowDownload,
       "approx_nn_path" -> approxNnPath, "allow_plaintext_latent" -> allowPlaintextLatent,
-      "cache_dir" -> services.home.root.resolve("models/vae-tools").toAbsolutePath.toString), listener, imageSecret)
+      "cache_dir" -> services.home.root.resolve("models/vae-tools").toAbsolutePath.toString)
+    if inputLabels.nonEmpty then payload("input_labels") = ujson.Arr.from(inputLabels)
+    if approxNnLabel.nonEmpty then payload("approx_nn_label") = ujson.Str(approxNnLabel)
+    services.client.vaeToolsOwned(payload, listener, imageSecret)

@@ -71,6 +71,7 @@ state = {
     "vae": None,
     "last_generation": None,
     "last_fastload": None,
+    "last_vae_inputs": None,
     "requests": [],
     "load_count": 0,
 }
@@ -199,6 +200,16 @@ def handle_work(rid, typ, params):
                              'hash': 'deadbeef', 'keywords': ['fixture'], 'source': 'default',
                              'default_catalog_available': params['kind'] == 'checkpoint'})
         elif typ == "vae_tools":
+            state['last_vae_inputs'] = []
+            labels = params.get('input_labels') or []
+            if labels and labels[0].endswith('vae-interrupt-test.safetensors'):
+                with open(labels[0] + '.started', 'w', encoding='utf-8') as signal:
+                    signal.write(params['input_paths'][0])
+                time.sleep(5)  # Intentionally ignore interruption while using the snapshot.
+            for path in params.get('input_paths', []):
+                with open(path, 'rb') as source:
+                    state['last_vae_inputs'].append({'path': path, 'bytes': base64.b64encode(source.read()).decode()})
+            state['last_vae_labels'] = params.get('input_labels')
             error(rid, "unsupported", "VAE Tools requires a real loaded VAE; fake engine cannot encode or decode latents")
         elif typ == "load_model":
             time.sleep(float(params.get("delay", 0)) if isinstance(params.get("delay"), (int, float)) else 0)
@@ -358,6 +369,7 @@ def main():
             result(rid, {})
         elif typ == "get_state":
             result(rid, {"loaded": state["loaded"], "vae": state["vae"], "last_generation": state["last_generation"], "last_fastload": state["last_fastload"],
+                         "last_vae_inputs": state.get("last_vae_inputs"), "last_vae_labels": state.get("last_vae_labels"),
                          "load_count": state["load_count"], "pid": os.getpid()})
         elif typ == "list_models":
             result(rid, {"models": [dict(f, kind="sd15") for f in list_dir(params.get("dirs", []), {".safetensors", ".ckpt"})]})

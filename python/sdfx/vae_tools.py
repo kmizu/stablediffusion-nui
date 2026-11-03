@@ -244,7 +244,7 @@ def _approx_nn(engine, array, options):
     if Path(path).stat().st_size > 16 * 1024 * 1024:
         raise ValueError('Approx NN weights exceed size limit')
     weights = torch.load(path, map_location='cpu', weights_only=True)
-    engine._vae_tools_weights = dict(path=path, sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+    engine._vae_tools_weights = dict(path=options.get('approx_nn_label') or path, sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest(),
                                     format='tensor-only torch checkpoint; weights_only=True')
     if not isinstance(weights, dict):
         raise ValueError('Approx NN weights must be a tensor dictionary')
@@ -331,13 +331,19 @@ def run(engine, params, ctx):
     paths = params.get('input_paths')
     if not isinstance(paths, list) or not 1 <= len(paths) <= 64 or any(not isinstance(p, str) for p in paths):
         raise ValueError('input_paths must contain 1..64 file paths')
+    labels = params.get('input_labels', paths)
+    if not isinstance(labels, list) or len(labels) != len(paths) or any(not isinstance(p, str) or len(p) > 32768 for p in labels):
+        raise ValueError('input_labels must contain one bounded string per input')
     seed = params.get('seed', 0)
     if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= 0xFFFFFFFF:
         raise ValueError('seed must be an integer in 0..4294967295')
     for key in ('tiled', 'allow_download'):
         if key in params and not isinstance(params[key], bool):
             raise ValueError(f'{key} must be boolean')
-    options = dict(tiled=params.get('tiled', False), allow_download=params.get('allow_download', False), approx_nn_path=params.get('approx_nn_path', ''),
+    weight_label = params.get('approx_nn_label', '')
+    if not isinstance(weight_label, str) or len(weight_label) > 32768:
+        raise ValueError('approx_nn_label must be a bounded string')
+    options = dict(tiled=params.get('tiled', False), allow_download=params.get('allow_download', False), approx_nn_path=params.get('approx_nn_path', ''), approx_nn_label=weight_label,
                    cache_dir=params.get('cache_dir') or str(Path(params.get('output_dir') or '.') / '.vae-tools-models'))
     cmyk_format = params.get('cmyk_format', 'TIFF')
     if cmyk_format not in ('TIFF', 'JPEG100'):
@@ -373,7 +379,8 @@ def run(engine, params, ctx):
     for index, path in enumerate(paths):
         ctx.check_interrupt()
         started = time.monotonic()
-        item = dict(input_path=path, status='complete')
+        # A label is report-only: every file access below uses the verified snapshot path.
+        item = dict(input_path=labels[index], status='complete')
         try:
             if operation == 'decode' and Path(path).stat().st_size > MAX_BYTES:
                 raise ValueError('latent file exceeds size limit')

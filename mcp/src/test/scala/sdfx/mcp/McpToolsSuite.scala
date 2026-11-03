@@ -44,6 +44,85 @@ class McpToolsSuite extends munit.FunSuite:
     finally Files.deleteIfExists(outside)
   }
 
+  test("VAE file input is an owned snapshot while original path stays the provenance") {
+    val source = home.outputs(services.settings).resolve("snapshot-latent.safetensors")
+    Files.createDirectories(source.getParent)
+    val bytes = Array[Byte](13, 19, -1, 42)
+    Files.write(source, bytes)
+    val result = call("vae_tools", ujson.Obj("input_paths" -> ujson.Arr(source.toString), "operation" -> "decode"))
+    assert(result("isError").bool)
+    val state = Await.result(services.client.raw("get_state"), 10.seconds)
+    val snapshot = Paths.get(state("last_vae_inputs")(0)("path").str)
+    assertNotEquals(snapshot, source.toRealPath())
+    assertEquals(Base64.getDecoder.decode(state("last_vae_inputs")(0)("bytes").str).toSeq, bytes.toSeq)
+    assertEquals(state("last_vae_labels")(0).str, source.toRealPath().toString)
+    assert(eventually()(!Files.exists(snapshot)))
+    assertEquals(Files.readAllBytes(source).toSeq, bytes.toSeq)
+  }
+
+  test("interrupted VAE caller keeps the snapshot until the worker finishes") {
+    val source = home.outputs(services.settings).resolve("vae-interrupt-test.safetensors")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Array[Byte](1, 2, 3))
+    val marker = Paths.get(source.toString + ".started")
+    Files.deleteIfExists(marker)
+    val caller = new Thread(() => {
+      try { call("vae_tools", ujson.Obj("input_paths" -> ujson.Arr(source.toString), "operation" -> "decode")); () }
+      catch case _: Throwable => ()
+    })
+    caller.start()
+    try
+      assert(eventually(10.seconds)(Files.exists(marker)), "worker did not start")
+      val staged = Paths.get(Files.readString(marker))
+      assert(Files.exists(staged))
+      caller.interrupt()
+      caller.join(1500)
+      assert(!caller.isAlive, "interrupted caller did not return")
+      assert(Files.exists(staged), "worker is still using the snapshot")
+      assert(eventually(10.seconds)(!Files.exists(staged)), "snapshot not removed after worker finished")
+    finally
+      if caller.isAlive then { caller.interrupt(); caller.join(3000) }
+      Files.deleteIfExists(marker)
+  }
+
+  test("MCP VAE cancellation keeps the snapshot until the worker finishes") {
+    val source = home.outputs(services.settings).resolve("cancel-vae-interrupt-test.safetensors")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Array[Byte](5, 6, 7))
+    val marker = Paths.get(source.toString + ".started")
+    Files.deleteIfExists(marker)
+    val id = ujson.Str("vae-cancel-1")
+    val request = callReq("vae_tools", ujson.Obj("input_paths" -> ujson.Arr(source.toString), "operation" -> "decode"), id = id)
+    val running = Future(server.handle(request, _ => ()))
+    try
+      assert(eventually(10.seconds)(Files.exists(marker)), "worker did not start")
+      val staged = Paths.get(Files.readString(marker))
+      server.handle(ujson.Obj("jsonrpc" -> "2.0", "method" -> "notifications/cancelled", "params" -> ujson.Obj("requestId" -> id)), _ => ())
+      assert(Files.exists(staged), "worker is still using the snapshot")
+      assertEquals(Await.result(running, 15.seconds), None)
+      assert(eventually(10.seconds)(!Files.exists(staged)), "snapshot not removed after worker finished")
+    finally Files.deleteIfExists(marker)
+  }
+
+  test("VAE timeout keeps the snapshot until the worker finishes") {
+    val source = home.outputs(services.settings).resolve("timeout-vae-interrupt-test.safetensors")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Array[Byte](8, 9, 10))
+    val marker = Paths.get(source.toString + ".started")
+    Files.deleteIfExists(marker)
+    val short = new McpTools(services, McpTools.waitForEngine(services), vaeTimeout = 2.seconds)
+    val shortServer = new McpServer(short.all)
+    val request = callReq("vae_tools", ujson.Obj("input_paths" -> ujson.Arr(source.toString), "operation" -> "decode"), id = ujson.Str("vae-timeout-1"))
+    try
+      val response = shortServer.handle(request, _ => ()).get("result")
+      assert(response("isError").bool)
+      assert(Files.exists(marker), "worker did not start")
+      val staged = Paths.get(Files.readString(marker))
+      assert(Files.exists(staged), "worker is still using the snapshot")
+      assert(eventually(10.seconds)(!Files.exists(staged)), "snapshot not removed after worker finished")
+    finally Files.deleteIfExists(marker)
+  }
+
   private def call(tool: String, args: ujson.Value, rec: ujson.Value => Unit = _ => (), id: ujson.Value = ujson.Null, token: Option[ujson.Value] = None): ujson.Value =
     val r = server.handle(callReq(tool, args, id, token), rec).getOrElse(fail("no response"))
     assert(!r.obj.contains("error"), s"JSON-RPC error: $r")

@@ -40,6 +40,24 @@ def ctx():
     return JobContext(Emitter(io.BytesIO()), 'vae-test')
 
 
+def test_snapshot_uses_original_label_only_as_provenance(engine, tmp_path):
+    engine.device, engine.cuda = torch.device('cpu'), False
+    snapshot = tmp_path / 'staged.png'
+    Image.new('RGB', (64, 64), (12, 34, 56)).save(snapshot)
+    original_label = str(tmp_path / 'original.png')
+    result = engine.vae_tools(dict(input_paths=[str(snapshot)], input_labels=[original_label],
+                                   output_dir=str(tmp_path), operation='encode+decode'), ctx())
+    item = result['results'][0]
+    assert item['status'] == 'complete', item.get('error')
+    assert item['input_path'] == original_label
+    assert item['input_sha256'] == hashlib.sha256(snapshot.read_bytes()).hexdigest()
+    report = __import__('json').loads(Path(result['report_path']).read_text())
+    assert report['results'][0]['input_path'] == original_label
+    with pytest.raises(EngineError):
+        engine.vae_tools(dict(input_paths=[str(snapshot)], input_labels=[], output_dir=str(tmp_path),
+                              operation='encode+decode'), ctx())
+
+
 @pytest.mark.parametrize('representation', ['L', 'RGBA', 'CMYK'])
 def test_actual_tiny_vae_file_roundtrip_and_batch(engine, tmp_path, representation):
     source = tmp_path / 'source.png'
@@ -179,6 +197,8 @@ def test_odd_source_not_resized_and_failed_explicit_decode_is_not_caught(engine,
 
 
 def test_approx_modes_have_real_resolution_and_encoding_fallback(engine, tmp_path):
+    engine.device = 'cpu'
+    engine.cuda = False
     source = tmp_path / 'source.png'
     Image.new('RGB', (64, 64)).save(source)
     result = engine.vae_tools(dict(input_paths=[str(source)], output_dir=str(tmp_path), operation='encode+decode', approximation='Approx cheap'), ctx())
@@ -191,7 +211,8 @@ def test_approx_modes_have_real_resolution_and_encoding_fallback(engine, tmp_pat
         weights[f'conv{i}.bias'] = torch.zeros(cout)
     path = tmp_path / 'approx.pt'
     torch.save(weights, path)
-    result = engine.vae_tools(dict(input_paths=[str(source)], output_dir=str(tmp_path), operation='encode+decode', approximation='Approx NN', approx_nn_path=str(path)), ctx())
+    result = engine.vae_tools(dict(input_paths=[str(source)], output_dir=str(tmp_path), operation='encode+decode', approximation='Approx NN', approx_nn_path=str(path), approx_nn_label='original-weights.pt'), ctx())
+    assert result['weights']['path'] == 'original-weights.pt'
     assert result['results'][0]['status'] == 'complete', result
     image = Image.open(result['results'][0]['path'])
     assert image.size == (16, 16) and np.array(image).min() == np.array(image).max() == 127
