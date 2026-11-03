@@ -1,5 +1,7 @@
 # Stable Diffusion NUI MCP server
 
+保存済み Prompt Tools は `prompt_library` の `{"action":"list"}` で名前と正・負を一覧し、`{"action":"get","name":"quality"}` で本文を取得できる。`list` の `limit` は最大 100、次のページは `next_offset` を `offset` に渡す。ホームの `config/prompt-tools/prompts.json` だけを読み、保存や削除は行わない。ファイル自体がシンボリックリンクの場合は拒否するが、親ディレクトリのリンク差替えは保護しない。ファイルは最大 20 MiB、取得する本文は最大 100,000 文字。
+
 Lets AI agents (Claude Code, other MCP clients) generate images with Stable Diffusion NUI.
 
 Two transports:

@@ -54,6 +54,38 @@ class McpToolsSuite extends munit.FunSuite:
     assert(!r("isError").bool, s"$tool failed: ${textOf(r)}")
     r
 
+  test("prompt library MCP lists names and reads one prompt without modifying the library") {
+    val descriptor = tools.all.find(_.name == "prompt_library").getOrElse(fail("prompt library tool missing")).descriptor
+    assert(descriptor("annotations")("readOnlyHint").bool)
+    val service = services.promptTools
+    service.updateLibrary(_.save("quality", "sharp, detailed", false)._1.save("avoid", "blurry", true)._1)
+    val file = service.libraryStore.file
+    val before = Files.readAllBytes(file)
+    val first = ok("prompt_library", ujson.Obj("action" -> "list", "limit" -> 1))("structuredContent")
+    assertEquals(first("entries").arr.head("name").str, "quality")
+    assertEquals(first("entries").arr.head("negative").bool, false)
+    assertEquals(first("next_offset").num.toInt, 1)
+    assert(!first.render().contains("sharp, detailed"))
+    val next = ok("prompt_library", ujson.Obj("action" -> "list", "offset" -> 1))("structuredContent")
+    assertEquals(next("entries").arr.head("name").str, "avoid")
+    val item = ok("prompt_library", ujson.Obj("action" -> "get", "name" -> "avoid"))("structuredContent")
+    assertEquals(item("prompt").str, "blurry")
+    assertEquals(item("negative").bool, true)
+    assert(call("prompt_library", ujson.Obj("action" -> "get", "name" -> "missing"))("isError").bool)
+    assert(call("prompt_library", ujson.Obj("action" -> "delete", "name" -> "avoid"))("isError").bool)
+    assert(call("prompt_library", ujson.Obj("action" -> "get", "name" -> "avoid", "limit" -> 1))("isError").bool)
+    assert(java.util.Arrays.equals(Files.readAllBytes(file), before))
+    val tooLong = ujson.Obj("large" -> ujson.Obj("prompt" -> ("x" * 100001), "is_negative" -> false))
+    Files.writeString(file, tooLong.render())
+    try
+      assert(call("prompt_library", ujson.Obj("action" -> "get", "name" -> "large"))("isError").bool)
+    finally Files.write(file, before)
+    Files.write(file, Array.fill[Byte](sdfx.core.prompttools.PromptLibrary.MaxFileBytes + 1)(32))
+    try
+      assert(call("prompt_library", ujson.Obj("action" -> "list"))("isError").bool)
+    finally Files.write(file, before)
+  }
+
   test("generation history MCP lists entries and reads exact typed fields without source metadata") {
     import sdfx.core.presets.*
     val store = new PresetStore(home.configDir.resolve("generation-history"), PresetLimits(maxCollections = 6))
