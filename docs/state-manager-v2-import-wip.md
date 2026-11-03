@@ -23,7 +23,13 @@ import record の「全復元」も実際には対応済み項目だけの復元
 
 追加の合成 fixture `core/src/test/resources/fixtures/state-manager-v2-webstreams.gz` は `scripts/dev/make_state_manager_fixture.mjs` が Node 22 の Web Streams `CompressionStream("gzip")` で生成する。上流と同じブラウザ API を使うが、内容は手作りの例で、上流アプリを実行した証拠ではない。SHA-256 `364bed76c185013e2c43d7d7d043a07bc0acd5298f2c4690f10d65313da64d6a`。名前・プロンプトを含め個人データは入れていない。
 
-配布版、合成以外の上流データ、IndexedDB 抽出と import の境界条件・独立レビューがまだ残る。group のない entry と未知 group は拒否し、一括 import は全体が失敗する。未知設定の一覧は先頭40項目を表示し、残数を知らせる。source 原本を埋め込むため native JSON の容量制限によって import が拒否されることがある。source の preview 画像を native thumbnail としては取り込まない。上流との完全互換を主張しない。関連 issue #23 は open のまま。詳細な実施順は `docs/superpowers/plans/2026-11-03-state-import.md`。
+配布版、合成以外の上流データ、IndexedDB 抽出と import の境界条件・独立レビューがまだ残る。group のない entry と未知 group は拒否し、一括 import は全体が失敗する。未知設定の一覧は先頭40項目を表示し、残数を知らせる。source 原本を埋め込むため native JSON の容量制限によって import が拒否されることがある。上流との完全互換を主張しない。関連 issue #23 は open のまま。詳細な実施順は `docs/superpowers/plans/2026-11-03-state-import.md`。
+
+上流の `createPreviewImageData` は canvas に最大辺 100 px で描き、通常 PNG data URI を作る。これを native thumbnail に取り込む処理を追加。埋め込み PNG、decoded 256 KiB 以下、各辺 100 px 以下に限定し、寸法を読んでから decode し metadata を除いた PNG を保存する。外部 URL は取得せず、既存 thumbnail を上書きしない。JSON 保存後に thumbnail 保存を試し、非対応や失敗を別件数で知らせるため、画像のみ失敗した場合も履歴は残る。協調プロセス間ロックと既存の junction チェックを使うが非協調者による交換競合は保証しない。合成データで `GenerationHistorySuite` 18/18 と source-class の実 MainWindow が成功し、`outputs/import-thumbnails-final/state-manager-import-thumbnail.png` の赤いプレビューを目視した。初回の test は callback 内 assertion の例外が隠れて timeout し、結果を callback 外で検証する形に修正した後 focused と全件が成功。実上流生成ファイル、配布版、実 HTTP 接続遮断試験や保存中の非協調ディレクトリ交換は未検証。
+
+main への部分統合時も履歴18件・`RealNamedGenerationStatesCheck`・`ui/assembly` が exit 0。JAR SHA-256 は `8f85e9d42c534ddbbb641d0b6139c4c9978b7ea3e3ec6c692b8fa4dcda4b916e`。下記の実モデル試験は分離 worktree の source-class GUI によるもので、main JAR や配布版の実測ではない。
+
+最終版は `GenerationHistorySuite` 18/18 と source-class 実 MainWindow による SD1.5／SDXL 両モデルで成功。生成画像から作った thumbnail を合成 gzip に埋めて取り込み、画像の保存数、favourites の表示、prompt・seed 復元と PNG metadata を確認した（`outputs/import-preview-real-sd15/history-real-2864515455241078903`、`outputs/import-preview-real-sdxl/history-real-3862274142710093619`）。それぞれ `03-imported-thumbnail.png` の一覧画像と、生成した `00007-7109.png` を目視し、桜と赤い着物の人物を確認。生成画像 SHA-256 は順に `214aeb334ff1a06e3dd3fb85488eb666c0d0063455c1825b7cfa0d1d5f7f42cd` と `ea98780bea283320740110a305c1ca98378347ec95d4ea0fb56481cdb01a6e47`。
 
 独立レビューで、取込み履歴を末尾に追加すると、上限時に既存の新しい履歴が先に削除され得ることを確認。固定 revision の上流 `saveState` は `Date.now()` のミリ秒を作成キーに使うが、native 履歴は比較に使える正確な共通 timestamp を保持しない。新規取込み分は既存履歴の前に置いて古い扱いとし、表示・削除順と原本の metadata 複製、対応項目は entry ごとに異なる点を確認画面と日本語文書に明示した。修正前の回帰テストは期待どおり失敗し、修正後は decoder 3/3、履歴 13/13 と offline の実 MainWindow test が成功。`outputs/state-v2-order-gui/state-manager-import-preview.png` を目視した。異なる取込み間の正確な時系列は保証しない。
 

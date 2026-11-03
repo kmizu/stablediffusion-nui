@@ -451,7 +451,13 @@ object RealNamedGenerationStatesCheck:
       }}
       checked("multi-remove, clear and explicit delete respect favourite membership")
       val upstream = output.resolve("synthetic-state-manager-history.txt")
-      val upstreamJson = """{"defaults":{"d":{"img2img/Prompt":"original default","img2img/Unrecognized setting":"keep"}},"entries":{"1700000000123":{"saveVersion":"2.0","type":"img2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"img2img/Prompt":"imported prompt"}}}}"""
+      val previewImage = new java.awt.image.BufferedImage(32, 16, java.awt.image.BufferedImage.TYPE_INT_RGB)
+      val previewGraphics = previewImage.createGraphics()
+      previewGraphics.setColor(java.awt.Color.RED); previewGraphics.fillRect(0, 0, 32, 16); previewGraphics.dispose()
+      val previewBytes = new java.io.ByteArrayOutputStream()
+      require(ImageIO.write(previewImage, "png", previewBytes))
+      val previewUri = "data:image/png;base64," + java.util.Base64.getEncoder.encodeToString(previewBytes.toByteArray)
+      val upstreamJson = s"""{"defaults":{"d":{"img2img/Prompt":"original default","img2img/Unrecognized setting":"keep"}},"entries":{"1700000000123":{"saveVersion":"2.0","type":"img2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"img2img/Prompt":"imported prompt"},"preview":"$previewUri"}}}"""
       val gzip = new java.util.zip.GZIPOutputStream(Files.newOutputStream(upstream))
       gzip.write(upstreamJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)); gzip.close()
       def previewImport(answer: ButtonType): Unit =
@@ -474,6 +480,12 @@ object RealNamedGenerationStatesCheck:
       fx { require(node[ListView[PresetRecord]]("generation-history-list").getItems.isEmpty, "cancel imported history") }
       previewImport(ButtonType.OK)
       eventually("imported history") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 1) }
+      eventually("imported thumbnail") { fx {
+        val item = node[ListView[PresetRecord]]("generation-history-list").getItems.get(0)
+        Files.isRegularFile(home.configDir.resolve("generation-history/thumbs").resolve(item.id.toString + ".png")) &&
+          node[TextArea]("generation-states-status").getText.contains("thumbnails saved: 1")
+      }}
+      screenshot("state-manager-import-thumbnail")
       fx {
         node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
         val list = node[ListView[PresetRecord]]("generation-favourites-list")

@@ -145,6 +145,7 @@ object RealGenerationHistoryCheck:
       val idA = historyItems.head.id
       val thumbA = home.configDir.resolve(s"generation-history/thumbs/$idA.png")
       eventually("first thumbnail") { Files.isRegularFile(thumbA) }
+      val thumbABytes = Files.readAllBytes(thumbA)
       val thumb = ImageIO.read(thumbA.toFile)
       require(thumb.getWidth <= 100 && thumb.getHeight <= 100 && math.max(thumb.getWidth, thumb.getHeight) == 100, s"thumbnail ${thumb.getWidth}x${thumb.getHeight}")
       val thumbColors = (for y <- 0 until thumb.getHeight; x <- 0 until thumb.getWidth yield thumb.getRGB(x, y)).distinct.size
@@ -294,7 +295,8 @@ object RealGenerationHistoryCheck:
       note("multi-select Delete removed two entries and their thumbnails")
       screenshot("02-after-delete.png")
       val upstream = run.resolve("synthetic-history.txt")
-      val upstreamJson = s"""{"defaults":{"d":{"txt2img/Prompt":"source default","txt2img/Sampling method":"Euler","txt2img/Sampling steps":$steps,"txt2img/Width":$side,"txt2img/Height":$side,"customscript/seed.py/txt2img/Seed":7109,"txt2img/Unsupported":"preserved"}},"entries":{"1700000000123":{"saveVersion":"2.0","type":"txt2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"txt2img/Prompt":"1girl, red kimono, cherry blossoms"}}}}"""
+      val previewUri = "data:image/png;base64," + java.util.Base64.getEncoder.encodeToString(thumbABytes)
+      val upstreamJson = s"""{"defaults":{"d":{"txt2img/Prompt":"source default","txt2img/Sampling method":"Euler","txt2img/Sampling steps":$steps,"txt2img/Width":$side,"txt2img/Height":$side,"customscript/seed.py/txt2img/Seed":7109,"txt2img/Unsupported":"preserved"}},"entries":{"1700000000123":{"saveVersion":"2.0","type":"txt2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"txt2img/Prompt":"1girl, red kimono, cherry blossoms"},"preview":"$previewUri"}}}"""
       val gz = new java.util.zip.GZIPOutputStream(Files.newOutputStream(upstream))
       gz.write(upstreamJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)); gz.close()
       fx {
@@ -314,6 +316,12 @@ object RealGenerationHistoryCheck:
         control[TabPane]("generation-states-tabs").getSelectionModel.select(2)
         control[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.source.exists(_.format == "state-manager-v2"))
       }}
+      eventually("imported State Manager thumbnail") { fx {
+        val item = control[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.find(_.source.exists(_.format == "state-manager-v2")).get
+        Files.isRegularFile(home.configDir.resolve("generation-history/thumbs").resolve(item.id.toString + ".png")) &&
+          control[TextArea]("generation-states-status").getText.contains("thumbnails saved: 1")
+      }}
+      screenshot("03-imported-thumbnail.png")
       fx {
         val list = control[ListView[PresetRecord]]("generation-favourites-list")
         val imported = list.getItems.asScala.find(_.source.exists(_.format == "state-manager-v2")).get

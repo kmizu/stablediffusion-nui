@@ -35,9 +35,43 @@ object StateCategory:
   def keys(record: PresetRecord, chosen: Set[StateCategory]): Set[FieldKey] =
     record.fields.keySet.filter(k => chosen(of(k)))
 
+final case class HistoryImportSummary(previewsSaved: Int, previewsSkipped: Int)
+
+private object ImportedHistoryPreview:
+  private val prefix = "data:image/png;base64,"
+  private val maxBytes = 256 * 1024
+  def png(value: String): Option[Array[Byte]] =
+    if !value.startsWith(prefix) || value.length - prefix.length > ((maxBytes + 2) / 3) * 4 then return None
+    try
+      val bytes = java.util.Base64.getDecoder.decode(value.substring(prefix.length))
+      if bytes.length > maxBytes then return None
+      val input = new javax.imageio.stream.MemoryCacheImageInputStream(new java.io.ByteArrayInputStream(bytes))
+      try
+        val readers = javax.imageio.ImageIO.getImageReaders(input)
+        if !readers.hasNext then return None
+        val reader = readers.next()
+        try
+          if !reader.getFormatName.equalsIgnoreCase("png") then return None
+          reader.setInput(input, true, true)
+          val width = reader.getWidth(0)
+          val height = reader.getHeight(0)
+          if width < 1 || height < 1 || width > 100 || height > 100 then return None
+          val image = reader.read(0)
+          val output = new java.io.ByteArrayOutputStream()
+          Option.when(image != null && javax.imageio.ImageIO.write(image, "png", output))(output.toByteArray)
+        finally reader.dispose()
+      finally input.close()
+    catch case NonFatal(_) => None
+
 /** Automatic, capped per-mode generation history kept apart from the manual named-state library. */
 object GenerationHistory:
   val DefaultLimit = 50
+  private def sourceDigest(entry: StateManagerV2Entry): Array[Byte] =
+    MessageDigest.getInstance("SHA-256").digest(
+      (entry.mode.toString + "\u0000" + entry.sourceId + "\u0000" + entry.originalEntry.text + "\u0000" + entry.originalDefaults.text).getBytes(UTF_8))
+  def importedId(entry: StateManagerV2Entry): UUID =
+    val buffer = ByteBuffer.wrap(sourceDigest(entry))
+    new UUID(buffer.getLong(), buffer.getLong())
   /** Comma-separated terms all need to match one of the searchable saved fields or the name. */
   def matchesSearch(record: PresetRecord, query: String): Boolean =
     val terms = Option(query).getOrElse("").split(",").toVector.map(_.trim.toLowerCase(java.util.Locale.ROOT)).filter(_.nonEmpty)
@@ -139,10 +173,8 @@ object GenerationHistory:
             case PresetMode.Txt2Img => Mode.Txt2Img
             case PresetMode.Img2Img => Mode.Img2Img
             case PresetMode.Inpaint => Mode.Inpaint
-          val digest = MessageDigest.getInstance("SHA-256").digest(
-            (entry.mode.toString + "\u0000" + entry.sourceId + "\u0000" + entry.originalEntry.text + "\u0000" + entry.originalDefaults.text).getBytes(UTF_8))
-          val buffer = ByteBuffer.wrap(digest)
-          val id = new UUID(buffer.getLong(), buffer.getLong())
+          val digest = sourceDigest(entry)
+          val id = importedId(entry)
           val shortHash = digest.take(10).map(b => f"${b & 255}%02x").mkString
           val originalTitle = entry.sourceName.map(_.trim).filter(_.nonEmpty).getOrElse(s"State Manager ${entry.sourceId}")
           val cleanTitle = originalTitle.codePoints().toArray.filterNot(cp => Character.isISOControl(cp)).take(180)
@@ -328,9 +360,44 @@ final class GenerationHistoryStore(directory: Path, limit: Int, dispatch: (() =>
     }
 
   def importV2(incoming: Vector[StateManagerV2Entry])(done: Either[PresetError, Unit] => Unit): Unit =
+    importV2WithPreviews(incoming)(result => done(result.map(_ => ())))
+
+  def importV2WithPreviews(incoming: Vector[StateManagerV2Entry])(done: Either[PresetError, HistoryImportSummary] => Unit): Unit =
     run {
       val result = mutate(lib => (GenerationHistory.importV2(lib, incoming, limit).toOption.get, None, Vector.empty),
-        lib => GenerationHistory.importV2(lib, incoming, limit).map(_ => ())).map(_ => ())
+        lib => GenerationHistory.importV2(lib, incoming, limit).map(_ => ())).map { _ =>
+          val candidates = incoming.flatMap { entry =>
+            try ujson.read(entry.originalEntry.text).obj.get("preview") match
+              case Some(ujson.Str(value)) if value.nonEmpty => Some((GenerationHistory.importedId(entry), value))
+              case Some(ujson.Null) | Some(ujson.Str("")) | None => None
+              case Some(_) => Some((GenerationHistory.importedId(entry), ""))
+            catch case NonFatal(_) => None
+          }
+          val copied = exclusive {
+            val live = store.load().fold(error => throw new java.io.IOException(error.issues.map(_.message).mkString("; ")),
+              _.library.collections.flatMap(_.presets.map(_.id)).toSet)
+            var saved = 0
+            var skipped = 0
+            candidates.foreach { (id, value) =>
+              val path = thumbnail(id)
+              if live(id) && !Files.exists(path, LinkOption.NOFOLLOW_LINKS) then
+                try
+                  ImportedHistoryPreview.png(value) match
+                    case None => skipped += 1
+                    case Some(bytes) =>
+                      if !safeThumbDirectory(true) then throw new java.io.IOException("unsafe thumbnail directory")
+                      val temp = Files.createTempFile(thumbs, ".import-", ".png")
+                      try
+                        Files.write(temp, bytes, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
+                        Files.move(temp, path)
+                        saved += 1
+                      finally try Files.deleteIfExists(temp) catch case NonFatal(_) => ()
+                catch case NonFatal(_) => skipped += 1
+            }
+            HistoryImportSummary(saved, skipped)
+          }
+          copied.getOrElse(HistoryImportSummary(0, candidates.size))
+        }
       dispatch(() => { done(result); if result.isRight then listener() })
     }
 

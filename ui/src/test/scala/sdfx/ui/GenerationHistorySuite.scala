@@ -27,6 +27,74 @@ class GenerationHistorySuite extends munit.FunSuite:
   private def values(n: Int): Map[FieldKey, PresetAtom] =
     Map(FieldKey(Vector("generation", "steps")) -> PresetAtom.Integer(n))
 
+  test("State Manager import saves bounded inline preview without overwriting an existing thumbnail") {
+    val image = new java.awt.image.BufferedImage(16, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    image.setRGB(0, 0, 0xffff0000)
+    val png = new java.io.ByteArrayOutputStream()
+    assert(javax.imageio.ImageIO.write(image, "png", png))
+    val uri = "data:image/png;base64," + java.util.Base64.getEncoder.encodeToString(png.toByteArray)
+    val json = ujson.Obj("defaults" -> ujson.Obj("d" -> ujson.Obj("txt2img/Prompt" -> "sample")),
+      "entries" -> ujson.Obj("1700000000000" -> ujson.Obj("saveVersion" -> "2.0", "type" -> "txt2img", "defaults" -> "d",
+        "groups" -> ujson.Arr("history"), "quickSettings" -> ujson.Obj(), "componentSettings" -> ujson.Obj(), "preview" -> uri)))
+    val bytes = new java.io.ByteArrayOutputStream()
+    val gzip = new java.util.zip.GZIPOutputStream(bytes)
+    gzip.write(json.render().getBytes(java.nio.charset.StandardCharsets.UTF_8)); gzip.close()
+    val incoming = StateManagerV2.decode(bytes.toByteArray).toOption.get
+    val dir = Files.createTempDirectory("sdfx-import-preview-")
+    val store = new GenerationHistoryStore(dir, 50, thunk => thunk())
+    val done = new CountDownLatch(1)
+    var result: Either[PresetError, HistoryImportSummary] = null
+    store.importV2WithPreviews(incoming) { r => result = r; done.countDown() }
+    assert(done.await(20, TimeUnit.SECONDS) && result.isRight, result.toString)
+    assertEquals(result.toOption.get.previewsSaved, 1)
+    val listed = new CountDownLatch(1)
+    var entries = Vector.empty[PresetRecord]
+    store.list(Mode.Txt2Img) { r => entries = r.toOption.get; listed.countDown() }
+    assert(listed.await(20, TimeUnit.SECONDS))
+    val thumb = store.thumbnailIfSafe(entries.head.id).get
+    val decoded = javax.imageio.ImageIO.read(thumb.toFile)
+    assertEquals((decoded.getWidth, decoded.getHeight), (16, 8))
+    val original = Files.readAllBytes(thumb).toVector
+    val retry = new CountDownLatch(1)
+    var retryResult: Either[PresetError, Unit] = null
+    store.importV2(incoming) { r => retryResult = r; retry.countDown() }
+    assert(retry.await(20, TimeUnit.SECONDS))
+    assert(retryResult.isRight, retryResult.toString)
+    assertEquals(Files.readAllBytes(thumb).toVector, original)
+    store.close()
+  }
+
+  test("import rejects unsafe previews without dropping history records") {
+    val wide = new java.io.ByteArrayOutputStream()
+    javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(101, 1, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", wide)
+    val previews = Vector("https://example.invalid/preview.png", "data:image/png;base64,not-valid!",
+      "data:image/png;base64," + java.util.Base64.getEncoder.encodeToString(wide.toByteArray),
+      "data:image/png;base64," + ("A" * 200000))
+    val entries = ujson.Obj.from(previews.zipWithIndex.map { (preview, i) =>
+      s"170000000000$i" -> ujson.Obj("saveVersion" -> "2.0", "type" -> "txt2img", "defaults" -> "d",
+        "groups" -> ujson.Arr("history"), "quickSettings" -> ujson.Obj(), "componentSettings" -> ujson.Obj(), "preview" -> preview)
+    })
+    val json = ujson.Obj("defaults" -> ujson.Obj("d" -> ujson.Obj("txt2img/Prompt" -> "sample")), "entries" -> entries)
+    val bytes = new java.io.ByteArrayOutputStream()
+    val gzip = new java.util.zip.GZIPOutputStream(bytes)
+    gzip.write(json.render().getBytes(java.nio.charset.StandardCharsets.UTF_8)); gzip.close()
+    val incoming = StateManagerV2.decode(bytes.toByteArray).toOption.get
+    val dir = Files.createTempDirectory("sdfx-import-invalid-preview-")
+    val store = new GenerationHistoryStore(dir, 50, thunk => thunk())
+    val done = new CountDownLatch(1)
+    var result: Either[PresetError, HistoryImportSummary] = null
+    store.importV2WithPreviews(incoming) { r => result = r; done.countDown() }
+    assert(done.await(20, TimeUnit.SECONDS) && result.isRight, result.toString)
+    assertEquals(result.toOption.get, HistoryImportSummary(0, 4))
+    val listed = new CountDownLatch(1)
+    var count = 0
+    store.list(Mode.Txt2Img) { r => count = r.toOption.get.size; listed.countDown() }
+    assert(listed.await(20, TimeUnit.SECONDS))
+    assertEquals(count, 4)
+    assert(!Files.exists(dir.resolve("thumbs")))
+    store.close()
+  }
+
   test("rename updates both references while preserving identity and rejects stale or duplicate names") {
     val (one, first, _) = GenerationHistory.append(empty, Mode.Txt2Img, values(1), at, 10)
     val (two, second, _) = GenerationHistory.append(one, Mode.Txt2Img, values(2), at, 10)

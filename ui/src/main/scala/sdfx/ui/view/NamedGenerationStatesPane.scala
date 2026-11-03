@@ -386,6 +386,7 @@ final class NamedGenerationStatesPane(
             val message = s"Import ${entries.size} entries from ${path.getFileName}?\n" +
               "Only supported fields are restored; the supported fields differ by entry. " +
               "Original entries and defaults, including any private settings or preview images, are copied into local history metadata. " +
+              "Embedded PNG previews up to 100 × 100 pixels may be copied as thumbnails; external URLs are not fetched. " +
               "Imported history is treated as older than existing history and may be evicted first. " +
               "If history capacity or storage limits would be exceeded, nothing is imported.\n\n" +
               s"Supported fields across all entries: $supported\n\n" +
@@ -393,12 +394,13 @@ final class NamedGenerationStatesPane(
             if confirmImport(message) && !closed then
               historyPending = true
               refreshButtons()
-              history.importV2(entries) { result =>
+              history.importV2WithPreviews(entries) { result =>
                 historyPending = false
                 if !closed then
                   result match
                     case Left(error) => failure(error)
-                    case Right(_) => status.setText(s"Imported ${entries.size} source entries; existing matching entries were kept.")
+                    case Right(summary) => status.setText(s"Imported ${entries.size} source entries; existing matching entries were kept. " +
+                      s"Preview thumbnails saved: ${summary.previewsSaved}; preview values skipped (unsupported or failed): ${summary.previewsSkipped}.")
                   refreshButtons()
               }
             else refreshButtons()
