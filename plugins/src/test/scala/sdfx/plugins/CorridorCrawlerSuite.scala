@@ -57,6 +57,59 @@ class CorridorCrawlerSuite extends munit.FunSuite:
     for y <- 0 until 512; x <- 0 until 512 do img.setRGB(x, y, rgb)
     img
 
+  test("aspect-preserving placement leaves and repaints unused window space") {
+    val ctx = new FakeContext(echoInit = true)
+    val green = ctx.dir.resolve("prefab-green.png")
+    ImageIO.write(ctxSolid(0x00ff00), "png", green.toFile)
+    plugin.run(img2img(ctx), values("steps" -> "1", "prefab" -> CustomPrefab, "prefab_image" -> green.toString,
+      "window_width" -> "40", "window_height" -> "20", "placement" -> "Preserve aspect"), ctx)
+    val (init, maybeMask) = ctx.inputs.head
+    val m = maybeMask.get
+    assertEquals(px(init, 140, 90), 0x2060c0)
+    assertEquals(px(init, 260, 90), 0x00ff00)
+    assertEquals(px(m, 140, 90), 0)
+    assertEquals(px(m, 260, 90), 0xffffff)
+  }
+
+  test("aspect placement never enlarges, records actual bounds, and updates the mask for the next image") {
+    val ctx = new FakeContext(echoInit = true)
+    val input = ctx.dir.resolve("small.png")
+    val small = new BufferedImage(80, 40, BufferedImage.TYPE_INT_RGB)
+    val g = small.createGraphics(); g.setColor(java.awt.Color.RED); g.fillRect(0, 0, 80, 40); g.dispose()
+    ImageIO.write(small, "png", input.toFile)
+    val p = base.copy(img2img = Some(Img2ImgParams(input.toString, denoisingStrength = 0.9)))
+    plugin.run(p, values("steps" -> "2", "placement" -> "Preserve aspect", "make_grid" -> "false"), ctx)
+    assertEquals(ctx.generated.head.extra("Corridor Crawler image window"), "127,81,80,40")
+    assertEquals(ctx.generated(1).extra("Corridor Crawler image window"), "127,81,254,254")
+    assertEquals(px(ctx.inputs.head._2.get, 205, 100), 0)
+    assertEquals(px(ctx.inputs.head._2.get, 210, 100), 0xffffff)
+    assertEquals(px(ctx.inputs(1)._2.get, 210, 100), 0)
+    assertEquals(ctx.generated.head.extra("Corridor Crawler placement"), "Preserve aspect")
+  }
+
+  test("aspect mode rejects a shrink that removes the first image before generation") {
+    val ctx = new FakeContext(echoInit = true)
+    val input = ctx.dir.resolve("small-for-mask.png")
+    ImageIO.write(new BufferedImage(80, 40, BufferedImage.TYPE_INT_RGB), "png", input.toFile)
+    val p = base.copy(img2img = Some(Img2ImgParams(input.toString, denoisingStrength = 0.9)))
+    intercept[IllegalArgumentException] {
+      plugin.run(p, values("steps" -> "2", "placement" -> "Preserve aspect", "mask_shrink" -> "20"), ctx)
+    }
+    assertEquals(ctx.generated.size, 0)
+  }
+
+  test("aspect zoom uses fixed frames without stretching a wide older image") {
+    val newer = ctxSolid(0x00ff00)
+    val older = new BufferedImage(80, 40, BufferedImage.TYPE_INT_RGB)
+    val g = older.createGraphics(); g.setColor(java.awt.Color.RED); g.fillRect(0, 0, 80, 40); g.dispose()
+    val frames = aspectWalk(Seq(older, newer), Seq(Rect(100, 100, 80, 40)), 3, 128)
+    assertEquals(frames.size, 4)
+    assert(frames.forall(f => f.getWidth == 128 && f.getHeight == 128))
+    assertEquals(px(frames.last, 64, 10), 0)
+    assertEquals(px(frames.last, 64, 64), 0xff0000)
+    assertEquals(px(frames.last, 64, 120), 0)
+  }
+
   test("built-in prefab is a corridor: distinct surfaces around the window") {
     val win = Rect(127, 81, 254, 254)
     val c = brickCorridor(512, 512, win)
@@ -238,6 +291,78 @@ class CorridorCrawlerSuite extends munit.FunSuite:
     val bytes = Files.readAllBytes(gif)
     assert(new String(bytes, "ISO-8859-1").contains("NETSCAPE2.0"), "loop extension")
     in.close(); reader.dispose()
+  }
+
+  test("GIF refuses existing files and removes its own incomplete file after an error") {
+    val dir = Files.createTempDirectory("corridor-gif-safe-")
+    val existing = dir.resolve("existing.gif")
+    val original = Array[Byte](1, 2, 3, 4)
+    Files.write(existing, original)
+    intercept[java.nio.file.FileAlreadyExistsException](writeGif(Seq(ctxSolid(0xff0000)), 50, existing))
+    assert(java.util.Arrays.equals(Files.readAllBytes(existing), original))
+    val partial = dir.resolve("partial.gif")
+    intercept[Exception](writeGif(Seq(ctxSolid(0xff0000), null), 50, partial))
+    assert(!Files.exists(partial))
+    val entries = Files.list(dir)
+    try assert(!entries.anyMatch(p => p.getFileName.toString.startsWith(".corridor-gif-"))) finally entries.close()
+  }
+
+  test("GIF publication falls back to exclusive copy when hard links are unavailable") {
+    val dir = Files.createTempDirectory("corridor-gif-fallback-")
+    val temp = dir.resolve("finished.tmp")
+    val target = dir.resolve("result.gif")
+    val data = Array[Byte](1, 2, 3, 4)
+    Files.write(temp, data)
+    val noLink: (java.nio.file.Path, java.nio.file.Path) => Unit = (_, _) => throw new UnsupportedOperationException("no hard links")
+    publishGif(temp, target, noLink)
+    assert(java.util.Arrays.equals(Files.readAllBytes(target), data))
+    intercept[java.nio.file.FileAlreadyExistsException](publishGif(temp, target, noLink))
+    assert(java.util.Arrays.equals(Files.readAllBytes(target), data))
+    val partial = dir.resolve("partial.gif")
+    val missingSource: (java.nio.file.Path, java.nio.file.Path) => Unit = (_, source) => {
+      Files.delete(source)
+      throw new UnsupportedOperationException("no hard links")
+    }
+    val error = intercept[java.io.IOException](publishGif(temp, partial, missingSource))
+    assert(error.getMessage.contains("incomplete file may remain"))
+    assert(Files.exists(partial))
+  }
+
+  test("GIF fallback preserves a read failure when closing the output also fails") {
+    val dir = Files.createTempDirectory("corridor-gif-errors-")
+    val missing = dir.resolve("missing.tmp")
+    val target = dir.resolve("partial.gif")
+    val noLink: (java.nio.file.Path, java.nio.file.Path) => Unit = (_, _) => throw new UnsupportedOperationException("no hard links")
+    val failingClose: java.nio.file.Path => java.io.OutputStream = p =>
+      val underlying = Files.newOutputStream(p, java.nio.file.StandardOpenOption.CREATE_NEW)
+      new java.io.FilterOutputStream(underlying):
+        override def close(): Unit =
+          super.close()
+          throw new java.io.IOException("close failed")
+    val error = intercept[java.io.IOException](publishGif(missing, target, noLink, failingClose))
+    assert(error.getMessage.contains("incomplete file may remain"))
+    assert(error.getCause.isInstanceOf[java.nio.file.NoSuchFileException])
+    assert(error.getCause.getSuppressed.exists(_.getMessage.contains("close failed")))
+  }
+
+  test("GIF collision leaves generated images and removes intermediate inputs") {
+    val ctx = new FakeContext(echoInit = true):
+      override def generate(p: GenerationParams): Seq[OutputImage] =
+        val results = super.generate(p)
+        val path = results.last.path
+        Files.write(path.resolveSibling(path.getFileName.toString.stripSuffix(".png") + "-corridor.gif"), Array[Byte](1, 2, 3))
+        results
+    val p = img2img(ctx)
+    intercept[java.nio.file.FileAlreadyExistsException] {
+      plugin.run(p, values("steps" -> "1", "animation" -> "true"), ctx)
+    }
+    assertEquals(ctx.outputPaths.size, 1)
+    assert(Files.exists(ctx.outputPaths.head))
+    val image = ctx.generated.head.img2img.get
+    assert(!Files.exists(java.nio.file.Path.of(image.initImage)))
+    assert(!Files.exists(java.nio.file.Path.of(image.mask.get)))
+    val gif = ctx.outputPaths.head.resolveSibling(ctx.outputPaths.head.getFileName.toString.stripSuffix(".png") + "-corridor.gif")
+    assert(java.util.Arrays.equals(Files.readAllBytes(gif), Array[Byte](1, 2, 3)))
   }
 
   test("a full run with animation writes the GIF beside the last step") {

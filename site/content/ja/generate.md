@@ -284,3 +284,7 @@ Img2Img folder の処理が途中で失敗した場合、先に生成された�
 ### Img2Img Workflow（段階設定）
 
 img2img のスクリプト「Img2Img Workflow」で Phase 1〜3 の寸法・枚数・denoising を指定できます。各段階は個別に実行し、入力画像の向きから寸法を選ぶ `Guess` も使えます。元画像やプロンプトなどは引き継がれます。Quick Mask、overlay、画像効果など、上流の機能にはまだ対応していないものがあります。
+
+### Corridor Crawler の画像配置
+
+img2img の Corridor Crawler では、前の画像の配置を「Stretch」と「Preserve aspect」から選べます。後者は縦横比を保ち、窓より小さい画像は拡大しません。GIF は既存ファイルを上書きしません。保存に失敗したとき、生成済み画像や途中の GIF が残る場合があります。
