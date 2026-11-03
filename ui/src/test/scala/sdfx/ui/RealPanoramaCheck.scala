@@ -53,7 +53,7 @@ object RealPanoramaCheck:
     sum.toDouble / (3.0 * a.argb.length)
 
   def main(args: Array[String]): Unit =
-    require(args.length == 5, "python output-directory sd15-panorama.png sdxl-panorama.png other-picture.png")
+    require(args.length == 5 || args.length == 6, "python output-directory sd15-panorama.png sdxl-panorama.png other-picture.png [patch.png]")
     val output = Paths.get(args(1)).toAbsolutePath.normalize()
     Files.createDirectories(output)
     val work = Files.createTempDirectory(output, "pano-run-")
@@ -401,6 +401,112 @@ object RealPanoramaCheck:
       require(viewFiles == beforePublishFiles, "unpublished perspective must be removed")
       fx { session.lock(); window.ctx.imageAccessChanged() }
       checked("a protection session change before delivery removes the unsent perspective")
+      val cancelledSave = fx { session.synchronized {
+        val target = pano.saveView().get
+        session.unlock("changed-before-view-save")
+        target
+      } }
+      eventually("view save session change rejected") { label("panorama-status").contains("protection session changed") }
+      require(!Files.exists(cancelledSave), "session change must prevent saved view publication")
+      fx { session.lock(); window.ctx.imageAccessChanged() }
+      checked("session change during view render prevents saving")
+      // Apply a local perspective patch at the current camera, keeping the old source unchanged.
+      selectTab("panorama-tab-page")
+      require(pathOf == sdxl, "the SDXL source must still be selected")
+      fx(pano.model.setView(View(90, 15, 70)))
+      require(view == View(90, 15, 70))
+      val baseBefore = source
+      val patchImage = if args.length == 6 then ImageIO.read(Paths.get(args(5)).toFile) else
+        val synthetic = new java.awt.image.BufferedImage(120, 100, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        for y <- 0 until 100; x <- 0 until 120 do synthetic.setRGB(x, y, 0xffe53510)
+        synthetic
+      require(patchImage != null, "patch image must be readable")
+      val patchPath = work.resolve("perspective-patch.png")
+      require(ImageIO.write(patchImage, "png", patchPath.toFile))
+      val largeHeader = Files.readAllBytes(patchPath)
+      val headerBuffer = java.nio.ByteBuffer.wrap(largeHeader)
+      headerBuffer.putInt(16, 16385)
+      val headerCrc = new java.util.zip.CRC32()
+      headerCrc.update(largeHeader, 12, 17)
+      headerBuffer.putInt(29, headerCrc.getValue.toInt)
+      val largePath = work.resolve("oversized-patch.png")
+      Files.write(largePath, largeHeader)
+      fx(pano.applyPerspective(largePath, 0))
+      eventually("oversized patch refused") { !fx(pano.perspectivePending) && label("panorama-status").contains("too large") }
+      require(pathOf == sdxl && (source eq baseBefore), "oversized patch must not replace the source")
+      checked("oversized patch is rejected without replacing the panorama")
+      fx(pano.applyPerspective(patchPath, 0))
+      eventually("composited panorama saved") { pathOf != sdxl && pathOf != null && Files.isRegularFile(pathOf) }
+      val expected = PanoramaCompose.applyView(baseBefore, Raster.fromImage(patchImage), View(90, 15, 70), 0)
+      require(java.util.Arrays.equals(source.argb, expected.argb), "composite pixels differ from expected")
+      require(view == View(90, 15, 70), "the camera must stay on the edited area")
+      settled()
+      require(java.util.Arrays.equals(Raster.fromImage(ImageIO.read(pathOf.toFile)).argb, expected.argb), "saved composite differs")
+      require(java.util.Arrays.equals(baseBefore.argb, Raster.fromImage(ImageIO.read(sdxl.toFile)).argb), "original must remain unchanged")
+      snapshot("pano-compose.png")
+      checked("perspective patch is projected into panorama, saved, and source is preserved")
+      fx(window.ctx.sendToPanorama(sdxl)); loaded(sdxl)
+      val panoramaDir = outputs.resolve("panorama")
+      def composeFiles: Set[Path] =
+        val stream = Files.list(panoramaDir)
+        try stream.iterator().asScala.filter(_.getFileName.toString.startsWith("panorama-composite-")).toSet
+        finally stream.close()
+      val beforeCancel = composeFiles
+      fx {
+        pano.applyPerspective(patchPath, 0)
+        require(pano.perspectivePending)
+        window.scene.lookup("#panorama-cancel-apply").asInstanceOf[Button].fire()
+      }
+      eventually("cancel view application") { fx(!pano.perspectivePending) }
+      require(pathOf == sdxl && composeFiles == beforeCancel, "cancel must preserve the source and leave no composite")
+      checked("cancelling view application preserves source and leaves no output")
+      val beforeSourceChange = composeFiles
+      fx { pano.applyPerspective(patchPath, 0); window.ctx.sendToPanorama(sd15) }
+      loaded(sd15)
+      eventually("source change cancels composition") { fx(!pano.perspectivePending) }
+      require(pathOf == sd15 && composeFiles == beforeSourceChange, "replacing the source must discard composition")
+      fx(window.ctx.sendToPanorama(sdxl)); loaded(sdxl)
+      checked("changing panorama while applying a view discards the obsolete result")
+      val composeBackup = outputs.resolve("panorama-compose-test-backup")
+      Files.move(panoramaDir, composeBackup)
+      Files.writeString(panoramaDir, "not a directory")
+      try
+        fx(pano.applyPerspective(patchPath, 0))
+        eventually("compose save failure") { !fx(pano.perspectivePending) && label("panorama-status").startsWith("Cannot apply the view") }
+        require(pathOf == sdxl, "failed compose must not replace source")
+      finally
+        Files.delete(panoramaDir)
+        Files.move(composeBackup, panoramaDir)
+      checked("compose save failure preserves the source panorama")
+      val beforeProtectionChange = composeFiles
+      fx { services.imageScrambleSession.synchronized {
+        pano.applyPerspective(patchPath, 0)
+        services.imageScrambleSession.unlock("changed-during-compose")
+      } }
+      eventually("protection change rejects composite") { fx(!pano.perspectivePending) }
+      require(pathOf == sdxl && composeFiles == beforeProtectionChange, "changed session must not publish")
+      fx { services.imageScrambleSession.lock(); window.ctx.imageAccessChanged() }
+      checked("protection session change discards the view application")
+      fx { services.imageScrambleSession.unlock("hunter2"); window.ctx.imageAccessChanged() }
+      fx(pano.applyPerspective(patchPath, 0))
+      eventually("protected composite saved") { pathOf != sdxl && pathOf != null && Files.isRegularFile(pathOf) }
+      require(PngMetadata.readTexts(pathOf).contains("Encrypt"), "composite must be protected")
+      val protectedSource = pathOf
+      val beforeLockedApply = composeFiles
+      fx { services.imageScrambleSession.lock(); window.ctx.imageAccessChanged() }
+      fx(pano.applyPerspective(patchPath, 0))
+      eventually("locked protected source is rejected", 10) {
+        label("panorama-status").contains("protection session changed")
+      }
+      require(pathOf == protectedSource && composeFiles == beforeLockedApply,
+        "a decrypted source from an old session must never be exported as plaintext")
+      require(fx(pano.saveView()).isEmpty, "locked protected source must not save a view")
+      press("panorama-view-to-img2img")
+      require(!fx(pano.perspectivePending), "locked protected source must not send a view")
+      press("panorama-to-cube")
+      require(!fx(pano.perspectivePending), "locked protected source must not convert")
+      checked("applying a view under image protection saves a scrambled composite; after lock all derived operations are rejected")
+      fx(window.ctx.sendToPanorama(sdxl)); loaded(sdxl)
       // Preview pane button
       fx(window.select(Mode.Txt2Img))
       fx(window.preview.show(sd15))
@@ -468,6 +574,7 @@ object RealPanoramaCheck:
       fx(window.stage.setWidth(1700))
       checked("the tab lays out at a 900 px wide window (screenshot)")
 
+      fx(window.ctx.sendToPanorama(sd15)); loaded(sd15)
       // Disposing before the background render returns must not hand a path to another tab.
       val dir = outputs.resolve("panorama")
       def perspectiveFiles: Set[Path] =
