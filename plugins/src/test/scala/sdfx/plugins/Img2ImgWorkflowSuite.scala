@@ -27,6 +27,8 @@ class Img2ImgWorkflowSuite extends munit.FunSuite:
     assertEqualsDouble(sent.img2img.get.denoisingStrength, 0.5, 1e-9)
     assertEquals((sent.img2img.get.initImage, sent.img2img.get.mask, sent.prompt, sent.seed, sent.hooks),
       (input, Some(input), "test", 42L, p.hooks))
+    assertEquals(sent.copy(width = p.width, height = p.height, batchSize = p.batchSize, nIter = p.nIter,
+      img2img = p.img2img, extra = p.extra), p)
     assertEquals(out.images.size, 4)
   }
 
@@ -59,6 +61,12 @@ class Img2ImgWorkflowSuite extends munit.FunSuite:
     intercept[IllegalArgumentException](plugin.run(p, values("phase" -> "Phase 1", "phase1_width" -> "65"), ctx))
     intercept[IllegalArgumentException](plugin.run(p, values("phase" -> "Phase 1", "ratio" -> "bad"), ctx))
     intercept[IllegalArgumentException](plugin.run(p, values("phase" -> "Phase 3", "phase3_count" -> "0"), ctx))
+    intercept[IllegalArgumentException](plugin.run(p, values("phase" -> "Phase 1", "phase1_width" -> "4104"), ctx))
+    intercept[IllegalArgumentException](plugin.run(p, values("phase" -> "Phase 1", "phase1_height" -> "72", "ratio" -> "2:1"), ctx))
+    intercept[IllegalArgumentException](plugin.run(p, values("phase" -> "Phase 1", "phase1_denoise" -> "NaN"), ctx))
+    intercept[IllegalArgumentException](plugin.run(p, values("phase" -> "Phase 1", "override_denoise" -> "true", "denoise" -> "1.01"), ctx))
+    intercept[IllegalArgumentException](plugin.run(p, values("phase" -> "Unknown"), ctx))
+    intercept[IllegalArgumentException](plugin.run(p, values("phase" -> "Phase 1", "orientation" -> "Unknown"), ctx))
     intercept[IllegalArgumentException](plugin.run(GenerationParams(), values("phase" -> "None"), ctx))
     assertEquals(ctx.generated.size, 0)
   }
