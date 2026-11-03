@@ -501,6 +501,15 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   private val prevButton = action("◀", "Previous picture in this folder", "panorama-prev")(step(-1))
   private val nextButton = action("▶", "Next picture in this folder", "panorama-next")(step(1))
   private val resetButton = action("Reset view", "Look straight ahead at 90° (double click does the same)", "panorama-reset")(model.resetView())
+  private val directionButtons = Seq(
+    ("front", "Front", 0.0, 0.0), ("back", "Back", 180.0, 0.0),
+    ("left", "Left", -90.0, 0.0), ("right", "Right", 90.0, 0.0),
+    ("up", "Up", 0.0, 90.0), ("down", "Down", 0.0, -90.0)
+  ).map { (id, label, yaw, pitch) =>
+    action(label, s"Look $label while keeping the current field of view", "panorama-direction-" + id) {
+      model.setView(View(yaw, pitch, model.fov.get))
+    }
+  }
   private val fullButton = action("Fullscreen", "Show the panorama on a full-screen window; Esc leaves", "panorama-fullscreen")(openFullscreen())
   private val saveViewButton = action("Save view", "Save what the camera sees now as a PNG in the panorama folder of the outputs", "panorama-save-view")(saveView())
   private val toCube = action("→ Cubemap", "Convert the equirectangular picture to a 4:3 cubemap net, save it and show it", "panorama-to-cube")(convert(toCube = true))
@@ -513,7 +522,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     sendOn(p => ctx.sendToTab(Mode.Inpaint, p, PngMetadata.readParameters(p))))
   private val toExtras = action("⇢ Extras", "Send this picture to Extras, e.g. to upscale it", "panorama-to-extras")(sendOn(ctx.sendToExtras))
   private val pathButtons = Seq(prevButton, nextButton, toImg2img, toInpaint, toExtras)
-  private val pictureButtons = Seq(resetButton, fullButton, saveViewButton, toCube, toEqui)
+  private val pictureButtons = Seq(resetButton, fullButton, saveViewButton, toCube, toEqui) ++ directionButtons
   private val autoRotate = new CheckBox("Auto-rotate")
   autoRotate.setId("panorama-autorotate")
   W.tip(autoRotate, "Turn slowly to the right while the tab is open")
@@ -574,9 +583,10 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   private val toolbar2 = W.hbox(8, W.label("Yaw"), yawSpinner, W.label("Pitch"), pitchSpinner, W.label("FOV"), W.hgrow(fovBox), resetButton, autoRotate, speedSpinner)
   private val toolbar3 = W.hbox(6, fullButton, saveViewButton, toCube, toEqui, W.spacer(), toImg2img, toInpaint, toExtras)
   private val videoToolbar = W.hbox(6, ffmpegButton, videoPlay, videoStop, W.label("Speed"), videoSpeed, W.label("Video position"), W.hgrow(videoSeek))
+  private val directionsToolbar = W.hbox(6, (Seq(W.label("Look")) ++ directionButtons)*)
   private val stage = new StackPane(viewport, empty)
   VBox.setVgrow(stage, Priority.ALWAYS)
-  val node: VBox = new VBox(8, toolbar1, toolbar2, toolbar3, videoToolbar, stage, W.hbox(12, readout, W.hgrow(hintLabel)), status)
+  val node: VBox = new VBox(8, toolbar1, toolbar2, toolbar3, directionsToolbar, videoToolbar, stage, W.hbox(12, readout, W.hgrow(hintLabel)), status)
   node.setPadding(new Insets(10))
   node.setId("panorama-tab")
   node.setMinWidth(0)

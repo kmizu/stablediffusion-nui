@@ -85,6 +85,13 @@ object RealPanoramaVideoCheck:
       }
       eventually("paused") { fx(window.panorama.videoPaused) }
       fx {
+        window.panorama.model.setView(View(30, 20, 70))
+        val up = window.panorama.node.lookup("#panorama-direction-up").asInstanceOf[Button]
+        require(up != null && !up.isDisabled)
+        up.fire()
+        require(window.panorama.model.view == View(0, 90, 70))
+      }
+      fx {
         val speed = window.panorama.node.lookup("#panorama-video-speed").asInstanceOf[ComboBox[java.lang.Double]]
         speed.setValue(java.lang.Double.valueOf(2.0))
         assertEqualsSpeed(window.panorama.videoRate, 2.0)

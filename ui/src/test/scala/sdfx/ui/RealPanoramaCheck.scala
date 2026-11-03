@@ -155,6 +155,19 @@ object RealPanoramaCheck:
       snapshot("pano-01-sd15.png")
       checked(s"send-to-panorama opens the real SD1.5 picture (1024x512) on the Panorama tab as Equirectangular, hint says it matches; the sharp viewport frame (${vp.lastSize._1}x${vp.lastSize._2}) is pixel-identical to the reference render")
 
+      // Six cardinal views preserve the field of view, independent of the previous orientation.
+      val directions = Seq("front" -> View(0, 0, 67), "back" -> View(180, 0, 67),
+        "left" -> View(-90, 0, 67), "right" -> View(90, 0, 67),
+        "up" -> View(0, 90, 67), "down" -> View(0, -90, 67))
+      for (name, expected) <- directions do
+        fx(pano.model.setView(View(37, 12, 67)))
+        press("panorama-direction-" + name)
+        eventually("direction " + name)(view == expected.normalized)
+      settled()
+      snapshot("pano-00-directions.png")
+      checked("six directions preserve FOV and update the shared camera")
+      fx(pano.model.resetView())
+
       // ---- mouse, wheel, keys ----------------------------------------------------------------------------------
       val w0 = fx(vp.getWidth)
       val v0 = view
@@ -306,7 +319,8 @@ object RealPanoramaCheck:
       val big = fx(pano.fullscreenView.get)
       fx(pano.model.setView(View(-60, -10, 85)))
       val before = big.renders
-      eventually("fullscreen follows the model")(big.renders > before && big.lastSize._1 >= 800)
+      press("panorama-direction-right")
+      eventually("fullscreen follows direction button")(view == View(90, 0, 85) && big.renders > before && big.lastSize._1 >= 800)
       Thread.sleep(600)
       require(fx(window.scene.getWindow.isShowing))
       ImageIO.write(SwingFXUtils.fromFXImage(fx(big.getScene.snapshot(null)), null), "png", output.resolve("pano-08-fullscreen.png").toFile)
