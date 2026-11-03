@@ -96,7 +96,8 @@ object Images:
   /** Decodes `spec` into an image file the engine can read. Paths must pass `policy` (relative paths resolve
     * against `base`); base64 / data URIs are written as PNG via `tempFile` (returned so the caller deletes them).
     */
-  def materialize(spec: String, field: String, policy: PathPolicy, base: Path, tempFile: String => Path): (Path, Option[Path]) =
+  def materialize(spec: String, field: String, policy: PathPolicy, base: Path, tempFile: String => Path,
+      platform: String = System.getProperty("os.name")): (Path, Option[Path]) =
     val s = spec.trim
     if s.isEmpty then throw ToolError(s"$field is empty")
     s match
@@ -105,13 +106,28 @@ object Images:
         writeDecoded(decodeB64(data, field), field, tempFile)
       case _ if PathPolicy.isNetworkPath(s) || looksLikePath(s) =>
         val p = policy.resolve(s, field, base)
-        checkDims(dimensions(p), field)
-        rejectProtected(ImageIO.createImageInputStream(p.toFile), field)
-        val img =
-          try ImageIO.read(p.toFile)
-          catch case NonFatal(_) => null
+        val roots = policy.allowedRoots.flatMap(r => scala.util.Try(r.toRealPath()).toOption)
+        val bytes = new ByteArrayOutputStream()
+        try sdfx.engine.VerifiedFolderInput.copy(p, roots, bytes, platform = platform, maxBytes = MaxInputBytes.toLong)
+        catch
+          case NonFatal(_) => throw ToolError(s"$field: verified input could not be read inside an allowed folder; use base64 image data if verified file handles are unavailable")
+        val data = bytes.toByteArray
+        checkDims(dimensions(data), field)
+        rejectProtected(ImageIO.createImageInputStream(new ByteArrayInputStream(data)), field)
+        val img = try ImageIO.read(new ByteArrayInputStream(data)) catch case NonFatal(_) => null
         if img == null then throw ToolError(s"$field: not a supported image file")
-        (p, None)
+        val filename = p.getFileName.toString
+        val dot = filename.lastIndexOf('.')
+        val suffix = if dot >= 0 && filename.substring(dot).matches("\\.[A-Za-z0-9]{1,8}") then filename.substring(dot) else ".img"
+        val staged = tempFile(suffix)
+        try
+          Files.write(staged, data)
+          (staged.toAbsolutePath, Some(staged))
+        catch
+          case error: Throwable =>
+            try Files.deleteIfExists(staged)
+            catch case cleanup: Throwable => error.addSuppressed(cleanup)
+            throw error
       case _ => writeDecoded(decodeB64(s, field), field, tempFile)
 
   private def decodeB64(data: String, field: String): Array[Byte] =

@@ -7,7 +7,7 @@ import java.util.{Base64, Locale}
 import java.util.concurrent.{Callable, Executors, ThreadFactory, TimeUnit, TimeoutException}
 
 /** Restricted MCP input: verify the final path of an open handle and copy from that handle. */
-private[engine] object VerifiedFolderInput:
+private[sdfx] object VerifiedFolderInput:
   def ensureSupported(platform: String = System.getProperty("os.name")): Unit =
     if !platform.toLowerCase(Locale.ROOT).contains("win") then
       throw new UnsupportedOperationException("Restricted folder input requires verified Windows file handles")
@@ -89,16 +89,57 @@ private[engine] object VerifiedFolderInput:
     |} catch { [Console]::Error.WriteLine('Verified input unavailable'); exit 1 }
     |""".stripMargin
 
+  private val unixScript = """
+    |import json, os, stat, sys
+    |req = json.loads(sys.stdin.readline())
+    |path = os.path.normpath(req['path'])
+    |roots = [os.path.normpath(r) for r in req['roots']]
+    |if not os.path.isabs(path) or path.startswith('//') or not any(
+    |    os.path.isabs(r) and not r.startswith('//') and path != r and os.path.commonpath([path, r]) == r for r in roots):
+    |    raise ValueError('Input outside allowed roots')
+    |directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+    |file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+    |parts = path.split('/')[1:]
+    |opened = []
+    |try:
+    |    fd = os.open('/', directory_flags)
+    |    opened.append(fd)
+    |    for name in parts[:-1]:
+    |        fd = os.open(name, directory_flags, dir_fd=fd)
+    |        opened.append(fd)
+    |    fd = os.open(parts[-1], file_flags, dir_fd=fd)
+    |    opened.append(fd)
+    |    info = os.fstat(fd)
+    |    if not stat.S_ISREG(info.st_mode) or info.st_size <= 0 or info.st_size > int(req['maxBytes']):
+    |        raise ValueError('Invalid input size or type')
+    |    sys.stdout.write('READY %d\n' % info.st_size)
+    |    sys.stdout.flush()
+    |    if sys.stdin.readline().strip() != 'COPY':
+    |        raise ValueError('Copy not admitted')
+    |    while True:
+    |        chunk = os.read(fd, 65536)
+    |        if not chunk: break
+    |        sys.stdout.buffer.write(chunk)
+    |    sys.stdout.buffer.flush()
+    |finally:
+    |    for fd in reversed(opened): os.close(fd)
+    |""".stripMargin
+
   def copy(path: Path, roots: Seq[Path], output: OutputStream, check: () => Unit = () => (),
-      afterOpen: () => Unit = () => (), platform: String = System.getProperty("os.name")): Unit =
-    ensureSupported(platform)
+      afterOpen: () => Unit = () => (), platform: String = System.getProperty("os.name"),
+      maxBytes: Long = Img2ImgFolderManifest.MaxFileBytes): Unit =
     require(roots.nonEmpty, "Restricted folder input requires an allowed root")
+    require(maxBytes > 0 && maxBytes <= Img2ImgFolderManifest.MaxFileBytes, "Invalid verified input size limit")
     check()
-    val systemRoot = Option(System.getenv("SystemRoot")).getOrElse(throw new IllegalStateException("Windows system root unavailable"))
-    val exe = Path.of(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe").toString
-    val encoded = Base64.getEncoder.encodeToString(script.getBytes(UTF_16LE))
-    val process = new ProcessBuilder(exe, "-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encoded)
-      .redirectError(ProcessBuilder.Redirect.DISCARD).start()
+    val command = if platform.toLowerCase(Locale.ROOT).contains("win") then
+      val systemRoot = Option(System.getenv("SystemRoot")).getOrElse(throw new IllegalStateException("Windows system root unavailable"))
+      val exe = Path.of(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe").toString
+      val encoded = Base64.getEncoder.encodeToString(script.getBytes(UTF_16LE))
+      Seq(exe, "-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encoded)
+    else if platform.toLowerCase(Locale.ROOT).contains("linux") then
+      Seq("/usr/bin/python3", "-I", "-c", unixScript)
+    else throw new UnsupportedOperationException("Verified input handles are unavailable on this platform")
+    val process = new ProcessBuilder(command*).redirectError(ProcessBuilder.Redirect.DISCARD).start()
     val outputGate = new Object
     var outputOpen = true
     val executor = Executors.newSingleThreadExecutor(new ThreadFactory:
@@ -113,7 +154,7 @@ private[engine] object VerifiedFolderInput:
           val in = new BufferedInputStream(process.getInputStream)
           writer.write(ujson.Obj("path" -> path.toAbsolutePath.normalize().toString,
             "roots" -> ujson.Arr.from(roots.map(_.toAbsolutePath.normalize().toString)),
-            "maxBytes" -> ujson.Num(Img2ImgFolderManifest.MaxFileBytes.toDouble)).render())
+            "maxBytes" -> ujson.Num(maxBytes.toDouble)).render())
           writer.newLine(); writer.flush()
           val header = new StringBuilder
           var c = in.read()
@@ -123,7 +164,7 @@ private[engine] object VerifiedFolderInput:
           val value = header.toString
           if c != '\n' || !value.startsWith("READY ") then throw new IllegalArgumentException("Verified input open failed")
           val size = value.substring(6).toLongOption.getOrElse(throw new IllegalArgumentException("Invalid verified input size"))
-          require(size > 0 && size <= Img2ImgFolderManifest.MaxFileBytes, "Invalid verified input size")
+          require(size > 0 && size <= maxBytes, "Invalid verified input size")
           check(); afterOpen(); check()
           writer.write("COPY\n"); writer.flush()
           var left = size

@@ -163,6 +163,12 @@ claude mcp add --transport http stablediffusion-nui-gui http://127.0.0.1:7861/mc
 | `controlnet_preprocess` | 画像生成なしで、画像またはフォルダに ControlNet プリプロセッサを実行します（拡張機能 ControlNet Preprocessor の Extras 相当）。`preprocessor` は `operation=list` で確認できるモジュール（canny、invert、recolor_*、tile_*、blur_gaussian、depth、Marigold、検出系）、`processor_res`（64〜2048）または `pixel_perfect` は canny と検出系に効き、`args` でモジュールのスライダーを指定します。結果は `<名前>-<preprocessor>.png` として、パラメータに `ControlNet Preprocessor: "{...}"` を付けて保存され、上書きされません。 |
 | `vae_tools` | 読み込み中の VAE で、ローカルファイル（`input_paths`、最大 64 個）をエンコード、デコード、または往復変換します。TAESD や Approx NN の重みは `allow_download: true` のときだけダウンロードします。 |
 
+### 生成用画像のパス
+
+MCP の画像・マスク指定は、許可したフォルダ内のファイルを検証して一時コピーを作り、そのコピーで処理します。ローカルファイルは 48 MiB 以下です。Windows と、`/usr/bin/python3` を利用できる Linux に対応し、その他の環境では base64 または data URI を使えます。処理中に元画像を変更しても、そのコピーは更新されません。元ファイルの場所を新たに生成履歴へ記録する機能はありません。
+
+この対策は生成用画像など `Images.materialize` を使う経路が対象です。`get_image` や metadata 検査など他のファイル読み取り経路には別途調査中の競合があり、一時フォルダを同じユーザーで直接変更できるプロセスにも対応していません。
+
 ### 保存したプロンプト
 
 `prompt_library` は Prompt Tools に保存したプロンプトを読み取ります。`action: "list"` で名前と positive／negative の区分を一覧し、`action: "get"` と `name` で本文を取得できます。一覧は `offset` と `limit`（1〜100、既定100）で分割し、途中で保存内容が変わるとページがずれることがあります。名前や本文には個人情報が含まれる場合があります。このツールは内容を変更したり画像を生成したりしません。詳しい制約は `docs/prompt-library-mcp-ja.md` を参照してください。
