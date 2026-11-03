@@ -8,6 +8,12 @@
 
 最初の注入試験は manifest 固定前に入力を変更して画像 decode で失敗し、harness も failed job の `isError` を成功と誤認して停止した。1枚目の生成 step を確認した後に変更し、failed を検査するよう修正して両系統を再実施した。SDXL の native folder GUI、最終 ZIP を展開した配布版の実モデル生成、さまざまな途中失敗や大規模フォルダは未確認。
 
+2026-11-03 の別の配布候補では、main JAR `1409bf5bd330615d6e323770adf2ec99175e703395bc55f16ab06e83ab8d67c2` の face・folder・queue・MCP に関わる class 37 件をコンパイル出力と照合し、候補 ZIP `783e01aa5eac0917c6b791547cad982dfbd735a2d3bc752b0670b3f66e7118ed` を作成した。別フォルダに展開した JAR の hash 一致と、Python source・顔文書・notice 計146ファイルの main 作業ツリーとの bytes 一致を確認。これはリリース公開ではない。
+
+展開版 `SDNUI.exe` の実画面で SDXL `waiIllustriousSDXL_v170`、顔 checkpoint `animekawa_v10`、832×1216、12 steps、img2img denoise 0.1 を設定し、別々の2画像をフォルダから生成した。GUI は `2/2 · Done · 2 images` を表示し、両 PNG に顔 checkpoint hash `d4c1719023` と各入力のパスが記録された。画像を目視し、SHA-256 は `83a90a521fde6e6c5f44fd586e1f3b49d212f9c486fec120b5dc888e08db12d6` と `d05707df1cba920150ccce3eea72b192dbb7a3d28199f6b8229225b8969a9fd2`。画像・画面は `outputs/face-package-candidate/extracted/SDNUI/outputs/img2img/2026-11-03/` と `outputs/face-package-candidate/face-folder-done.png` に保存。Python は既存 smoke venv を指定しており、同梱ソースと exe の確認であって新規 Python 環境の bootstrap 試験ではない。
+
+別 run では分離した第2入力を事前に破損させ、1枚目の生成後に画像 decode が失敗することを確認した。実 GUI は `a.png 1/2 · Failed` を表示し、ギャラリーには生成済み1枚が残った（`outputs/face-package-candidate/face-folder-failed.png`）。保存された先行画像の SHA-256 は `96bd9f0af9798ee4a6b671bf1f18afbf818ea70fc0c3f08e3e385fd0f2531053`。最初に生成中の第2入力を変更しようとした試みは読込に間に合わず2枚とも成功したため、上記は事前破損による別試験。入力を元 hash に復元し、exe と worker の終了と GPU lock 解放を確認した。途中での入力変更拒否と MCP の failure 応答は上記の source-built JAR 試験で確認している。
+
 ライセンスについては `scripts/third_party.py` と同梱の notices に記録。MediaPipe Tasks と BlazeFace は Apache-2.0、YOLO 実行用の ultralytics は AGPL-3.0 で任意導入。モデルは初回に別途取得し、再配布しない。ユーザーが用意する生成モデル・LoRA の利用条件は各配布元による。
 
 2026-11-03 に新規 Python 3.10 venv で `requirements-torch.txt` の PyTorch 2.7.1+cu128、`requirements.txt` の固定依存、MediaPipe 1.2.0 を通常インストールし、`pip check` と SDXL 画像の CPU 顔検出が成功。pip 23.0.1 のまま PyTorch 専用 index を使うと `flit_core` の取得に失敗し、PyPI を追加 index にするとインストールできた。アプリの bootstrap は先に pip を更新する。別の新規 venv を pip 26.3 に更新し PyTorch 専用 index だけで dry-run したところ、依存解決は成功したが実インストールはしていない。インストール後は OpenCV headless 4.11.0 と opencv-contrib 5.0.0.93 の両 distribution が入っているため、同じ `cv2` 名前空間のパッケージ共存には注意が必要（実行時の cv2 は 4.11.0）。この環境で SDXL 元モデル・SD1.5 顔モデルを公式 MCP SDK から実生成し、PNG 復元、hash 不一致の拒否と元モデルへの復帰まで確認した。テストした組み合わせ以外の依存環境やモデルでの動作を保証するものではない。
