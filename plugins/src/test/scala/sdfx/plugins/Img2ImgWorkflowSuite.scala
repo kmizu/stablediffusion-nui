@@ -70,3 +70,69 @@ class Img2ImgWorkflowSuite extends munit.FunSuite:
     intercept[IllegalArgumentException](plugin.run(GenerationParams(), values("phase" -> "None"), ctx))
     assertEquals(ctx.generated.size, 0)
   }
+
+  test("quick mask selects exact or nearby RGB and can invert without selecting transparent pixels") {
+    val image = new java.awt.image.BufferedImage(4, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+    image.setRGB(0, 0, 0xff102030); image.setRGB(1, 0, 0xff112030)
+    image.setRGB(2, 0, 0xff132030); image.setRGB(3, 0, 0x00102030)
+    val exact = Img2ImgWorkflowPlugin.colorMask(image, 0x102030, 1, false)
+    assertEquals((0 until 4).map(i => exact.getRGB(i, 0) & 0xff), Seq(255, 0, 0, 0))
+    val near = Img2ImgWorkflowPlugin.colorMask(image, 0x102030, 2, false)
+    assertEquals((0 until 4).map(i => near.getRGB(i, 0) & 0xff), Seq(255, 255, 0, 0))
+    val inverse = Img2ImgWorkflowPlugin.colorMask(image, 0x102030, 2, true)
+    assertEquals((0 until 4).map(i => inverse.getRGB(i, 0) & 0xff), Seq(0, 0, 255, 0))
+  }
+
+  test("quick mask passes a temporary inpaint mask and removes it after generation") {
+    var observed: Option[java.awt.image.BufferedImage] = None
+    val ctx = new FakeContext:
+      override def generate(p: GenerationParams): Seq[sdfx.core.plugins.api.OutputImage] =
+        observed = Some(javax.imageio.ImageIO.read(java.nio.file.Path.of(p.img2img.get.mask.get).toFile))
+        super.generate(p)
+    val input = ctx.initImage(64, 64)
+    val p = GenerationParams(img2img = Some(Img2ImgParams(input)))
+    plugin.run(p, values("phase" -> "None", "quick_mask" -> "Black", "mask_threshold" -> "1"), ctx)
+    assert(observed.nonEmpty)
+    assertEquals((observed.get.getWidth, observed.get.getHeight), (64, 64))
+    assert(!java.nio.file.Files.exists(java.nio.file.Path.of(ctx.generated.head.img2img.get.mask.get)))
+  }
+
+  test("quick mask validates inputs and refuses protected-session plaintext") {
+    val ctx = new FakeContext
+    val input = ctx.initImage(64, 64)
+    val p = GenerationParams(img2img = Some(Img2ImgParams(input)))
+    intercept[IllegalArgumentException](plugin.run(p, values("quick_mask" -> "Custom", "mask_color" -> "red"), ctx))
+    intercept[IllegalArgumentException](plugin.run(p, values("quick_mask" -> "White", "mask_threshold" -> "0"), ctx))
+    intercept[IllegalArgumentException](plugin.run(p, values("quick_mask" -> "White", "mask_invert" -> "perhaps"), ctx))
+    val protectedCtx = new FakeContext:
+      override def imageScramblingEnabled = true
+    intercept[IllegalArgumentException](plugin.run(p, values("quick_mask" -> "Black"), protectedCtx))
+    assertEquals(ctx.generated.size, 0)
+    assertEquals(protectedCtx.generated.size, 0)
+  }
+
+  test("quick mask temporary file is removed if generation fails") {
+    var temp: Option[java.nio.file.Path] = None
+    val ctx = new FakeContext:
+      override def generate(p: GenerationParams): Seq[sdfx.core.plugins.api.OutputImage] =
+        temp = Some(java.nio.file.Path.of(p.img2img.get.mask.get))
+        assert(java.nio.file.Files.exists(temp.get))
+        throw new RuntimeException("generation failure")
+    val input = ctx.initImage(64, 64)
+    val p = GenerationParams(img2img = Some(Img2ImgParams(input)))
+    intercept[RuntimeException](plugin.run(p, values("quick_mask" -> "Black"), ctx))
+    assert(temp.nonEmpty && !java.nio.file.Files.exists(temp.get))
+  }
+
+  test("default quick mask inversion toggles only an existing inpaint mask") {
+    val ctx = new FakeContext
+    val input = ctx.initImage(64, 64)
+    val p = GenerationParams(img2img = Some(Img2ImgParams(input, mask = Some(input), inpaintingMaskInvert = true)))
+    plugin.run(p, values("quick_mask" -> "Default", "mask_invert" -> "true"), ctx)
+    assertEquals(ctx.generated.head.img2img.get.mask, Some(input))
+    assertEquals(ctx.generated.head.img2img.get.inpaintingMaskInvert, false)
+    val ctx2 = new FakeContext
+    val noMask = p.copy(img2img = Some(Img2ImgParams(input)))
+    plugin.run(noMask, values("quick_mask" -> "Default", "mask_invert" -> "true"), ctx2)
+    assertEquals(ctx2.generated.head, noMask)
+  }
