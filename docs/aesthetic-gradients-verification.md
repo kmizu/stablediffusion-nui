@@ -1,5 +1,30 @@
 # Aesthetic Gradients verification (#2)
 
+## 研究側の公開ファイルと原拡張の画面（2026-11-03 追加）
+
+対象拡張の固定 revision `2624e5dd4902cb731287b426ad483e741ece85bb` の [ss.png](https://github.com/AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients/blob/2624e5dd4902cb731287b426ad483e741ece85bb/ss.png) を一時取得し目視した（SHA-256 `4bf96115fd951f6108f9f2439b876358c7f5583b92b525e4956725bab85d279f`）。画面には weight 0.9、steps 20、learning rate 0.0001、slerp angle 0.1、補間・negative の選択、embedding 名の選択が見える。NUI の該当設定と初期値は一致する。この画面だけでは演算や PNG パラメータの形式は確認できない。原拡張のソースはコピーしていない。
+
+原拡張が参照する [研究用リポジトリの固定 revision](https://github.com/vicgalle/stable-diffusion-aesthetic-gradients/tree/30ca347d39eb7c92dd651a513cf4f795ed995708) の公開 `.pt` 8 件を `outputs/aesthetic2-source/` に一時取得し、`torch.load(..., weights_only=True, map_location="cpu")` と製品の `load_embedding` で CPU 検査した。`aivazovsky`, `cloudcore`, `flower_plant`, `gloomcore`, `glowwave` は float16 の `(1, 768)`、`fantasy` は float32 の `(1, 768)`、`laion_7plus`, `sac_8plus` は float32 の `(768,)` だった。研究 README は `(1, 768)` と説明するが、後者 2 件は実物が一次元だった。NUI は全 8 件を有限な float32 の `(768,)` として読み、ノルムは約 1 だった。対象拡張が作成したファイルではなく、生成結果や PNG 復元の互換性を立証するものではない。
+
+| ファイル | SHA-256 |
+| --- | --- |
+| aivazovsky.pt | `56b94ef535483b6cf3cfcb711b74fe6521b3c1fb48455a1f603e0401aa1e404b` |
+| cloudcore.pt | `e43033d6b8b5d3544e61a1d2d8efd21bfedddd2fbed1deef4891d1be4a22708e` |
+| fantasy.pt | `b23246edcbacc7db39032ca0c97bffb54becbc0dc456f7d14081bec50bb69de6` |
+| flower_plant.pt | `2b7fe366b35f1c4b83349ef9414ea565d725fd0ad219a9750e4113a88d91ef7f` |
+| gloomcore.pt | `c36bd2b13a2cd1ddb5251dce812e693f0d635d86b141508c4f91148ad5120af5` |
+| glowwave.pt | `99065e72453bf08440912114cf429c26312c730b41f3c42eda053656736a738e` |
+| laion_7plus.pt | `0ef2afc5fe81641ff67b7872d8d2c4c00d1d9100a5ebb887c6931f17843d7d56` |
+| sac_8plus.pt | `d3e267a606c90742c0b47c0010365c257240020cd73c1419201a30ba70d4a678` |
+
+研究リポジトリの [LICENSE](https://github.com/vicgalle/stable-diffusion-aesthetic-gradients/blob/30ca347d39eb7c92dd651a513cf4f795ed995708/LICENSE) は CreativeML Open RAIL-M だが、個々の embedding と生成元データの権利条件を今回確認できていない。ファイルは調査用であり Git や配布物に含めない。対象拡張の生成 PNG／embedding 自体の互換、研究側 embedding を使う生成と元拡張の結果比較は引き続き未確認。#2 は open のまま。
+
+### 研究 embedding の実生成（2026-11-03）
+
+`aivazovsky.pt` を実行ごとの許可済み出力フォルダに複製し SHA-256 一致を確認して、公式 MCP SDK の stdio から実 SD1.5 `animekawa_v10` と SDXL `waiIllustriousSDXL_v170` をそれぞれ実行した。512×512、seed 173、Euler 12 steps、weight 0.3・aesthetic steps 5。両方で基準画像と適用画像が異なり、PNG の embedding hash が原本と一致し、その設定からの再生成は RGB 一致した。元と適用後の両画像を目視し、SD1.5・SDXL とも青いティーポットと背景の違いを確認した。結果は `outputs/aesthetic2-real-{sd15,sdxl}/receipt.json`、実行用スクリプトは `scripts/dev/check_aesthetic_external_fixture.py`。fixture は取得元と同一の hash で利用し、配布しない。
+
+初回は fixture が MCP の許可フォルダ外にあったため安全に拒否された。上記成功は許可フォルダ内へ複製した後の結果で、外部パスを自動的に許可したわけではない。対象拡張からの実物とその生成結果との比較は未実施であり、研究側ファイルを NUI で利用できることの検証に限る。使用 JAR SHA-256 は `1409bf5bd330615d6e323770adf2ec99175e703395bc55f16ab06e83ab8d67c2`。
+
 ## 元拡張の実物との互換性について
 
 2026-11-03 に GitHub の tree メタデータを確認したところ、対象拡張の固定 revision `2624e5dd4902cb731287b426ad483e741ece85bb` には `.pt` ファイルがなく、PNG は `ss.png` のみだった。公開 release もない。したがって、この調査では拡張が出力した embedding や生成パラメータ入り PNG の正規 fixture を確保できていない。
