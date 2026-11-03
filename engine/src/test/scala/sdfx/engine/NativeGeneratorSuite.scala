@@ -103,7 +103,7 @@ class NativeGeneratorSuite extends munit.FunSuite:
       ImageIO.write(mask,"png",wideMask.toFile)
       val fullRes=services.generator.generate(GenerationParams(prompt="edit the selected region",width=64,height=64,
         steps=1,seed=44,img2img=Some(Img2ImgParams(wideSource.toString,mask=Some(wideMask.toString),
-          denoisingStrength=1.0,resizeMode=0,maskBlur=0,inpaintFullRes=true,inpaintFullResPadding=8)))).head
+          denoisingStrength=1.0,resizeMode=0,maskBlur=0,inpaintingFill=2,inpaintFullRes=true,inpaintFullResPadding=8)))).head
       val restored=PngMetadata.readImage(fullRes.path)
       assertEquals((restored.getWidth,restored.getHeight),(80,48),"full-resolution inpaint must restore the source canvas size")
       assertEquals((restored.getRGB(0,0)&0xffffff),0xff0000,"pixels outside the mask must remain from the source image")
