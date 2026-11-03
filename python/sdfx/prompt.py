@@ -209,9 +209,19 @@ def _emphasize(z, mults):
     import torch
     m = torch.tensor(mults, dtype=z.dtype, device=z.device).reshape(1, -1, 1)
     original_mean = z.mean()
+    original_scale = z.abs().mean()
     z = z * m
     new_mean = z.mean()
-    if float(new_mean) != 0.0:
+    new_scale = z.abs().mean()
+    # LayerNorm outputs are centered, so their global mean can be much smaller
+    # than the reduction's rounding error. In that regime mean preservation is
+    # ill-conditioned and its scale factor depends on the backend's reduction
+    # order. Preserve the weighted values without rescaling either near-zero
+    # mean; use the dtype epsilon to keep the decision consistent across CPU/GPU.
+    threshold = torch.finfo(z.dtype).eps * 8
+    if (float(original_scale) > 0 and float(new_scale) > 0 and
+            abs(float(original_mean)) > threshold * float(original_scale) and
+            abs(float(new_mean)) > threshold * float(new_scale)):
         z = z * (original_mean / new_mean)
     return z
 

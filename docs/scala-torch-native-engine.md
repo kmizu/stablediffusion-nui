@@ -57,6 +57,16 @@ with2MiB per session. These are tiny-model checks, not SD1.5/SDXL acceptance or
 proof that every NUI feature works without Python.
 # Scala native engine integration
 
+## Runtime dependency boundary
+
+NUI's `core`, `plugins`, `mcp` and `ui` modules do not compile against
+scala-torch or PyTorch. `engine` owns backend selection and starts the native
+worker as a separate Java process through the existing JSON Lines protocol.
+The scala-torch model and tensor implementation belongs in scala-torch's
+`models` module and its worker classpath; do not add those runtime jars to the
+NUI assembly or move tensor/model types into shared NUI modules. This keeps the
+backend replaceable without changing generation UI or protocol consumers.
+
 The opt-in `sdfx.engine.NativeScalaEngineSuite` launches scala-torch's
 `scalatorch.models.worker.NativeWorkerMain` directly with Java 25. It uses the
 real `EngineSupervisor` and `EngineClient`, including NUI's default generation
