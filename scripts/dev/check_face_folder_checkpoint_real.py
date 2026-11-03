@@ -19,6 +19,7 @@ async def run(a, receipt):
     (home/'config'/'settings.json').write_text(json.dumps(settings),encoding='utf-8')
     env=dict(os.environ,PYTHONPATH=str(a.source.resolve()/'python'),HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1')
     cmd=[str(a.java),'-Dfile.encoding=UTF-8','-Djava.awt.headless=true','-cp',str(a.jar.resolve()),'sdfx.mcp.McpMain','--home',str(home),'--drain-seconds','5']
+    if a.launcher: cmd=[str(a.launcher.resolve()),'--mcp','--home',str(home),'--drain-seconds','5']
     receipt.update(jar_sha256=sha(a.jar),input_sha256=originals,face_sha256=sha(a.models/(a.face+'.safetensors')),calls=[])
     async with Client(StdioServerParameters(command=cmd[0],args=cmd[1:],env=env,cwd=str(a.source.resolve())),read_timeout_seconds=3600) as client:
         async def call(name,args,allow_error=False):
@@ -52,6 +53,8 @@ async def run(a, receipt):
         failed=await wait(job)
         new_files=sorted(set(str(p) for p in (images/'img2img').rglob('*.png'))-before)
         assert failed['status']=='failed' and len(failed['images'])==1 and new_files, (failed,new_files)
+        terminal = next(x['result'] for x in reversed(receipt['calls']) if x['tool']=='get_job' and (x['result'].get('structured_content') or x['result'].get('structuredContent') or {}).get('status')=='failed')
+        assert terminal.get('is_error',terminal.get('isError',False)), terminal
         assert failed['images'][0]['path'] in new_files, (failed,new_files)
         shutil.copyfile(a.input_two,inputs/'b.png'); assert {p.name:sha(p) for p in inputs.iterdir()}==originals
         recovered=await wait(await submit(face)); assert recovered['status']=='done' and len(recovered['images'])==2,recovered
@@ -70,6 +73,7 @@ async def run(a, receipt):
 if __name__=='__main__':
     p=argparse.ArgumentParser()
     for name in ('output','models','jar','java','python','source','input','input-two'): p.add_argument('--'+name,type=Path,required=True)
+    p.add_argument('--launcher',type=Path)
     for name in ('base','face'): p.add_argument('--'+name,required=True)
     p.add_argument('--width',type=int,default=512); p.add_argument('--height',type=int,default=512); p.add_argument('--face-resolution',type=int,default=768)
     a=p.parse_args(); a.output.mkdir(parents=True,exist_ok=True); receipt={'success':False,'args':{k:str(v) for k,v in vars(a).items()}}
