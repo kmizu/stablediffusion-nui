@@ -12,7 +12,7 @@ import scala.concurrent.duration.*
 
 /** Real Generator saving/replay using a Java worker and an isolated app home. */
 class NativeGeneratorSuite extends munit.FunSuite:
-  override val munitTimeout: Duration=90.seconds
+  override val munitTimeout: Duration=180.seconds
   private def writeLinearLora(path: Path,name: String,input: Int,output: Int): Unit =
     val entries=Vector((s"$name.lora_down.weight",Vector(1,input),Array.fill(input)(1f/input)),
       (s"$name.lora_up.weight",Vector(output,1),Array.fill(output)(8f)))
@@ -64,6 +64,13 @@ class NativeGeneratorSuite extends munit.FunSuite:
         activePixels,"native NUI LoRA replay must be deterministic")
       assertEquals(smallPixels(services.generator.generate(loraParams).head.path),smallPixels(baseline.path),
         "adapter-free NUI request must return to the base model")
+      val batch=services.generator.generate(loraParams.copy(batchSize=2,nIter=2,seed=80))
+      assertEquals(batch.size,4,"NUI batch_size and n_iter must produce their full product")
+      assertEquals(batch.zipWithIndex.map { (result,index) =>
+        val metadata=Infotext.parse(PngMetadata.readParameters(result.path).getOrElse(fail("missing batch PNG parameters")))
+        (metadata.get("Seed"),metadata.get("Batch size"),metadata.get("Batch count"))
+      },Vector((Some("80"),Some("2"),Some("2")),(Some("81"),Some("2"),Some("2")),
+        (Some("82"),Some("2"),Some("2")),(Some("83"),Some("2"),Some("2"))))
       val source=services.generator.generate(GenerationParams(prompt="source",width=64,height=64,steps=1,seed=41)).head
       val params=GenerationParams(prompt="a red cat",negativePrompt="blurry",width=64,height=64,steps=4,seed=42,
         img2img=Some(Img2ImgParams(source.path.toString,denoisingStrength=0.5,resizeMode=2)))

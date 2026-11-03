@@ -32,11 +32,26 @@ This uses the same EngineClient/Supervisor and does not launch Python.
 The full test passed in29.912s. No production NUI routing change was needed.
 
 scala-torch's worker now implements file decoding, EXIF/RGB conversion,
-NUI resize modes0/1/2 and selectable CPU/CUDA VAE encoding for img2img. Mask/inpainting options
-remain unsupported and reject when active. This test establishes request and
+NUI resize modes0/1/2 and selectable CPU/CUDA VAE encoding for img2img. Four-channel
+masked img2img is implemented; full-resolution mask crops and nine-channel
+inpainting U-Nets remain unsupported and reject when active. This test establishes request and
 result transport, not full desktop PNG metadata/replay, SD1.5/SDXL quality,
 GPU img2img throughput or support for every extension. Those gates remain open.
 Changes stay on feat/scala-torch-native-engine as requested.
+
+## Native batch generation (2026-11-03)
+
+The native worker accepts NUI `batch_size` (1..16) together with `n_iter`
+(1..100), producing their product in the standard seed order. It generates
+images sequentially, so peak activation memory remains close to batch size 1;
+this adds request compatibility and capacity without claiming parallel batch
+throughput. Progress events report the total image count and requested logical
+batch size. The native worker suite verified four outputs for batch_size 2 ×
+n_iter 2, seed/subseed values 200..203 and 9..12, and matching progress fields.
+The no-Python `AppServices`/`Generator` integration also passed with a tiny
+SD1.5 checkpoint: batch_size 2 × n_iter 2 produced four PNGs with seeds 80..83
+and retained both infotext fields. This does not establish GUI batch controls,
+parallel batching, or normal-checkpoint quality/performance.
 
 ## Native CUDA weight offload (2026-11-03)
 
