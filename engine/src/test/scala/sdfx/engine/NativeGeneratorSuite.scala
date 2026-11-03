@@ -5,6 +5,7 @@ import sdfx.core.infotext.Infotext
 import sdfx.core.model.{GenerationParams,Img2ImgParams,LoraRef}
 import sdfx.core.png.PngMetadata
 import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.nio.{ByteBuffer,ByteOrder}
 import java.nio.file.{Files,Path}
 import javax.imageio.ImageIO
@@ -13,6 +14,62 @@ import scala.concurrent.duration.*
 /** Real Generator saving/replay using a Java worker and an isolated app home. */
 class NativeGeneratorSuite extends munit.FunSuite:
   override val munitTimeout: Duration=180.seconds
+  private def widenTinyInpaintModel(source: Path,target: Path): Unit =
+    import scala.jdk.CollectionConverters.*
+    val paths=Files.walk(source)
+    try paths.iterator().asScala.foreach { path =>
+      val destination=target.resolve(source.relativize(path))
+      if Files.isDirectory(path) then Files.createDirectories(destination)
+      else Files.copy(path,destination)
+    } finally paths.close()
+    val weights=target.resolve("unet/diffusion_pytorch_model.safetensors")
+    val bytes=Files.readAllBytes(weights)
+    val headerLength=ByteBuffer.wrap(bytes,0,8).order(ByteOrder.LITTLE_ENDIAN).getLong.toInt
+    val dataStart=8+headerLength
+    val original=ujson.read(new String(bytes,8,headerLength,java.nio.charset.StandardCharsets.UTF_8)).obj
+    val metadata=original.get("__metadata__")
+    val tensors=original.toVector.filterNot(_._1=="__metadata__").map { (name,value) =>
+      val fields=value.obj
+      val from=fields("data_offsets")(0).num.toInt
+      val until=fields("data_offsets")(1).num.toInt
+      val payload=java.util.Arrays.copyOfRange(bytes,dataStart+from,dataStart+until)
+      if name=="conv_in.weight" then
+        val shape=fields("shape").arr.map(_.num.toInt).toVector
+        require(fields("dtype").str=="F32" && shape.size==4 && shape(1)==4,
+          "tiny fixture conv_in must be F32 with four input channels")
+        val (out,_,height,width)=shape match
+          case Vector(o,i,h,w) => (o,i,h,w)
+          case _ => throw IllegalArgumentException("invalid tiny fixture conv_in shape")
+        val sourceWeights=ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val widened=ByteBuffer.allocate(out*9*height*width*4).order(ByteOrder.LITTLE_ENDIAN)
+        for o <- 0 until out; c <- 0 until 9; y <- 0 until height; x <- 0 until width do
+          if c<4 then widened.putFloat(sourceWeights.getFloat(((o*4+c)*height+y)*width*4+x*4))
+          else widened.putFloat(.025f*(c-3))
+        fields("shape")=ujson.Arr(out,9,height,width)
+        (name,value,widened.array())
+      else (name,value,payload)
+    }.sortBy { (_,value,_) => value("data_offsets")(0).num }
+    var offset=0L
+    val (tensorHeaders,payloads)=tensors.map { (name,value,payload) =>
+      val begin=offset;offset+=payload.length
+      val fields=value.obj
+      val shape=fields("shape").arr.map(_.num.toLong).mkString(",")
+      val json=s"\"$name\":{\"dtype\":\"${fields("dtype").str}\",\"shape\":[$shape],\"data_offsets\":[$begin,$offset]}"
+      (json,payload)
+    }.unzip
+    val metadataHeader=metadata.map(value=>s"\"__metadata__\":${ujson.write(value)}")
+    val encoded=("{"+(metadataHeader++tensorHeaders).mkString(",")+"}").getBytes(java.nio.charset.StandardCharsets.UTF_8)
+    val output=ByteArrayOutputStream()
+    output.write(ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(encoded.length.toLong).array())
+    output.write(encoded)
+    payloads.foreach(output.write)
+    Files.write(weights,output.toByteArray)
+    val config=target.resolve("unet/config.json")
+    val modelConfig=ujson.read(Files.readString(config))
+    require(modelConfig("in_channels").num.toInt==4,"tiny fixture U-Net must have four input channels")
+    modelConfig("in_channels")=ujson.Num(9)
+    Files.writeString(config,ujson.write(modelConfig))
+
   private def writeLinearLora(path: Path,name: String,input: Int,output: Int): Unit =
     val entries=Vector((s"$name.lora_down.weight",Vector(1,input),Array.fill(input)(1f/input)),
       (s"$name.lora_up.weight",Vector(output,1),Array.fill(output)(8f)))
@@ -29,8 +86,10 @@ class NativeGeneratorSuite extends munit.FunSuite:
     val cpFile=sys.env.get("SCALATORCH_WORKER_CLASSPATH_FILE")
     val model=sys.env.get("SCALATORCH_TINY_MODEL")
     assume(cpFile.nonEmpty && model.nonEmpty,"native worker classpath and tiny model required")
-    val root=Path.of(model.get).toAbsolutePath
+    val sourceRoot=Path.of(model.get).toAbsolutePath
     val home=AppHome(Files.createTempDirectory("native-generator"))
+    val root=home.root.resolve("tiny-nine-channel")
+    widenTinyInpaintModel(sourceRoot,root)
     val config=home.root.resolve("scheduler.json")
     Files.writeString(config,"""{"num_train_timesteps":1000,"beta_start":0.00085,"beta_end":0.012,"beta_schedule":"scaled_linear"}""")
     val launch=ScalaTorchLaunch.fromEnvironment(Map("SDFX_SCALATORCH_CLASSPATH_FILE"->cpFile.get,

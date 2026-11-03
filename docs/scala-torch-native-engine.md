@@ -32,9 +32,10 @@ This uses the same EngineClient/Supervisor and does not launch Python.
 The full test passed in29.912s. No production NUI routing change was needed.
 
 scala-torch's worker now implements file decoding, EXIF/RGB conversion,
-NUI resize modes0/1/2 and selectable CPU/CUDA VAE encoding for img2img. Four-channel
-masked img2img, including full-resolution mask crops, is implemented; nine-channel
-inpainting U-Nets remain unsupported and reject when active. This test establishes request and
+NUI resize modes0/1/2 and selectable CPU/CUDA VAE encoding for img2img. Four- and
+nine-channel masked img2img, including full-resolution mask crops, are implemented.
+Nine-channel routing is verified with widened tiny weights; trained inpaint
+checkpoint quality remains unverified. This test establishes request and
 result transport, not full desktop PNG metadata/replay, SD1.5/SDXL quality,
 GPU img2img throughput or support for every extension. Those gates remain open.
 Changes stay on feat/scala-torch-native-engine as requested.
@@ -65,7 +66,8 @@ unchanged. The no-Python NUI `Generator` integration also passed with an 80x48
 source and 64x64 model request, returning an 80x48 PNG with unmasked pixels
 preserved. Mask blur currently uses scala-torch's separable box approximation;
 pixel-exact parity with Pillow's Gaussian blur is not established. Exact Pillow
-parity for blurred-color fill mode 0 and nine-channel U-Nets remain open.
+parity for blurred-color fill mode 0, trained nine-channel checkpoint quality,
+and real-model throughput remain open.
 
 ## Native masked content fills (2026-11-03)
 
@@ -79,6 +81,17 @@ modes 0 and 3. Mode 0 approximates Pillow's Gaussian blur with separable box
 filters; pixel-exact parity is not established. Fill values are applied to model
 input; original pixels remain the source for preservation and final mask
 composition.
+
+## Native nine-channel inpainting (2026-11-03)
+
+The shared CPU/CUDA image pipeline accepts inpaint U-Nets with
+`2 * latentChannels + 1` input channels. Each step concatenates the scheduler
+latent, downsampled repaint mask and masked-image latent; four-channel U-Nets
+retain their existing per-step latent preservation. NUI `Generator` integration
+and the CUDA pipeline test passed with a synthetic tiny checkpoint widened from
+4 to 9 input channels. This verifies model loading and condition routing, not
+trained inpaint quality: no dedicated nine-channel checkpoint is present in the
+local test fixtures.
 
 ## Native CUDA weight offload (2026-11-03)
 
@@ -102,12 +115,21 @@ proof that every NUI feature works without Python.
 ## Runtime dependency boundary
 
 NUI's `core`, `plugins`, `mcp` and `ui` modules do not compile against
-scala-torch or PyTorch. `engine` owns backend selection and starts the native
-worker as a separate Java process through the existing JSON Lines protocol.
-The scala-torch model and tensor implementation belongs in scala-torch's
-`models` module and its worker classpath; do not add those runtime jars to the
-NUI assembly or move tensor/model types into shared NUI modules. This keeps the
-backend replaceable without changing generation UI or protocol consumers.
+scala-torch or PyTorch. `engine` is the sole NUI module that owns backend
+selection and the native-worker launch adapter. It starts the worker as a
+separate Java process through the existing JSON Lines protocol. The NUI build
+does not link scala-torch's model/tensor jars: `engine` receives their paths in
+the worker classpath file and the child JVM loads them. Keep scala-torch model
+and tensor implementation in scala-torch's `models` module; do not add those
+jars to NUI's sbt dependencies or assembly, and do not move tensor/model types
+into shared NUI modules.
+
+Backend-specific values may be persisted by `core` and edited by `ui`, but
+those modules must treat them as configuration strings/flags and must not
+import scala-torch classes or construct worker commands. `EngineLaunch` and
+the JSON Lines protocol are the seam: replacing the native backend should
+require changes in the `engine` adapter and its launch configuration, while
+generation UI, plugins and MCP continue using `EngineClient`.
 
 The opt-in `sdfx.engine.NativeScalaEngineSuite` launches scala-torch's
 `scalatorch.models.worker.NativeWorkerMain` directly with Java 25. It uses the
@@ -371,9 +393,13 @@ pixels mean repaint; black pixels preserve the resized source exactly. Euler and
 DPM++ use latent preservation at each scheduler step and final pixel compositing.
 Mask inversion and bounded blur are supported; the worker uses three separable
 box-blur passes to approximate Gaussian blur, so edge values are not promised to
-match Pillow byte-for-byte. Nine-channel inpaint U-Nets, exact Pillow parity for
-blurred-color fill mode 0, and plugin inpaint integrations remain unsupported
-or approximate.
+match Pillow byte-for-byte. Nine-channel U-Nets now receive the scheduler latent,
+latent mask and masked-image latent through the same CPU/CUDA pipeline; their
+four-channel latent-preservation blend is not applied. A widened tiny checkpoint
+passed the no-Python NUI `Generator` path and CUDA pipeline test. This synthetic
+fixture verifies channel routing, not trained inpaint quality. Exact Pillow
+parity for blurred-color fill mode 0 and plugin inpaint integrations remain open.
+No dedicated trained nine-channel checkpoint is available in the local fixtures.
 Normal-size model quality and the rest of NUI's
 Python feature set are still migration work.
 
