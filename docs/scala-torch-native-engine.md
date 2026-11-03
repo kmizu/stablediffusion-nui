@@ -33,7 +33,7 @@ The full test passed in29.912s. No production NUI routing change was needed.
 
 scala-torch's worker now implements file decoding, EXIF/RGB conversion,
 NUI resize modes0/1/2 and selectable CPU/CUDA VAE encoding for img2img. Four-channel
-masked img2img is implemented; full-resolution mask crops and nine-channel
+masked img2img, including full-resolution mask crops, is implemented; nine-channel
 inpainting U-Nets remain unsupported and reject when active. This test establishes request and
 result transport, not full desktop PNG metadata/replay, SD1.5/SDXL quality,
 GPU img2img throughput or support for every extension. Those gates remain open.
@@ -52,6 +52,20 @@ The no-Python `AppServices`/`Generator` integration also passed with a tiny
 SD1.5 checkpoint: batch_size 2 × n_iter 2 produced four PNGs with seeds 80..83
 and retained both infotext fields. This does not establish GUI batch controls,
 parallel batching, or normal-checkpoint quality/performance.
+
+## Full-resolution masked img2img (2026-11-03)
+
+The native worker now follows NUI's mask-bounded crop flow: blur and bound the
+mask, apply configured padding, expand the crop to the requested aspect ratio,
+resize the crop to the model canvas, then paste the generated region back and
+composite through the full-resolution mask. The returned PNG and image result
+dimensions follow the original canvas. scala-torch's worker suite passed a
+100x60 synthetic canvas through a 64x64 crop and verified untouched pixels stay
+unchanged. The no-Python NUI `Generator` integration also passed with an 80x48
+source and 64x64 model request, returning an 80x48 PNG with unmasked pixels
+preserved. Mask blur currently uses scala-torch's separable box approximation;
+pixel-exact parity with Pillow's Gaussian blur is not established. Inpainting
+fill modes other than original pixels and nine-channel U-Nets remain open.
 
 ## Native CUDA weight offload (2026-11-03)
 

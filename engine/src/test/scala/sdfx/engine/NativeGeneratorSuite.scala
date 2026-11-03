@@ -92,6 +92,22 @@ class NativeGeneratorSuite extends munit.FunSuite:
         assertEquals(image.getWidth,64);assertEquals(image.getHeight,64)
         image.getRGB(0,0,64,64,null,0,64).toVector
       assertEquals(pixels(replay.path),pixels(output.path))
+      val wideSource=home.root.resolve("fullres-source.png")
+      val wideMask=home.root.resolve("fullres-mask.png")
+      val canvas=new BufferedImage(80,48,BufferedImage.TYPE_INT_RGB)
+      val mask=new BufferedImage(80,48,BufferedImage.TYPE_INT_RGB)
+      for y <- 0 until 48; x <- 0 until 80 do
+        canvas.setRGB(x,y,0xffff0000)
+        mask.setRGB(x,y,if x>=30 && x<50 && y>=14 && y<34 then 0xffffffff else 0xff000000)
+      ImageIO.write(canvas,"png",wideSource.toFile)
+      ImageIO.write(mask,"png",wideMask.toFile)
+      val fullRes=services.generator.generate(GenerationParams(prompt="edit the selected region",width=64,height=64,
+        steps=1,seed=44,img2img=Some(Img2ImgParams(wideSource.toString,mask=Some(wideMask.toString),
+          denoisingStrength=1.0,resizeMode=0,maskBlur=0,inpaintFullRes=true,inpaintFullResPadding=8)))).head
+      val restored=PngMetadata.readImage(fullRes.path)
+      assertEquals((restored.getWidth,restored.getHeight),(80,48),"full-resolution inpaint must restore the source canvas size")
+      assertEquals((restored.getRGB(0,0)&0xffffff),0xff0000,"pixels outside the mask must remain from the source image")
+      assert((restored.getRGB(40,24)&0xffffff)!=0xff0000,"the selected region must contain generated pixels")
       assert(!Files.exists(home.pythonDir))
     catch case error: Throwable =>
       failure=error
