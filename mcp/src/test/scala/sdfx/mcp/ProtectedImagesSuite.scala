@@ -41,7 +41,11 @@ class ProtectedImagesSuite extends munit.FunSuite:
     val policy = new PathPolicy(() => Seq(dir))
     val temp: String => java.nio.file.Path = suffix => Files.createTempFile(dir, "input-", suffix)
     try
-      assertEquals(Images.materialize(path.toString, "init_image", policy, dir, temp)._1, path.toRealPath())
+      val snapshot = Images.materialize(path.toString, "init_image", policy, dir, temp)
+      try
+        assert(snapshot._2.nonEmpty)
+        assert(java.util.Arrays.equals(Files.readAllBytes(snapshot._1), Files.readAllBytes(path)))
+      finally snapshot._2.foreach(Files.deleteIfExists(_))
       val inline = Images.materialize(Base64.getEncoder.encodeToString(Files.readAllBytes(path)), "init_image", policy, dir, temp)
       try assertEquals(Images.size(inline._1), (8, 8))
       finally inline._2.foreach(Files.deleteIfExists(_))
