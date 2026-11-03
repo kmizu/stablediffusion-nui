@@ -10,7 +10,7 @@ import javafx.scene.image.{ImageView, PixelFormat, WritableImage}
 import javafx.scene.input.{KeyCode, KeyEvent, MouseButton, MouseEvent, ScrollEvent}
 import javafx.scene.layout.{Priority, Region, StackPane, VBox}
 import javafx.scene.shape.Rectangle
-import javafx.stage.Stage
+import javafx.stage.{FileChooser, Stage}
 import javafx.util.Duration
 import sdfx.core.panorama.*
 import sdfx.core.png.PngMetadata
@@ -31,6 +31,7 @@ final class PanoramaModel:
   val fov = new SimpleDoubleProperty(90)
   /** File the picture came from (or was saved to); used to step through its folder and to send it on. */
   val path = new SimpleObjectProperty[Path](null)
+  val video = new SimpleBooleanProperty(false)
   def view: View = View(yaw.get, pitch.get, fov.get)
   def setView(v: View): Unit =
     val n = v.normalized
@@ -58,6 +59,19 @@ final class PanoramaViewport(val model: PanoramaModel) extends Region:
   private val executor = Executors.newSingleThreadExecutor(new ThreadFactory:
     def newThread(r: Runnable): Thread = { val t = new Thread(r, "panorama-render"); t.setDaemon(true); t })
   private val ticket = new AtomicLong(0)
+  private val videoEpoch = new AtomicLong(0)
+  private case class VideoRender(source: Raster, projection: Projection, view: View, width: Int, height: Int, epoch: Long)
+  private val videoFrames = new LatestFrame[VideoRender](job =>
+    val out = Panorama.render(job.source, job.projection, job.view, job.width, job.height)
+    if videoEpoch.get == job.epoch then
+      lastPixels = out; lastSize = (job.width, job.height); renders += 1
+      Fx.run {
+        if videoEpoch.get == job.epoch then
+          val img = new WritableImage(job.width, job.height)
+          img.getPixelWriter.setPixels(0, 0, job.width, job.height, PixelFormat.getIntArgbInstance, out.argb, 0, job.width)
+          imageView.setImage(img)
+      }
+  )
   private var dragging = false
   /** True while something else (auto-rotate) moves the camera continuously. */
   var live = false
@@ -76,10 +90,16 @@ final class PanoramaViewport(val model: PanoramaModel) extends Region:
   observed.foreach(_.addListener(invalidated))
   widthProperty.addListener(invalidated)
   heightProperty.addListener(invalidated)
+  private val videoModeChanged: javafx.beans.InvalidationListener = _ =>
+    videoEpoch.incrementAndGet(); ticket.incrementAndGet(); request(coarse = false)
+  model.video.addListener(videoModeChanged)
 
   def dispose(): Unit =
     observed.foreach(_.removeListener(invalidated))
+    model.video.removeListener(videoModeChanged)
     ticket.incrementAndGet()
+    videoEpoch.incrementAndGet()
+    videoFrames.close()
     settle.stop()
     executor.shutdownNow()
 
@@ -94,13 +114,16 @@ final class PanoramaViewport(val model: PanoramaModel) extends Region:
     if src == null || getWidth < 8 || getHeight < 8 || executor.isShutdown then
       if src == null then imageView.setImage(null)
     else
-      val scale = if coarse then 0.5 else 1.0
+      val isVideo = model.video.get
+      val scale = if coarse || isVideo then 0.5 else 1.0
       val w = math.max(8, (getWidth * scale).toInt)
       val h = math.max(8, (getHeight * scale).toInt)
       val projection = model.projection.get
       val view = model.view
       val mine = ticket.incrementAndGet()
-      try
+      if isVideo then
+        videoFrames.submit(VideoRender(src, projection, view, w, h, videoEpoch.get))
+      else try
         executor.execute { () =>
           if ticket.get == mine then
             try
@@ -184,6 +207,12 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   empty.setId("panorama-empty")
   private var busy = false
   private val actions = scala.collection.mutable.ArrayBuffer.empty[Control]
+  private var player: Option[PanoramaVideoPlayback] = None
+  private var videoProbe: Option[PanoramaFrameDecoder] = None
+  private var videoInfo: Option[PanoramaVideoInfo] = None
+  private var videoTicket = 0L
+  private var lastVideoTick = 0L
+  private var updatingVideoSlider = false
 
   private def action(text: String, tip: String, id: String, primary: Boolean = false)(body: => Unit): Button =
     val b = W.button(text, tip, if primary then Seq("primary") else Nil)(body)
@@ -197,6 +226,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   def open(path: Path): Unit =
     if disposed then return
     if !Files.isRegularFile(path) then { say(s"Not found: $path"); return }
+    stopVideo()
     loadTicket += 1
     val mine = loadTicket
     say(s"Loading ${path.getFileName}…")
@@ -251,6 +281,114 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     val fc = ImageFiles.chooser("Open a panorama")
     Option(model.path.get).flatMap(p => Option(p.getParent)).filter(Files.isDirectory(_)).foreach(d => fc.setInitialDirectory(d.toFile))
     Option(fc.showOpenDialog(ctx.stage)).foreach(f => open(f.toPath))
+
+  /** Open local equirectangular video using the user's ffmpeg installation. */
+  def openVideo(path: Path): Unit =
+    if disposed then return
+    if !Files.isRegularFile(path) then { say(s"Not found: $path"); return }
+    val configured = ctx.services.settings.panoramaFfmpegExe.filter(_.trim.nonEmpty)
+    if configured.isEmpty then { say("Choose an ffmpeg executable before opening video."); return }
+    stopVideo()
+    loadTicket += 1
+    videoTicket += 1
+    val mine = videoTicket
+    try
+      val ffmpeg = Path.of(configured.get).toAbsolutePath.normalize()
+      val probeName = if System.getProperty("os.name").toLowerCase.startsWith("windows") then "ffprobe.exe" else "ffprobe"
+      val ffprobe = ffmpeg.resolveSibling(probeName)
+      if !Files.isRegularFile(ffmpeg) then throw new IllegalArgumentException("Configured ffmpeg executable not found")
+      if !Files.isRegularFile(ffprobe) then throw new IllegalArgumentException("ffprobe was not found beside ffmpeg")
+      val probe = new PanoramaFrameDecoder(ffprobe, 10000)
+      val generation = probe.generation
+      videoProbe = Some(probe)
+      controls()
+      say(s"Reading video information for ${path.getFileName}…")
+      Fx.async(PanoramaVideoInfo.probeUsing(probe, ffprobe, path, generation)) { info =>
+        if videoProbe.contains(probe) then videoProbe = None
+        Fx.async(probe.close())(_ => ())(_ => ())
+        if mine == videoTicket && !disposed then
+          try
+            val ratio = math.min(1.0, math.min(1024.0 / info.width, 1024.0 / info.height))
+            val w = math.max(1, (info.width * ratio).toInt)
+            val h = math.max(1, (info.height * ratio).toInt)
+            val decoder = new PanoramaFrameDecoder(ffmpeg, 10000)
+            var next: PanoramaVideoPlayback = null
+            next = new PanoramaVideoPlayback(path, info.duration, w, h, decoder, () => System.nanoTime(),
+              (epoch, _, bytes) =>
+                val pixels = new Array[Int](w * h)
+                var i = 0
+                while i < pixels.length do
+                  val j = i * 3
+                  pixels(i) = 0xff000000 | ((bytes(j) & 255) << 16) | ((bytes(j + 1) & 255) << 8) | (bytes(j + 2) & 255)
+                  i += 1
+                val frame = new Raster(w, h, pixels)
+                Fx.run {
+                  if mine == videoTicket && !disposed && player.contains(next) && next.currentEpoch == epoch then
+                    val firstFrame = model.raster.get == null
+                    model.raster.set(frame)
+                    if firstFrame then controls()
+                },
+              (epoch, error) => Fx.run {
+                if mine == videoTicket && !disposed && player.contains(next) && next.currentEpoch == epoch then
+                  stopVideo()
+                  say("Cannot decode video: " + Fx.message(error))
+              })
+            player = Some(next)
+            videoInfo = Some(info)
+            model.path.set(null)
+            model.projection.set(Projection.Equirectangular)
+            model.video.set(true)
+            model.resetView()
+            nameLabel.setText(path.getFileName.toString)
+            hintLabel.setText(Panorama.hint(info.width, info.height, Projection.Equirectangular))
+            empty.setVisible(false)
+            updatingVideoSlider = true
+            try { videoSeek.setMax(info.duration); videoSeek.setValue(0.0) }
+            finally updatingVideoSlider = false
+            val selectedSpeed = Option(videoSpeed.getValue).fold(1.0)(_.doubleValue())
+            if selectedSpeed != 1.0 then next.setSpeed(selectedSpeed)
+            controls()
+            say(s"Playing ${path.getFileName} as equirectangular video.")
+            next.play()
+          catch case NonFatal(e) =>
+            stopVideo()
+            say("Cannot play video: " + Fx.message(e))
+      } { error =>
+        if videoProbe.contains(probe) then videoProbe = None
+        Fx.async(probe.close())(_ => ())(_ => ())
+        if mine == videoTicket && !disposed then
+          stopVideo()
+          say("Cannot read video information: " + Fx.message(error))
+      }
+    catch case NonFatal(e) =>
+      stopVideo()
+      say("Cannot play video: " + Fx.message(e))
+
+  def videoActive: Boolean = player.nonEmpty || videoProbe.nonEmpty
+  def videoPaused: Boolean = player.exists(p => !p.playing)
+  def videoSeconds: Double = player.fold(0.0)(_.position)
+  def videoRate: Double = player.fold(1.0)(_.speed)
+  def seekVideo(seconds: Double): Unit = player.foreach { p =>
+    if seconds.isFinite && seconds >= 0 && videoInfo.exists(i => seconds <= i.duration) then p.seek(seconds)
+  }
+  def stopVideo(): Unit =
+    videoTicket += 1
+    val oldProbe = videoProbe; videoProbe = None
+    val oldPlayer = player; player = None
+    videoInfo = None
+    oldProbe.foreach { p => p.cancel(); Fx.async(p.close())(_ => ())(_ => ()) }
+    oldPlayer.foreach { p => Fx.async(p.close())(_ => ())(_ => ()) }
+    model.video.set(false)
+    controls()
+
+  private def captureVideoFrame(now: Long): Unit = player.foreach { p =>
+    if now - lastVideoTick >= 150000000L then
+      lastVideoTick = now
+      p.tick()
+      updatingVideoSlider = true
+      try videoSeek.setValue(p.position)
+      finally updatingVideoSlider = false
+  }
 
   // ---- converting & saving -------------------------------------------------------------------------------------
   private def convert(toCube: Boolean): Unit =
@@ -331,6 +469,35 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
 
   // ---- controls ------------------------------------------------------------------------------------------------
   private val openButton = action("Open…", "Open an equirectangular picture or a cubemap net", "panorama-open")(chooseFile())
+  private val openVideoButton = action("Open video…", "Open a local equirectangular video", "panorama-open-video") {
+    val chooser = new FileChooser()
+    chooser.setTitle("Open a panorama video")
+    chooser.getExtensionFilters.add(new FileChooser.ExtensionFilter("Video", "*.mp4", "*.m4v", "*.mov", "*.mkv", "*.webm", "*.avi"))
+    Option(chooser.showOpenDialog(ctx.stage)).foreach(f => openVideo(f.toPath))
+  }
+  private val ffmpegButton = action("Choose ffmpeg…", "Choose your local ffmpeg executable; ffprobe must be beside it", "panorama-choose-ffmpeg") {
+    val chooser = new FileChooser()
+    chooser.setTitle("Choose ffmpeg executable")
+    Option(chooser.showOpenDialog(ctx.stage)).foreach { f =>
+      val selected = f.toPath.toAbsolutePath.normalize().toString
+      ctx.services.updateSettingsChecked(_.copy(panoramaFfmpegExe = Some(selected))) match
+        case Right(_) => say("ffmpeg executable saved: " + selected)
+        case Left(error) => say(error)
+    }
+  }
+  private val videoPlay = action("Pause", "Pause or resume the panorama video", "panorama-video-play") {
+    player.foreach { p => if p.playing then p.pause() else p.play() }
+  }
+  private val videoStop = action("Stop video", "Close the current video", "panorama-video-stop")(stopVideo())
+  private val videoSeek = new Slider(0, 1, 0)
+  videoSeek.setId("panorama-video-seek")
+  videoSeek.valueProperty.addListener((_, _, value) => if !updatingVideoSlider then seekVideo(value.doubleValue()))
+  private val videoSpeed = new ComboBox[java.lang.Double](FXCollections.observableArrayList(
+    java.lang.Double.valueOf(0.25), java.lang.Double.valueOf(0.5), java.lang.Double.valueOf(1.0),
+    java.lang.Double.valueOf(2.0), java.lang.Double.valueOf(4.0)))
+  videoSpeed.setId("panorama-video-speed")
+  videoSpeed.setValue(java.lang.Double.valueOf(1.0))
+  videoSpeed.valueProperty.addListener((_, _, value) => if value != null then player.foreach(_.setSpeed(value.doubleValue())))
   private val prevButton = action("◀", "Previous picture in this folder", "panorama-prev")(step(-1))
   private val nextButton = action("▶", "Next picture in this folder", "panorama-next")(step(1))
   private val resetButton = action("Reset view", "Look straight ahead at 90° (double click does the same)", "panorama-reset")(model.resetView())
@@ -367,8 +534,14 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     pictureButtons.foreach(_.setDisable(!has || busy))
     pathButtons.foreach(_.setDisable(!hasPath))
     openButton.setDisable(busy)
-    toCube.setDisable(!has || busy || model.projection.get != Projection.Equirectangular)
-    toEqui.setDisable(!has || busy || model.projection.get != Projection.CubemapNet)
+    openVideoButton.setDisable(busy)
+    videoPlay.setDisable(player.isEmpty)
+    videoStop.setDisable(!videoActive)
+    videoSeek.setDisable(player.isEmpty)
+    videoSpeed.setDisable(player.isEmpty)
+    projectionChoice.setDisable(videoActive)
+    toCube.setDisable(!has || busy || videoActive || model.projection.get != Projection.Equirectangular)
+    toEqui.setDisable(!has || busy || videoActive || model.projection.get != Projection.CubemapNet)
 
   projectionChoice.valueProperty.addListener((_, _, _) =>
     Option(model.raster.get).foreach { r =>
@@ -390,17 +563,20 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     override def handle(now: Long): Unit =
       val dt = if lastTick == 0 then 0.0 else (now - lastTick) / 1e9
       lastTick = now
+      captureVideoFrame(now)
+      videoPlay.setText(if videoPaused then "Play" else "Pause")
       if autoRotate.isSelected && model.raster.get != null && node.isVisible && node.getScene != null then
         model.setView(model.view.turned(speed.get * math.min(dt, 0.25), 0))
   autoRotate.selectedProperty.addListener((_, _, on) => { viewport.live = on; lastTick = 0L; if !on then viewport.request(coarse = false) })
   timer.start()
 
-  private val toolbar1 = W.hbox(6, openButton, prevButton, nextButton, nameLabel, W.spacer(), W.label("Projection"), projectionChoice)
+  private val toolbar1 = W.hbox(6, openButton, openVideoButton, prevButton, nextButton, nameLabel, W.spacer(), W.label("Projection"), projectionChoice)
   private val toolbar2 = W.hbox(8, W.label("Yaw"), yawSpinner, W.label("Pitch"), pitchSpinner, W.label("FOV"), W.hgrow(fovBox), resetButton, autoRotate, speedSpinner)
   private val toolbar3 = W.hbox(6, fullButton, saveViewButton, toCube, toEqui, W.spacer(), toImg2img, toInpaint, toExtras)
+  private val videoToolbar = W.hbox(6, ffmpegButton, videoPlay, videoStop, W.label("Speed"), videoSpeed, W.label("Video position"), W.hgrow(videoSeek))
   private val stage = new StackPane(viewport, empty)
   VBox.setVgrow(stage, Priority.ALWAYS)
-  val node: VBox = new VBox(8, toolbar1, toolbar2, toolbar3, stage, W.hbox(12, readout, W.hgrow(hintLabel)), status)
+  val node: VBox = new VBox(8, toolbar1, toolbar2, toolbar3, videoToolbar, stage, W.hbox(12, readout, W.hgrow(hintLabel)), status)
   node.setPadding(new Insets(10))
   node.setId("panorama-tab")
   node.setMinWidth(0)
@@ -419,6 +595,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   def dispose(): Unit =
     disposed = true
     timer.stop()
+    stopVideo()
     closeFullscreen()
     viewport.dispose()
 
