@@ -207,6 +207,8 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   empty.setId("panorama-empty")
   private var busy = false
   private var sourceProtectionRevision: Option[Long] = None
+  // Some(None) means a verified snapshot with no generation parameters; None means unverified fallback.
+  private var sourceParameters: Option[Option[String]] = None
 
   private def sourceAccessibleAt(revision: Long): Boolean =
     if sourceProtectionRevision.exists(_ != revision) then
@@ -242,17 +244,27 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     loadTicket += 1
     val mine = loadTicket
     say(s"Loading ${path.getFileName}…")
-    val readRevision = ctx.services.imageScrambleSession.state.revision
-    ctx.imageCopyReads.request(path) {
+    val session = ctx.services.imageScrambleSession
+    val captured = session.state
+    def fallback(): Unit = ctx.imageCopyReads.request(path) {
       case scala.util.Success(display) =>
         if mine == loadTicket && !disposed then
           Fx.async(pixelsOf(display.image))(r =>
-            if mine == loadTicket && !disposed then
-              if display.scrambled && ctx.services.imageScrambleSession.state.revision != readRevision then
-                say("Image protection session changed; reopen the protected panorama.")
-              else install(r, Some(path), if display.scrambled then Some(readRevision) else None))(
+            if mine == loadTicket && !disposed && session.state.revision == captured.revision then
+              install(r, Some(path), if display.scrambled then Some(captured.revision) else None))(
             e => if mine == loadTicket then say("Cannot read the picture: " + Fx.message(e)))
       case scala.util.Failure(e) => if mine == loadTicket then say("Cannot read the picture: " + Fx.message(e).stripPrefix("requirement failed: "))
+    }
+    Fx.async {
+      val snapshot = sdfx.core.png.PanoramaSourceSnapshot.read(path)
+      val decoded = snapshot.decode(captured.secret.map(_.use(identity)))
+      (Raster.fromImage(decoded.image), snapshot.parameters, decoded.scrambled)
+    } { (r, parameters, scrambled) =>
+      if mine == loadTicket && !disposed && session.state.revision == captured.revision then
+        install(r, Some(path), if scrambled then Some(captured.revision) else None, Some(parameters))
+    } {
+      case _: sdfx.core.png.PanoramaSourceSnapshot.Unavailable => if mine == loadTicket && !disposed then fallback()
+      case e => if mine == loadTicket && !disposed then say("Cannot read the picture: " + Fx.message(e))
     }
 
   private def pixelsOf(image: javafx.scene.image.Image): Raster =
@@ -269,13 +281,15 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
       case v if v == Projection.CubemapNet.label => Projection.CubemapNet
       case _ => Panorama.detect(r.width, r.height).getOrElse(Projection.Equirectangular)
 
-  private def install(r: Raster, path: Option[Path], protectionRevision: Option[Long] = None): Unit =
+  private def install(r: Raster, path: Option[Path], protectionRevision: Option[Long] = None,
+      parameters: Option[Option[String]] = None): Unit =
     var projection = chosenProjection(r)
     var note = ""
     if projection == Projection.CubemapNet && !PanoramaFiles.isCubeNet(r.width, r.height) then
       projection = Projection.Equirectangular
       note = " A cubemap net needs square faces (width = 4 x face, height = 3 x face), so it is shown as equirectangular."
     sourceProtectionRevision = protectionRevision
+    sourceParameters = parameters
     model.path.set(path.orNull)
     model.projection.set(projection)
     model.raster.set(r)
@@ -284,7 +298,8 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     hintLabel.setText(Panorama.hint(r.width, r.height, projection))
     empty.setVisible(false)
     controls()
-    say(s"${r.width}x${r.height} shown as ${projection.label}." + note + (if protectionRevision.nonEmpty then " Decoded in memory from a protected file." else ""))
+    val metadataNotice = if parameters.isEmpty then " Source metadata could not be verified; applying a view is unavailable and saved images omit parameters." else ""
+    say(s"${r.width}x${r.height} shown as ${projection.label}." + note + (if protectionRevision.nonEmpty then " Decoded in memory from a protected file." else "") + metadataNotice)
     viewport.requestFocus()
 
   /** Previous / next picture of the same folder (wraps around). */
@@ -345,6 +360,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
                   if mine == videoTicket && !disposed && player.contains(next) && next.currentEpoch == epoch then
                     val firstFrame = model.raster.get == null
                     sourceProtectionRevision = None
+                    sourceParameters = None
                     model.raster.set(frame)
                     if firstFrame then controls()
                 },
@@ -410,12 +426,18 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
       finally updatingVideoSlider = false
   }
 
+  private def saveWithParameters(r: Raster, target: Path, parameters: Option[String], password: Option[String]): Unit =
+    Files.createDirectories(target.toAbsolutePath.getParent)
+    sdfx.core.png.ScrambledPng.write(r.toBufferedImage, target, parameters.map(PngMetadata.ParametersKey -> _).toSeq, password)
+
   // ---- converting & saving -------------------------------------------------------------------------------------
   private def convert(toCube: Boolean): Unit =
     val src = model.raster.get
     if src == null || busy || !sourceAccessible then return
     val projection = model.projection.get
+    val ticket = loadTicket
     val sourcePath = Option(model.path.get)
+    val savedParameters = sourceParameters
     if toCube && projection != Projection.Equirectangular then { say("Switch the projection to Equirectangular first: this picture is shown as a cubemap."); return }
     if !toCube && projection != Projection.CubemapNet then { say("Switch the projection to Cubemap first: this picture is shown as equirectangular."); return }
     busy = true; controls()
@@ -431,21 +453,22 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
       val target = PanoramaFiles.uniqueTarget(dir, name, if toCube then "cubemap" else "equirect")
       session.synchronized {
         if session.state.revision != captured.revision then throw new IllegalStateException("Image protection session changed; try again")
-        PanoramaFiles.savePng(out, target, sourcePath, password)
+        PanoramaFiles.savePngWithParametersNew(out, target, savedParameters.flatten, password)
       }
       (out, target)
     } { case (out, target) =>
       busy = false
-      if disposed || session.state.revision != captured.revision then
-        try Files.deleteIfExists(target) catch case NonFatal(e) => System.err.println("[sdfx] panorama conversion cleanup failed: " + e)
-        if !disposed then { controls(); say("Image protection session changed; conversion discarded.") }
-      else
-        val keep = projectionChoice.getValue
-        projectionChoice.setValue(if toCube then Projection.CubemapNet.label else Projection.Equirectangular.label)
-        install(out, Some(target), if captured.secret.nonEmpty then Some(captured.revision) else None)
-        projectionChoice.setValue(keep)
-        say(s"Converted and saved to $target")
-        ctx.success("Saved " + target.getFileName)
+      session.synchronized {
+        if disposed || loadTicket != ticket || (model.raster.get ne src) || model.projection.get != projection || session.state.revision != captured.revision then
+          if !disposed then { controls(); say(s"The panorama or protection session changed; conversion was not displayed. The saved file remains at $target") }
+        else
+          val keep = projectionChoice.getValue
+          projectionChoice.setValue(if toCube then Projection.CubemapNet.label else Projection.Equirectangular.label)
+          install(out, Some(target), if captured.secret.nonEmpty then Some(captured.revision) else None, savedParameters)
+          projectionChoice.setValue(keep)
+          say(s"Converted and saved to $target")
+          ctx.success("Saved " + target.getFileName)
+      }
     }(e => { busy = false; controls(); say("Conversion failed: " + Fx.message(e)) })
 
   /** Saves the picture the camera sees now; renders and writes in the background and returns the target at once. */
@@ -459,6 +482,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
       val projection = model.projection.get
       val view = model.view
       val sourcePath = Option(model.path.get)
+      val parameters = sourceParameters.flatten
       val target = PanoramaFiles.uniqueTarget(saveDir(), sourcePath.fold("panorama.png")(_.getFileName.toString), "view")
       val captured = ctx.services.imageScrambleSession.state
       if !sourceAccessibleAt(captured.revision) then return None
@@ -469,14 +493,13 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
         val rendered = Panorama.render(src, projection, view, width, h)
         session.synchronized {
           if session.state.revision != captured.revision then throw new IllegalStateException("Image protection session changed; try again")
-          PanoramaFiles.savePng(rendered, target, sourcePath, password)
+          PanoramaFiles.savePngWithParametersNew(rendered, target, parameters, password)
         }
         target
       } { t =>
         session.synchronized {
           if disposed || session.state.revision != captured.revision then
-            try Files.deleteIfExists(t) catch case NonFatal(e) => System.err.println("[sdfx] panorama view cleanup failed: " + e)
-            if !disposed then say("Image protection session changed; view discarded.")
+            if !disposed then say(s"Image protection session changed; the saved view remains at $t")
           else { say(s"Saved the current view (${width}x$h) to $t"); ctx.success("Saved " + t.getFileName) }
         }
       }(e => if !disposed then say("Cannot save the view: " + Fx.message(e)))
@@ -490,7 +513,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     val (width, height) = dimensions.toOption.get
     val projection = model.projection.get
     val view = model.view
-    val sourcePath = Option(model.path.get)
+    val parameters = sourceParameters.flatten
     val session = ctx.services.imageScrambleSession
     val captured = session.state
     if !sourceAccessibleAt(captured.revision) then return
@@ -505,7 +528,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
         Files.createDirectories(dir)
         val target = Files.createTempFile(dir, "panorama-view-", ".png")
         try
-          PanoramaFiles.savePng(raster, target, sourcePath, password)
+          saveWithParameters(raster, target, parameters, password)
           (target, PngMetadata.readParameters(target))
         catch
           case NonFatal(e) =>
@@ -540,7 +563,9 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     if base.width > PanoramaFiles.MaxWidth || base.width.toLong * base.height > PanoramaCompose.MaxPixels then
       say("The panorama is too large to apply a view image."); return
     if !Files.isRegularFile(path) then { say(s"Not found: $path"); return }
-    val sourcePath = Option(model.path.get)
+    if sourceParameters.isEmpty then
+      say("Cannot apply the view: source metadata could not be verified; reopen a supported image under 64 MiB."); return
+    val parameters = sourceParameters.get
     val view = model.view
     val originalTicket = loadTicket
     val session = ctx.services.imageScrambleSession
@@ -570,7 +595,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
               Files.createDirectories(dir)
               val target = Files.createTempFile(dir, "panorama-composite-", ".png")
               try
-                PanoramaFiles.savePng(combined, target, sourcePath, password)
+                saveWithParameters(combined, target, parameters, password)
                 (combined, target)
               catch case NonFatal(e) =>
                 try Files.deleteIfExists(target) catch case NonFatal(cleanup) => e.addSuppressed(cleanup)
@@ -583,7 +608,7 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
                 try Files.deleteIfExists(target) catch case NonFatal(e) => System.err.println("[sdfx] panorama composite cleanup failed: " + e)
                 if !disposed then { controls(); say("The panorama or protection session changed; view not applied.") }
               else
-                install(combined, Some(target), if captured.secret.nonEmpty then Some(captured.revision) else None)
+                install(combined, Some(target), if captured.secret.nonEmpty then Some(captured.revision) else None, Some(parameters))
                 model.setView(view)
                 say(s"Applied the view and saved to $target")
             }

@@ -238,6 +238,19 @@ object RealPanoramaCheck:
       require(fx(find[ComboBox[String]]("panorama-projection").getValue).startsWith("Auto"))
       checked("forcing Cubemap on a 2:1 picture is refused with an explanation and the viewer keeps rendering it as equirectangular")
 
+      // A concurrent source switch must not publish a conversion of the old image.
+      fx { services.imageScrambleSession.synchronized {
+        window.scene.lookup("#panorama-to-cube").asInstanceOf[Button].fire()
+        pano.open(sdxl)
+      } }
+      loaded(sdxl)
+      eventually("stale conversion finishes") { !fx(pano.perspectivePending) }
+      val staleConversion = outputs.resolve("panorama/a-sd15-cabin-cubemap.png")
+      require(pathOf == sdxl && Files.isRegularFile(staleConversion),
+        "source switch must not display the old conversion; its published file remains")
+      Files.delete(staleConversion) // This test owns the isolated output directory.
+      fx(pano.open(sd15)); loaded(sd15)
+      checked("conversion cannot replace a newly selected source")
       // ---- converting to a cubemap and back --------------------------------------------------------------------
       settled()
       val reference = Panorama.render(s0, Projection.Equirectangular, View(0, 0, 90), vp.lastSize._1, vp.lastSize._2)
@@ -312,6 +325,14 @@ object RealPanoramaCheck:
       require(savedDiff == 0.0, s"saved view differs by $savedDiff")
       require(PngMetadata.readParameters(savedPath).exists(_.contains("Steps:")), "generation parameters kept in the saved view")
       checked(s"Save view writes the camera view as panorama/b-sdxl-cabin-view.png (${saved.getWidth}x${saved.getHeight}, identical to the reference render, generation parameters kept)")
+      val collidedView = fx { services.imageScrambleSession.synchronized {
+        val target = pano.saveView().get
+        Files.writeString(target, "concurrent owner")
+        target
+      } }
+      eventually("view collision reported") { label("panorama-status").startsWith("Cannot save the view") }
+      require(Files.readString(collidedView) == "concurrent owner", "save view must not overwrite the competing file")
+      checked("save view preserves an intervening file and reports the collision")
 
       // ---- fullscreen -------------------------------------------------------------------------------------------
       press("panorama-fullscreen")
@@ -435,8 +456,16 @@ object RealPanoramaCheck:
       eventually("oversized patch refused") { !fx(pano.perspectivePending) && label("panorama-status").contains("too large") }
       require(pathOf == sdxl && (source eq baseBefore), "oversized patch must not replace the source")
       checked("oversized patch is rejected without replacing the panorama")
-      fx(pano.applyPerspective(patchPath, 0))
-      eventually("composited panorama saved") { pathOf != sdxl && pathOf != null && Files.isRegularFile(pathOf) }
+      val originalBytes = Files.readAllBytes(sdxl)
+      val originalParameters = PngMetadata.readParameters(sdxl)
+      try
+        val replacement = new java.awt.image.BufferedImage(1536, 768, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        replacement.setRGB(0, 0, 0xff0000ff)
+        ScrambledPng.write(replacement, sdxl, Seq("parameters" -> "replacement metadata"), None)
+        fx(pano.applyPerspective(patchPath, 0))
+        eventually("composited panorama saved") { pathOf != sdxl && pathOf != null && Files.isRegularFile(pathOf) }
+        require(PngMetadata.readParameters(pathOf) == originalParameters, "composite metadata must belong to the displayed image, not a replacement")
+      finally Files.write(sdxl, originalBytes)
       val expected = PanoramaCompose.applyView(baseBefore, Raster.fromImage(patchImage), View(90, 15, 70), 0)
       require(java.util.Arrays.equals(source.argb, expected.argb), "composite pixels differ from expected")
       require(view == View(90, 15, 70), "the camera must stay on the edited area")
@@ -556,6 +585,15 @@ object RealPanoramaCheck:
       fx(window.panorama.open(secretCopy)); loaded(secretCopy)
       require(label("panorama-status").contains("Decoded in memory"), label("panorama-status"))
       require(java.util.Arrays.equals(source.argb, s0.argb), "decoded protected picture equals the plain one")
+      val protectedBytes = Files.readAllBytes(secretCopy)
+      try
+        ScrambledPng.write(PngMetadata.readImage(sd15), secretCopy, Seq("parameters" -> "replacement protected"), Some("hunter2"))
+        fx(pano.applyPerspective(patchPath, 0))
+        eventually("protected source replacement composite") { pathOf != secretCopy && pathOf != null && Files.isRegularFile(pathOf) }
+        require(PngMetadata.readParameters(pathOf).contains("protected panorama\nSteps: 24"), "protected composite must retain displayed source metadata")
+        require(PngMetadata.readTexts(pathOf).contains("Encrypt"), "composite stays protected")
+      finally Files.write(secretCopy, protectedBytes)
+      fx(window.panorama.open(secretCopy)); loaded(secretCopy)
       press("panorama-to-cube")
       eventually("protected conversion saved")(fx(pano.model.projection.get) == Projection.CubemapNet && pathOf.getFileName.toString == "e-protected-cubemap.png")
       require(PngMetadata.readTexts(pathOf).contains("Encrypt"), "the converted file is scrambled while the session is protected")

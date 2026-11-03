@@ -65,3 +65,28 @@ PNG の全 chunk を ImageIO より先に走査し、非画像メタデータと
 候補 ZIP を展開した EXE の GUI でも SDXL 生成画像を Panorama に送り、Windows の chooser から SD1.5 生成画像を適用し保存できた。原画像と合成画像はどちらも 1536×768、RGB の差分 bbox は `(576,271,960,497)`、画面は `outputs/panorama97/package-gui-compose.png`。この回は隔離 home の python/sdfx 未配置により GUI が engine crashed と表示されており、既存画像を使う offline 合成のみの検証。配布物の python/sdfx を隔離 home に配置して再起動すると同 EXE の GUI が CUDA engine ready、合成済み画像を再表示できた。ユーザー操作が検出されたため、その後の GUI 操作は停止し、試験で起動した process と所有 GPU lock を整理した。engine ready 状態での GUI 合成は未再試験、生成実行は上記 MCP のみ。
 
 PNG 以外のメタデータ展開の制限、セッション切替の残る競合、上流の pole correction・sketch・undo などは未完了。issue #97 は open のまま。
+
+
+## 2026-11-03 表示元と metadata の同一性（検証中）
+
+これまで合成時に元の path を読み直して generation parameters を付けていたため、表示後にそのファイルが置換されると、表示画像と違う metadata を出力へ付ける可能性があった。試作では、表示時に最大 64 MiB の source bytes を固定し、画像の復号・parameters を同じ bytes から得る。合成、変換、視点保存・送信ではその parameters を使い、変換結果にも引き継ぐ。保護画像も同じ snapshot で検証・復号する。source の path を後から差替えても、保存に再読込みしない。
+
+PNG は圧縮 metadata 対策を回避しないため 64 MiB 超や metadata 上限超過をエラーにする。非 PNG の decoder 未対応または 64 MiB 超は旧 viewer で表示するが、parameters は未検証として省略し、合成は拒否する。画面に理由を表示する。ImageIO と旧 JavaFX 読込の色や形式の完全互換性は未確認。`Source →` は元 path をそのまま渡す既存仕様で、path が後から置換されると表示画像とは異なるファイルを送る可能性が残る。当時は uniqueTarget の存在確認と保存が atomic no-replace でなく、別 process の同名作成と競合した（下記追補で名前付き出力を修正）。
+
+通常・保護画像を snapshot 取得後に置換しても元の画素と parameters を使う core test 等 10 件は通過し UI test compile も成功。合成中の source 置換・protected source の置換・conversion 中の source 切替を確かめる GUI test は追加したが、ユーザーの画面操作を検知したため実行していない。実モデル・配布版もこの修正後は未確認。
+## 2026-11-03 名前付き PNG の非上書き公開（検証中）
+
+conversion と Save view の候補名に、別 process が先にファイルを作った場合、そのファイルを置換しない。出力を同一ディレクトリの staging file に作り、hard link で完成したファイルを非上書き公開する。hard link が使えない場合は CREATE_NEW で宛先を排他的に作ってコピーする。既存名との競合は自動リネームせず明示エラーとなる。
+
+fallback はコピー中に不完全な PNG が見える可能性があり、書込・close の失敗や異常終了時に不完全ファイルが残り得る。第三者が既に差替えた宛先を消さないため無条件削除は行わず、エラーで残存の可能性を示す。session 変更時に公開済み結果を破棄する場合も、他者が差替えた宛先を消さず、保存済み path が残る旨を表示する。hard link 後の stage cleanup に失敗した場合はログに記録する。staging path／親ディレクトリ自体の悪意ある置換、耐クラッシュ性は保証範囲外。
+
+core 20 件と UI test compile は通過。別 Python process が候補名を作る実際の割込み、fallback 成功・既存名・部分 write・close 失敗、保護 PNG と parameters を確認した。GUI 回帰は用意・compile 済みだが、ユーザー操作に干渉しないため未実行。実モデル・配布版もこの修正後は未確認。`createTempFile` を使う視点送信と合成の内部 path は、この名前付き出力の修正範囲外。provenance 修正と合わせる際は、`savePngWithParametersNew` に表示 snapshot の parameters を渡す必要がある。
+
+
+## 2026-11-03 同一 snapshot と非上書きの統合試験
+
+provenance と非上書きを統合し、conversion と Save view は表示 snapshot の parameters を `savePngWithParametersNew` に渡す。source 変更後の conversion 結果は画面に採用せず、他者が差替えた可能性のある公開済み path は無条件削除しない。core 30 件と UI test compile が成功した。
+
+ユーザーの画面・入力に触れないよう `Stage.show` を呼ばず software renderer で実 MainWindow／Panorama を動かす `PanoramaSafetyOffscreenCheck` を実行し、通常画像と保護画像の表示後の source 差替えでも表示時 metadata と非合成領域の元画素を維持すること、変換中に別画像を開いても旧変換が表示を上書きしないこと、Save view の候補名を別の書込が先に作ったとき既存内容を維持してエラー表示することを確認した。4 個の個別成功 marker と `PANORAMA_SAFETY_OFFSCREEN_OK`、exit 0。マウス／キーボード・表示 Stage・GPU は使用していない。
+
+これは source-class の非表示 UI 検証であり、表示画面の操作、選択ダイアログ、実モデル画像、配布 EXE をこの統合変更後に通した証拠ではない。fallback の途中公開／部分ファイル残存や、PNG 以外の metadata 展開上限、Source → の path 差替え等の既知の限界は前節のとおり。

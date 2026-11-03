@@ -2,7 +2,8 @@ package sdfx.core.panorama
 
 import sdfx.core.png.PngMetadata
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{FileAlreadyExistsException, Files, Path, StandardOpenOption}
+import scala.util.control.NonFatal
 import scala.jdk.CollectionConverters.*
 
 /** File-side helpers of the Panorama tab: stepping through a folder and writing converted pictures. */
@@ -57,6 +58,46 @@ object PanoramaFiles:
     Files.createDirectories(target.toAbsolutePath.getParent)
     val parameters = from.flatMap(p => try PngMetadata.readParameters(p) catch case _: Exception => None)
     sdfx.core.png.ScrambledPng.write(raster.toBufferedImage, target, parameters.map(PngMetadata.ParametersKey -> _).toSeq, password)
+
+  /** Publish completed staging bytes without replacing any existing entry. */
+  private[panorama] def publishNew(stage: Path, target: Path,
+      link: (Path, Path) => Unit = (dest, src) => { Files.createLink(dest, src); () },
+      open: Path => java.io.OutputStream = p => Files.newOutputStream(p, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)): Unit =
+    try link(target, stage)
+    catch
+      case exists: FileAlreadyExistsException => throw exists
+      case NonFatal(_) =>
+        val dest = open(target)
+        try Files.copy(stage, dest)
+        catch
+          case error: Throwable =>
+            try dest.close() catch case close: Throwable => error.addSuppressed(close)
+            if NonFatal(error) then throw new java.io.IOException(s"PNG copy failed; an incomplete file may remain at $target", error)
+            else throw error
+        try dest.close() catch
+          case NonFatal(error) => throw new java.io.IOException(s"PNG copy failed; an incomplete file may remain at $target", error)
+
+  /** Encode privately, then publish without replacing the target, including on hardlink-less filesystems. */
+  def savePngNew(raster: Raster, target: Path, from: Option[Path], password: Option[String] = None): Unit =
+    val parameters = from.flatMap(p => try PngMetadata.readParameters(p) catch case _: Exception => None)
+    savePngWithParametersNew(raster, target, parameters, password)
+
+  /** Same non-overwriting publication using parameters captured with a source snapshot. */
+  def savePngWithParametersNew(raster: Raster, target: Path, parameters: Option[String], password: Option[String] = None): Unit =
+    val parent = target.toAbsolutePath.normalize.getParent
+    Files.createDirectories(parent)
+    val stage = Files.createTempFile(parent, ".panorama-", ".png.part")
+    var failure: Throwable = null
+    try
+      sdfx.core.png.ScrambledPng.write(raster.toBufferedImage, stage, parameters.map(PngMetadata.ParametersKey -> _).toSeq, password)
+      publishNew(stage, target)
+    catch
+      case e: Throwable => failure = e; throw e
+    finally
+      try Files.deleteIfExists(stage)
+      catch case NonFatal(cleanup) =>
+        if failure != null then failure.addSuppressed(cleanup)
+        else System.err.println("[sdfx] panorama staging cleanup failed: " + cleanup)
 
   /** A cube net needs a 4:3 picture of square faces. */
   def isCubeNet(width: Int, height: Int): Boolean = width % 4 == 0 && height % 3 == 0 && width / 4 == height / 3
