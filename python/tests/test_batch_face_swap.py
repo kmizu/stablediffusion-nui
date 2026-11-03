@@ -12,6 +12,39 @@ from sdfx.protocol import INVALID_PARAMS, EngineError
 Image = pytest.importorskip("PIL.Image")
 
 
+def test_expected_face_checkpoint_hash_validation():
+    assert bfs.normalize({"checkpoint": "face", "checkpoint_hash": "ABCDEF1234"})["checkpoint_hash"] == "abcdef1234"
+    for value in ("invalid", "a" * 9, "a" * 11, 123):
+        with pytest.raises(EngineError):
+            bfs.normalize({"checkpoint": "face", "checkpoint_hash": value})
+    with pytest.raises(EngineError):
+        bfs.normalize({"checkpoint_hash": "0123456789"})
+
+
+def test_expected_face_checkpoint_hash_must_match_loaded_identity():
+    bfs.verify_checkpoint_hash("0123456789", {"hash": "0123456789"})
+    bfs.verify_checkpoint_hash("", {"hash": "different"})
+    for loaded in ({"hash": "1111111111"}, {}, None):
+        with pytest.raises(EngineError, match="checkpoint hash"):
+            bfs.verify_checkpoint_hash("0123456789", loaded)
+
+
+def test_face_checkpoint_rejects_unapplied_lora():
+    other = SimpleNamespace(_apply_loras=lambda *args: {}, _load_embeddings=lambda *args: pytest.fail("must not encode"))
+    gp = SimpleNamespace(extra={}, hooks={}, loras=[SimpleNamespace(name="xl-only")], prompt="", negative_prompt="")
+    with pytest.raises(EngineError, match="xl-only"):
+        bfs.prepare_face_engine(other, gp, SimpleNamespace(), SimpleNamespace(), {})
+
+
+def test_face_checkpoint_accepts_applied_lora():
+    loaded = []
+    other = SimpleNamespace(_apply_loras=lambda *args: {"compatible": "hash"},
+                            _load_embeddings=lambda *args: loaded.append(True))
+    gp = SimpleNamespace(extra={}, hooks={}, loras=[SimpleNamespace(name="compatible")], prompt="", negative_prompt="")
+    bfs.prepare_face_engine(other, gp, SimpleNamespace(), SimpleNamespace(), {})
+    assert loaded == [True]
+
+
 def test_defaults_map_to_one_face_unit():
     unit = bfs.to_adetailer({})["units"][0]
     assert unit["model"] == "face_yolov8n.pt" and unit["mask_shape"] == "ellipse" and unit["mask_scale"] == 1.2
@@ -20,6 +53,102 @@ def test_defaults_map_to_one_face_unit():
     assert not (unit["use_steps"] or unit["use_cfg_scale"] or unit["use_sampler"] or unit["use_inpaint_width_height"])
     # the ADetailer layer accepts the unit unchanged
     assert adetailer.normalize_units(bfs.to_adetailer({}))[0]["mask_shape"] == "ellipse"
+
+
+def test_face_checkpoint_is_optional_and_rejects_non_string_values():
+    assert bfs.normalize({})["checkpoint"] == ""
+    assert bfs.normalize({"checkpoint": " face.safetensors "})["checkpoint"] == "face.safetensors"
+    for bad in (None, 123, {"path": "foo"}):
+        with pytest.raises(EngineError) as error:
+            bfs.normalize({"checkpoint": bad})
+        assert error.value.code == INVALID_PARAMS
+
+
+def test_face_engine_scope_isolated_and_restores_base_even_on_failure(tmp_path):
+    import hashlib
+    checkpoint = tmp_path / "other.safetensors"
+    checkpoint.write_bytes(b"fixture")
+    events = []
+    class Base:
+        pipe = object()
+        def park(self): events.append("park")
+        def _activate(self, pipe):
+            assert pipe is self.pipe
+            events.append("restore")
+    class Other:
+        _owns_shared_cache = True
+        model = {"hash": hashlib.sha256(b"fixture").hexdigest()[:10]}
+        def load_model(self, params, ctx):
+            assert self._owns_shared_cache is False
+            events.append(("load", params["path"]))
+        def _free(self): events.append("free")
+    ctx = SimpleNamespace(check_interrupt=lambda: None)
+    base = Base()
+    base.load_opts = SimpleNamespace(dtype="fp16", vram_mode="gpu")
+    with pytest.raises(ValueError):
+        with bfs.face_engine_scope(base, str(checkpoint), ctx, lambda: Other()):
+            events.append("face")
+            raise ValueError("test failure")
+    assert events == ["park", ("load", str(checkpoint)), "face", "free", "restore"]
+
+
+def test_face_engine_scope_restores_base_after_checkpoint_load_failure(tmp_path):
+    checkpoint = tmp_path / "bad.safetensors"
+    checkpoint.write_bytes(b"fixture")
+    events = []
+    class Base:
+        pipe = object()
+        load_opts = SimpleNamespace(dtype="fp16", vram_mode="gpu")
+        def park(self): events.append("park")
+        def _activate(self, pipe): events.append("restore")
+    class Other:
+        def load_model(self, params, ctx): raise ValueError("load failure")
+        def _free(self): events.append("free")
+    with pytest.raises(ValueError, match="load failure"):
+        with bfs.face_engine_scope(Base(), str(checkpoint), SimpleNamespace(check_interrupt=lambda: None), Other):
+            pytest.fail("failed load must not run face pass")
+    assert events == ["park", "free", "restore"]
+
+
+def test_face_scope_keeps_original_failure_if_cleanup_and_restore_fail(tmp_path):
+    import hashlib
+    checkpoint = tmp_path / "other.safetensors"
+    checkpoint.write_bytes(b"fixture")
+    class Base:
+        pipe = object()
+        load_opts = SimpleNamespace(dtype="fp16", vram_mode="gpu")
+        def park(self): pass
+        def _activate(self, pipe): raise RuntimeError("restore error")
+    class Other:
+        model = {"hash": hashlib.sha256(b"fixture").hexdigest()[:10]}
+        def load_model(self, params, ctx): pass
+        def _free(self): raise RuntimeError("cleanup error")
+    failure = ValueError("original error")
+    with pytest.raises(ValueError) as caught:
+        with bfs.face_engine_scope(Base(), str(checkpoint), SimpleNamespace(check_interrupt=lambda: None), Other):
+            raise failure
+    assert caught.value is failure
+    assert any("cleanup error" in note for note in caught.value.__notes__)
+    assert any("restore error" in note for note in caught.value.__notes__)
+
+
+def test_face_scope_rejects_checkpoint_changed_during_load(tmp_path):
+    checkpoint = tmp_path / "face.safetensors"
+    checkpoint.write_bytes(b"first")
+    events = []
+    class Base:
+        pipe = object()
+        load_opts = SimpleNamespace(dtype="fp16", vram_mode="gpu")
+        def park(self): events.append("park")
+        def _activate(self, pipe): events.append("restore")
+    class Other:
+        model = {"hash": "irrelevant"}
+        def load_model(self, params, ctx): checkpoint.write_bytes(b"changed")
+        def _free(self): events.append("free")
+    with pytest.raises((EngineError, ValueError)):
+        with bfs.face_engine_scope(Base(), str(checkpoint), SimpleNamespace(check_interrupt=lambda: None), Other):
+            pytest.fail("changed checkpoint must not run face pass")
+    assert events == ["park", "free", "restore"]
 
 
 def test_overrides_switch_the_use_flags_on():
@@ -152,6 +281,75 @@ def test_nothing_detected_leaves_the_image_alone(harness, monkeypatch):
     assert passes(calls) == []
     with Image.open(result["images"][0]["path"]) as im:
         assert im.convert("RGB").getpixel((60, 60)) == (30, 30, 200)
+
+
+@pytest.mark.parametrize("aesthetic", [False, True])
+def test_face_checkpoint_load_is_lazy_and_used_only_for_face_pass(harness, monkeypatch, tmp_path, aesthetic):
+    from contextlib import contextmanager
+    engine, request, calls = harness
+    checkpoint = tmp_path / "face.safetensors"
+    checkpoint.write_bytes(b"fixture")
+    request["params"]["hooks"]["batch_face_swap"] = dict(checkpoint=str(checkpoint))
+    if aesthetic:
+        from sdfx import aesthetic_score
+        monkeypatch.setattr(aesthetic_score, "job_config", lambda hooks, ctx: {})
+        monkeypatch.setattr(aesthetic_score, "score_final", lambda *a: {"infotext_fields": [["Aesthetic score", "9"]]})
+    events = []
+    class Face:
+        model = {"hash": "abcd123456"}
+        def _adjust_embeds(self, gp, emb, ctx): return emb
+        def _encode_scheduled(self, *a, **k): events.append("face encode"); return {}
+        def _run(self, task, gp, req, ctx, **kw):
+            events.append("face run")
+            return [Image.new("RGB", (kw["w"], kw["h"]), (200, 30, 30))], SimpleNamespace(schedule="Normal")
+    @contextmanager
+    def scope(base, path, ctx, factory):
+        events.append(("load", path))
+        try: yield Face()
+        finally: events.append("free")
+    monkeypatch.setattr(bfs, "face_engine_scope", scope)
+    monkeypatch.setattr(bfs, "prepare_face_engine", lambda *a: None, raising=False)
+    stub_detect(monkeypatch, [])
+    request["params"]["hooks"]["batch_face_swap"]["checkpoint_hash"] = "0000000000"
+    no_face = engine.txt2img(request, context())
+    assert not events
+    assert not any(field[0] == "Face checkpoint hash" for field in no_face["images"][0].get("infotext_fields", []))
+    request["params"]["hooks"]["batch_face_swap"]["checkpoint_hash"] = "abcd123456"
+    stub_detect(monkeypatch, [(10, 20, 40, 50)])
+    result = engine.txt2img(request, context())
+    assert events == [("load", str(checkpoint)), "face encode", "face run", "free"]
+    assert not passes(calls)
+    assert ["Face checkpoint hash", "abcd123456"] in result["images"][0]["infotext_fields"]
+    if aesthetic:
+        assert ["Aesthetic score", "9"] in result["images"][0]["infotext_fields"]
+    request["params"]["hooks"]["batch_face_swap"]["checkpoint_hash"] = "0000000000"
+    events.clear()
+    with pytest.raises(EngineError, match="checkpoint hash"):
+        engine.txt2img(request, context())
+    assert events == [("load", str(checkpoint)), "free"]
+
+
+def test_missing_face_checkpoint_is_rejected_before_base_generation(harness, tmp_path):
+    engine, request, calls = harness
+    request["params"]["hooks"]["batch_face_swap"] = dict(checkpoint=str(tmp_path / "missing.safetensors"))
+    with pytest.raises(EngineError):
+        engine.txt2img(request, context())
+    assert not [c for c in calls if c[0] == "run"]
+
+
+def test_same_checkpoint_reuses_base_engine(harness, monkeypatch, tmp_path):
+    engine, request, calls = harness
+    checkpoint = tmp_path / "base.safetensors"
+    checkpoint.write_bytes(b"fixture")
+    engine.model["path"] = str(checkpoint)
+    request["params"]["hooks"]["batch_face_swap"] = dict(checkpoint=str(checkpoint))
+    stub_detect(monkeypatch, [(10, 20, 40, 50)])
+    monkeypatch.setattr(bfs, "face_engine_scope", lambda *a: pytest.fail("same checkpoint must not load again"))
+    engine.txt2img(request, context())
+    assert len(passes(calls)) == 1
+    request["params"]["hooks"]["batch_face_swap"]["checkpoint_hash"] = "0000000000"
+    with pytest.raises(EngineError, match="checkpoint hash"):
+        engine.txt2img(request, context())
 
 
 def test_runs_after_adetailer_and_without_the_hook_nothing_changes(harness, monkeypatch):

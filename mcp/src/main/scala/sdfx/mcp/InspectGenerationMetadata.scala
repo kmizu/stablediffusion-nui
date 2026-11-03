@@ -239,7 +239,7 @@ object InspectGenerationMetadata:
       (if on.value.contains("aesthetic_gradients") then AestheticGradientsPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("aesthetic_gradients") && f.contains("Aesthetic embedding SHA256") then Set("Aesthetic embedding SHA256") else Set.empty[String]) ++
       (if on.value.contains("aesthetic_score") then AestheticScorePlugin.InfotextKeys.toSet else Set.empty[String]) ++
-      (if on.value.contains("batch_face_swap") then Set(BatchFaceSwapPlugin.InfotextKey) else Set.empty[String])
+      (if on.value.contains("batch_face_swap") then Set(BatchFaceSwapPlugin.InfotextKey, "Face checkpoint hash") else Set.empty[String])
     // Script candidates: only reported, run_script is called by the agent with these values and generation_args.
     val scriptCandidates: Seq[(String, Values, Seq[String])] =
       OldSdFirstpasserPlugin.replay(f).map(v => (OldSdFirstpasserPlugin.Id, v, OldSdFirstpasserPlugin.InfotextKeys)).toSeq ++
@@ -251,4 +251,6 @@ object InspectGenerationMetadata:
     val unconsumed = f.filterNot((key, _) => represented.contains(key) || scriptKeys.contains(key))
     ujson.Obj("infotext" -> text, "generation_args" -> args, "always_on" -> on, "scripts" -> scripts,
       "unapplied_fields" -> ujson.Obj.from(unconsumed.map((k, v) => k -> ujson.Str(v))),
-      "warnings" -> ujson.Arr.from(Seq("Review candidates and missing model, LoRA, image, mask and unsupported plugin settings before replay; nothing was executed.") ++ aestheticError))
+      "warnings" -> ujson.Arr.from(Seq("Review candidates and missing model, LoRA, image, mask and unsupported plugin settings before replay; nothing was executed.") ++ aestheticError ++
+        Option.when(f.contains("Face checkpoint hash") && !on.value.contains("batch_face_swap"))(
+          "Face checkpoint fingerprint or settings are invalid; Batch Face Swap was not restored.")))

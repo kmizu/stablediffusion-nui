@@ -179,6 +179,7 @@ class Engine(BaseEngine):
         self.ext_cache: dict = {}
         self.ip_state = adapters.IPAdapterState()
         self.parked = False
+        self._owns_shared_cache = True
 
     # -- info ---------------------------------------------------------------
     def hello(self) -> dict:
@@ -297,7 +298,8 @@ class Engine(BaseEngine):
         self.model = None
         self.vae_info = None
         self.taesd = preview.TaesdPreviewer()
-        upscalers.unload_models()
+        if getattr(self, "_owns_shared_cache", True):
+            upscalers.unload_models()
         gc.collect()
         if self.cuda:
             torch.cuda.empty_cache()
@@ -1670,6 +1672,7 @@ class Engine(BaseEngine):
         hardware_started = time.perf_counter()
         req = self.parse_generation(params, mode, ctx)
         gp = req.params
+        ctx.face_checkpoint_hashes = {}
         from . import nsfw_checker
         nsfw_cfg = nsfw_checker.job_config(gp.hooks, ctx)
         from . import aesthetic_score
@@ -1679,7 +1682,9 @@ class Engine(BaseEngine):
         face_swap_cfg = hooks_mod.hook_config(gp.hooks, "batch_face_swap", {})
         if face_swap_cfg is not None:  # reject bad settings before the first image, not after it
             from . import batch_face_swap
-            batch_face_swap.normalize(face_swap_cfg)
+            face_checkpoint = batch_face_swap.normalize(face_swap_cfg)["checkpoint"]
+            if face_checkpoint and not os.path.isfile(face_checkpoint):
+                raise EngineError(INVALID_PARAMS, f"Batch Face Swap: checkpoint not found: {face_checkpoint}")
         from . import img2img_hires_fix
         refine_config = hooks_mod.hook_config(gp.hooks, 'img2img_hires_fix', {})
         refine_config = img2img_hires_fix.normalize(refine_config) if refine_config is not None else None
@@ -1868,7 +1873,7 @@ class Engine(BaseEngine):
                 if bfs is not None:
                     from . import batch_face_swap
                     images = self._adetailer(pass_gp, req, ctx, batch_face_swap.to_adetailer(bfs), images,
-                                             item_seeds, first, total, pag)
+                                             item_seeds, first, total, pag, batch_face_swap.normalize(bfs)["checkpoint"], bfs)
                 return images
             if hr_plan is None and refine_config is None and (keyword_plan is None or not detail):
                 if detail:
@@ -1902,6 +1907,9 @@ class Engine(BaseEngine):
                 path = next_output_path(req.output_dir, str(base_seeds[j]))
                 image_result = {"path": path, "seed": base_seeds[j], "subseed": base_subs[j],
                                 "width": im.width, "height": im.height}
+                face_hash = ctx.face_checkpoint_hashes.get(idx0 + j)
+                if face_hash:
+                    image_result.setdefault("infotext_fields", []).append(["Face checkpoint hash", face_hash])
                 if keyword_plan is not None:
                     image_result['effective_prompt'] = keyword_plan['replay_prompts'][it * bs + j]
                     image_result['model_keyword_source_prompt'] = keyword_plan['prompts'][it * bs + j]
@@ -1917,7 +1925,10 @@ class Engine(BaseEngine):
                     image_result['hardware_info'] = record(hardware_profile, hardware_timer.next_image(), req.hardware_info.remark)
                 if aesthetic_cfg is not None:
                     # Aesthetic score: the final image as it is saved (after censoring and any upscale).
-                    image_result.update(aesthetic_score.score_final(im, aesthetic_cfg, ctx, gp, seed, self.model["hash"]))
+                    score = aesthetic_score.score_final(im, aesthetic_cfg, ctx, gp, seed, self.model["hash"])
+                    score_fields = score.pop("infotext_fields", [])
+                    image_result.update(score)
+                    image_result.setdefault("infotext_fields", []).extend(score_fields)
                 if getattr(self, '_benchmark_no_save', False):
                     if getattr(self, '_vram_capture_sample', False) and getattr(self, '_vram_sample', None) is None:
                         self._vram_sample = im.copy()
@@ -2126,7 +2137,30 @@ class Engine(BaseEngine):
                              "revision", "ip_adapter", "controllllite", "photomaker", "img2imgalt", "soft_inpainting",
                              "agent_attention", "incantations", "sonar", "llul", "aesthetic_gradients", "batch_face_swap")
 
-    def _adetailer(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag):
+    def _adetailer(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag, checkpoint="", face_config=None):
+        from contextlib import ExitStack
+        if checkpoint and self.model and self.model.get("path"):
+            try:
+                if os.path.samefile(checkpoint, self.model["path"]):
+                    checkpoint = ""
+            except OSError:
+                pass
+        with ExitStack() as stack:
+            worker = None
+            def face_engine(sub):
+                nonlocal worker
+                from . import batch_face_swap
+                if not checkpoint:
+                    batch_face_swap.verify_checkpoint_hash((face_config or {}).get("checkpoint_hash", ""), self.model)
+                    return self
+                if worker is None:
+                    worker = stack.enter_context(batch_face_swap.face_engine_scope(self, checkpoint, ctx, Engine))
+                    batch_face_swap.verify_checkpoint_hash((face_config or {}).get("checkpoint_hash", ""), worker.model)
+                    batch_face_swap.prepare_face_engine(worker, sub, req, ctx, face_config or {})
+                return worker
+            return self._adetailer_impl(gp, req, ctx, cfg, imgs, seeds, idx0, total, pag, face_engine, face_config)
+
+    def _adetailer_impl(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag, face_engine, face_config):
         """ADetailer: detect, then inpaint every detection of every unit (in unit order) at full resolution."""
         import dataclasses
 
@@ -2161,6 +2195,7 @@ class Engine(BaseEngine):
                 if not masks:
                     log.info("ADetailer unit %d: nothing detected", ui + 1)
                     continue
+                worker = face_engine(sub)
                 pos = adm.unit_prompts(u["prompt"], gp.prompt, len(masks))
                 neg = adm.unit_prompts(u["negative_prompt"], gp.negative_prompt, len(masks))
                 if u["use_inpaint_width_height"]:
@@ -2175,13 +2210,21 @@ class Engine(BaseEngine):
                     ctx.check_interrupt()
                     job = inpaint.prepare(im, m, w, h, 0, int(u["mask_blur"]), 1, bool(u["inpaint_only_masked"]),
                                           int(u["inpaint_padding"]), False, seed)
-                    emb = self._adjust_embeds(sub, self._encode_scheduled(pos[k], neg[k], sub, 1, steps,
+                    emb = worker._adjust_embeds(sub, worker._encode_scheduled(pos[k], neg[k], sub, 1, steps,
                                                                          gradient_total=actual), ctx)
-                    res, _ = self._run("inpaint", sub, req, ctx, sampler=sampler, schedule=gp.scheduler,
+                    res, _ = worker._run("inpaint", sub, req, ctx, sampler=sampler, schedule=gp.scheduler,
                                        cfg_scale=cfg_scale, embeds=emb, steps=n, w=w, h=h, seeds=[seed],
                                        pass_="adetailer", image_idx=idx0 + j, images_total=total, image=[job.image],
                                        mask=[job.mask], strength=strength, expected_steps=actual, pag=pag,
                                        hook_seed=seed, conditioning_denoise=float(u['denoising_strength']))
+                    if face_config and face_config.get("checkpoint"):
+                        face_hash = (getattr(worker, "model", None) or {}).get("hash")
+                        if face_hash:
+                            ctx.face_checkpoint_hashes[idx0 + j] = face_hash
+                            resources = getattr(ctx, "resource_hashes", None)
+                            if resources is not None:
+                                name = os.path.basename(face_config["checkpoint"])
+                                resources[f"face_model:{name}"] = face_hash
                     redrawn = res[0]
                     if u["color_correction"]:
                         redrawn = adm.match_colors(redrawn, job.image)

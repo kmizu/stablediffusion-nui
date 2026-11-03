@@ -285,6 +285,15 @@ final class Generator(
 
   def resolveHookModels(hooks: Map[String, ujson.Value], warn: String => Unit): Map[String, ujson.Value] =
     hooks.map {
+      case ("batch_face_swap", o: ujson.Obj) =>
+        o.value.get("checkpoint") match
+          case Some(ujson.Str(name)) if name.trim.nonEmpty && !name.trim.equalsIgnoreCase("none") =>
+            val model = catalog.findCheckpoint(name.trim).getOrElse(
+              throw EngineError(Protocol.ErrorCodes.InvalidParams, s"Batch Face Swap checkpoint not found: $name"))
+            "batch_face_swap" -> ujson.Obj.from(o.value.toSeq.map((field, value) =>
+              field -> (if field == "checkpoint" then ujson.Str(model.path) else value)))
+          case Some(ujson.Str(_)) | None => "batch_face_swap" -> o
+          case _ => throw EngineError(Protocol.ErrorCodes.InvalidParams, "Batch Face Swap checkpoint must be a string")
       case (k, o: ujson.Obj) if hookModelSources.contains(k) =>
         o.value.get("model") match
           case Some(ujson.Str(name)) if name.nonEmpty && name != "None" =>

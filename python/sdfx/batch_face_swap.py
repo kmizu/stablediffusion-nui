@@ -12,17 +12,19 @@ repository has no licence, so no code was read or copied.
 This is a face-only pass over the same inpaint machinery as ADetailer: each detected face becomes one mask, the
 surrounding crop is redrawn at `resolution` (the face area magnification) and pasted back. `[PROMPT]` in the face
 prompt is replaced by the main prompt and `[SEP]` gives a different prompt to each face (left to right).
-Not provided: the "override model" option (a different checkpoint for the face pass) and the folder input of the
-img2img tab; use the MCP/GUI img2img with one image at a time.
+An optional separate checkpoint is loaded into a job-scoped auxiliary engine for the face pass.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+import sys
+import re
 from .protocol import INVALID_PARAMS, EngineError
 
 DEFAULTS = {"detector": "face_yolov8n.pt", "confidence": 0.3, "max_faces": 0, "mask_shape": "ellipse",
             "mask_size": 1.2, "mask_blur": 8, "denoising_strength": 0.5, "padding": 32, "resolution": 0,
             "prompt": "", "negative_prompt": "", "steps": 0, "cfg_scale": 0.0, "sampler": "",
-            "color_correction": True}
+            "color_correction": True, "checkpoint": "", "checkpoint_hash": ""}
 SHAPES = ("ellipse", "box")
 
 
@@ -44,6 +46,14 @@ def normalize(cfg: dict) -> dict:
         raise EngineError(INVALID_PARAMS, f"Batch Face Swap: unknown setting(s) {', '.join(unknown)}")
     c = dict(DEFAULTS)
     c.update(cfg)
+    if not isinstance(c["checkpoint"], str) or len(c["checkpoint"]) > 8192:
+        raise EngineError(INVALID_PARAMS, "Batch Face Swap: checkpoint must be a string")
+    c["checkpoint"] = c["checkpoint"].strip()
+    if not isinstance(c["checkpoint_hash"], str):
+        raise EngineError(INVALID_PARAMS, "Batch Face Swap: checkpoint hash must be a string")
+    c["checkpoint_hash"] = c["checkpoint_hash"].strip().lower()
+    if c["checkpoint_hash"] and (not c["checkpoint"] or not re.fullmatch(r"[0-9a-f]{10}", c["checkpoint_hash"])):
+        raise EngineError(INVALID_PARAMS, "Batch Face Swap: expected checkpoint hash requires a checkpoint and 10 hexadecimal digits")
     c["detector"] = str(c["detector"]).strip()
     if not c["detector"] or c["detector"].lower() == "none":
         raise EngineError(INVALID_PARAMS, "Batch Face Swap: a detector is required")
@@ -66,6 +76,93 @@ def normalize(cfg: dict) -> dict:
     c["color_correction"] = bool(c["color_correction"]) if isinstance(c["color_correction"], bool) else \
         str(c["color_correction"]).strip().lower() in ("1", "true", "yes", "on")
     return c
+
+
+def verify_checkpoint_hash(expected, model):
+    actual = (model or {}).get("hash")
+    if expected and (not isinstance(actual, str) or actual.lower() != expected.lower()):
+        raise EngineError(INVALID_PARAMS, "Batch Face Swap: face checkpoint hash does not match the recorded hash")
+
+
+@contextmanager
+def face_engine_scope(base, checkpoint, ctx, factory):
+    """Own an auxiliary face pipeline while keeping the base pipeline intact."""
+    ctx.check_interrupt()
+    from .resource_hashes import FileSnapshot
+    try:
+        snapshot = FileSnapshot.capture(checkpoint)
+    except OSError as error:
+        raise EngineError(INVALID_PARAMS, f"Batch Face Swap: cannot inspect checkpoint: {error}") from error
+    other = factory()
+    other._owns_shared_cache = False
+    try:
+        base.park()
+        ctx.check_interrupt()
+        options = {"path": checkpoint, "dtype": base.load_opts.dtype,
+                   "vram_mode": "model_offload" if getattr(base, "cuda", False) else "gpu"}
+        other.load_model(options, ctx)
+        ctx.check_interrupt()
+        try:
+            digest = snapshot.digest()
+        except (OSError, ValueError) as error:
+            raise EngineError(INVALID_PARAMS, f"Batch Face Swap: checkpoint changed while loading: {error}") from error
+        if (getattr(other, "model", None) or {}).get("hash") != digest:
+            raise EngineError(INVALID_PARAMS, "Batch Face Swap: checkpoint hash changed while loading")
+        other._face_checkpoint_hash = digest
+        yield other
+    finally:
+        primary = sys.exc_info()[1]
+        errors = []
+        composable = getattr(other, "_composable_job", None)
+        if composable is not None:
+            try:
+                composable.remove()
+            except BaseException as error:
+                errors.append(error)
+            other._composable_job = None
+        try:
+            other._free()
+        except BaseException as error:
+            errors.append(error)
+        try:
+            if base.pipe is not None:
+                base._activate(base.pipe)
+        except BaseException as error:
+            errors.append(error)
+        if errors:
+            target = primary or errors.pop(0)
+            notes = [f"Face checkpoint cleanup or restore failed: {error}" for error in errors]
+            if hasattr(target, "add_note"):
+                for note in notes: target.add_note(note)
+            else:
+                target.__notes__ = getattr(target, "__notes__", []) + notes
+            warn = getattr(ctx, "warn", None)
+            if callable(warn):
+                for note in notes: warn(note)
+            if primary is None:
+                raise target
+
+
+def prepare_face_engine(other, gp, req, ctx, cfg):
+    """Prepare a separately owned pipeline with this job's compatible conditioning."""
+    from . import extensions as ext_mod
+    from .cd_tuner import Job as CdTunerJob
+    other._editor_preview = None
+    other._embedding_merge_ctx = ctx
+    other._clip_io_done = set()
+    other._intermediate_recorder = None
+    other._composable_job = None
+    other._cd_tuner_job = CdTunerJob(False)
+    other._incantations_job = None
+    other._vae_recovery = []
+    other._aesthetic_digests = set()
+    other._extra = dict(gp.extra or {})
+    other._ms_overrides = ext_mod.model_sampling_overrides(gp)
+    applied = other._apply_loras(gp, req, ctx)
+    missing = sorted({lr.name for lr in gp.loras} - set(applied))
+    if missing:
+        raise EngineError(INVALID_PARAMS, "Batch Face Swap: face checkpoint could not apply LoRA: " + ", ".join(missing))
+    other._load_embeddings(req, [gp.prompt, gp.negative_prompt, cfg.get("prompt", ""), cfg.get("negative_prompt", "")], ctx)
 
 
 def to_adetailer(cfg: dict) -> dict:

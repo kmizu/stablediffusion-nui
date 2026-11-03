@@ -13,6 +13,25 @@ import scala.jdk.CollectionConverters.*
 class GeneratorSuite extends munit.FunSuite:
   import FakeEngine.*
 
+  test("face checkpoint is resolved from the model catalog while recorded metadata retains the name") {
+    val localHome = tempHome()
+    val local = new AppServices(localHome, Settings(), dryRun = true, builtins = Nil,
+      launchOverride = Some(() => launch()), persistSettings = false, installShutdownHook = false)
+    try
+      val file = Files.writeString(localHome.root.resolve("face.safetensors"), "fixture")
+      local.catalog.set(local.catalog.snapshot.copy(checkpoints = Seq(ModelEntry("face-model", file.toString, "sd15"))))
+      val hook = ujson.Obj("checkpoint" -> "face-model")
+      val prepared = local.generator.prepare(GenerationParams(hooks = Map("batch_face_swap" -> hook)))
+      assertEquals(prepared.recorded.hooks("batch_face_swap")("checkpoint").str, "face-model")
+      assertEquals(prepared.request.params.hooks("batch_face_swap")("checkpoint").str, file.toString)
+      intercept[EngineError] {
+        local.generator.prepare(GenerationParams(hooks = Map("batch_face_swap" -> ujson.Obj("checkpoint" -> "missing"))))
+      }
+    finally
+      local.shutdown()
+      deleteTree(localHome.root)
+  }
+
   test("a stale aesthetic fingerprint in imported extras is never recorded as a current resource") {
     val localHome = tempHome()
     val local = new AppServices(localHome, Settings(), dryRun = true, builtins = Nil,

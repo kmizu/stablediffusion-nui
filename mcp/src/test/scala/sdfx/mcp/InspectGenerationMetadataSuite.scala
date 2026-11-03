@@ -479,6 +479,29 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("batch_face_swap"))
   }
 
+  test("face checkpoint name and actual hash survive MCP metadata inspection") {
+    val dir = Files.createTempDirectory("mcp-inspect-face-checkpoint-")
+    val path = dir.resolve("face.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val plugin = new sdfx.plugins.BatchFaceSwapPlugin
+    val values = sdfx.core.plugins.api.Values(sdfx.core.plugins.api.Values.defaults(plugin.controls).map ++
+      Map("enabled" -> "true", "checkpoint" -> "face-model"))
+    val params = plugin.process(sdfx.core.model.GenerationParams(prompt = "girl"), values)
+    val facts = sdfx.core.infotext.ImageFacts(seed = 4,
+      extra = scala.collection.immutable.ListMap("Face checkpoint hash" -> "abcd123456"))
+    val text = sdfx.core.infotext.Infotext.write(params, facts)
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    assertEquals(result("always_on")("batch_face_swap")("checkpoint").str, "face-model")
+    assertEquals(result("always_on")("batch_face_swap")("checkpoint_hash").str, "abcd123456")
+    assert(!result("unapplied_fields").obj.contains("Face checkpoint hash"))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path,
+      Seq("parameters" -> text.replace("abcd123456", "invalid")))
+    val invalid = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    assert(!invalid("always_on").obj.contains("batch_face_swap"))
+    assert(invalid("warnings").arr.exists(_.str.contains("fingerprint")))
+  }
+
   test("LLuL source infotext becomes a typed candidate and its keys are consumed") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("llul.png")

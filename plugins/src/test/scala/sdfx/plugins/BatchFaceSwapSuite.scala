@@ -65,6 +65,20 @@ class BatchFaceSwapSuite extends munit.FunSuite:
     assertEquals(restored.str("custom_detector"), "")
     assertEquals(plugin.process(GenerationParams(), restored).hooks(plugin.id)("detector").str, "mediapipe_face")
 
+  test("face checkpoint selection is retained through infotext replay"):
+    val params = plugin.process(GenerationParams(), enabled("checkpoint" -> "face-model"))
+    assertEquals(params.hooks(plugin.id)("checkpoint").str, "face-model")
+    val restored = BatchFaceSwapPlugin.replay(params.extra).get
+    assertEquals(restored.str("checkpoint"), "face-model")
+    assertEquals(plugin.process(GenerationParams(), restored).hooks(plugin.id), params.hooks(plugin.id))
+
+  test("face checkpoint replay retains and validates its recorded hash"):
+    val fields = Map("Batch Face Swap" -> """{"checkpoint":"face-model"}""", "Face checkpoint hash" -> "ABCDEF1234")
+    val restored = BatchFaceSwapPlugin.replay(fields).get
+    assertEquals(restored.str("checkpoint_hash"), "abcdef1234")
+    assertEquals(plugin.process(GenerationParams(), restored).hooks(plugin.id)("checkpoint_hash").str, "abcdef1234")
+    assertEquals(BatchFaceSwapPlugin.replay(fields.updated("Face checkpoint hash", "invalid")), None)
+
   test("replay disables the plugin for other PNGs and rejects what the engine would reject"):
     assertEquals(BatchFaceSwapPlugin.replay(Map.empty).get.str("enabled"), "false")
     assertEquals(BatchFaceSwapPlugin.replay(Map("Batch Face Swap" -> "{}")).get.str("enabled"), "true")
