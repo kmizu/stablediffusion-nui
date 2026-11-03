@@ -14,16 +14,16 @@ class Img2ImgWorkflowPlugin extends Plugin:
   override def tabs: Set[Tab] = Set(Tab.Img2Img)
   override def description = "Choose a documented workflow phase to set image size, count and denoising. Each phase can be adjusted. Optionally create an inpaint mask from a selected colour. Effects and overlays are not yet implemented."
   override def controls: Seq[Control] = Seq(
-    Section("quickmask_section", "Quick Mask", expanded = false),
-    Choice("quick_mask", "Colour mask", Seq("Default", "White", "Black", "Custom"), "Default"),
-    Text("mask_color", "Custom colour (#RRGGBB)", "#ffffff"),
-    IntField("mask_threshold", "Colour threshold (1 = exact)", 1, 256, 1),
-    Check("mask_invert", "Invert colour selection"),
     Choice("phase", "Phase", Seq("None", "Phase 1", "Phase 2", "Phase 3"), "None"),
     Choice("orientation", "Orientation", Seq("Guess", "Vertical", "Horizontal", "Square"), "Guess"),
     Choice("ratio", "Ratio", Seq("Base", "2:1"), "Base"),
     Check("override_denoise", "Override phase denoising"),
     Slider("denoise", "Denoising override", 0, 1, 0.01, 0.5),
+    Section("quickmask_section", "Quick Mask", expanded = false),
+    Choice("quick_mask", "Colour mask", Seq("Default", "White", "Black", "Custom"), "Default"),
+    Text("mask_color", "Custom colour (#RRGGBB)", "#ffffff"),
+    IntField("mask_threshold", "Colour threshold (1 = exact)", 1, 256, 1),
+    Check("mask_invert", "Invert colour selection"),
     Section("phase1", "Phase 1", expanded = false),
     IntField("phase1_width", "Width", 64, 4096, 512), IntField("phase1_height", "Height", 64, 4096, 768),
     IntField("phase1_count", "Images", 1, 100, 4), Slider("phase1_denoise", "Denoising", 0, 1, 0.01, 0.5),

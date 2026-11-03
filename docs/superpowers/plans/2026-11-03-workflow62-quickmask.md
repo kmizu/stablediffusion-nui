@@ -14,3 +14,5 @@
 保護 session の追補: 最初の GREEN は 8-bit grayscale を既存スクランブル書込みが受け付けず失敗。mask を白黒 RGB で保持するよう修正後、plugin suite 11/11、実 Generator の PluginContext で保護一時 PNG の暗号化・復号・削除 1/1 が成功。実モデルでの保護 session のマスク生成と復号はまだ確認していない。
 
 保護 session の実モデル追補: source-class job で SD1.5 512×512／SDXL 768×768 とも、保護済み合成 input と White Quick Mask から生成し、生成結果が保護され正しいパスワードで復号可能・パスワードなしでは拒否されることを確認。一時ディレクトリは生成後に空になった。復号画像を目視し、同 seed の非保護 Quick Mask と両モデルとも全 RGB 一致。`outputs/quickmask62-protected-{sd15,sdxl}` のテスト用復号画像は合成 fixture であり、実写真や個人データではない。これは source-class job の試験で、実 MainWindow や配布版の確認ではない。
+
+非表示 MainWindow で実際の img2img script form を開き White を選択、値の反映と Phase 選択が Quick Mask 内に誤って格納されないことを確認（`WORKFLOW_QUICKMASK_OFFSCREEN_OK`）。`outputs/quickmask62-offscreen3/workflow-quickmask-controls.png` を目視した。これは transparent な subsection を画面の暗色背景上に撮影した UI 要素の画像で、実際に表示した window の操作や生成を示さない。ユーザーの画面・入力は使用していない。
