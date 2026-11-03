@@ -524,7 +524,7 @@ object RealNamedGenerationStatesCheck:
       val previewBytes = new java.io.ByteArrayOutputStream()
       require(ImageIO.write(previewImage, "png", previewBytes))
       val previewUri = "data:image/png;base64," + java.util.Base64.getEncoder.encodeToString(previewBytes.toByteArray)
-      val upstreamJson = s"""{"defaults":{"d":{"img2img/Prompt":"original default","img2img/Unrecognized setting":"keep"}},"entries":{"1700000000123":{"saveVersion":"2.0","type":"img2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"img2img/Prompt":"imported prompt"},"preview":"$previewUri"}}}"""
+      val upstreamJson = s"""{"defaults":{"d":{"img2img/Prompt":"original default","img2img/Denoising strength":0.75,"img2img/Unrecognized setting":"keep"}},"entries":{"1700000000123":{"saveVersion":"2.0","type":"img2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"img2img/Prompt":"imported prompt","img2img/Denoising strength":0.35},"preview":"$previewUri"}}}"""
       val gzip = new java.util.zip.GZIPOutputStream(Files.newOutputStream(upstream))
       gzip.write(upstreamJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)); gzip.close()
       def previewImport(answer: ButtonType): Unit =
@@ -565,11 +565,13 @@ object RealNamedGenerationStatesCheck:
       fx { require(window.vms(mode).prompt.get == "imported prompt") }
       fx {
         window.vms(mode).prompt.set("changed before imported restore")
+        window.vms(mode).denoise.set(0.9)
         window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.setText("unrelated bad draft")
       }
       confirmButton("generation-states-restore")
       fx {
         require(window.vms(mode).prompt.get == "imported prompt")
+        require(math.abs(window.vms(mode).denoise.get - 0.35) < 1e-9, "imported denoising strength was not restored")
         require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "unrelated bad draft")
       }
       previewImport(ButtonType.OK)

@@ -1,5 +1,11 @@
 # State Manager V2 保存データ読み取り（作業中）
 
+## img2img の Denoising strength（2026-11-03）
+
+上流 img2img の `img2img/Denoising strength` を native の `generation.denoisingStrength` に対応付けた。同名の txt2img 設定は hires 用なので対象外にし、型不一致は未対応として保持する。[A1111 の UI 実装](https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/master/modules/ui.py) の img2img スライダーを参照した。
+
+追加回帰は既存実装で RED、修正後 `StateManagerV2Suite` 6/6 と source-class の実 MainWindow offline import → favourites 全復元が成功し、上流合成データの変更値 0.35 が適用された。プレビュー `outputs/state-denoise-gui/state-manager-import-preview.png` を目視し、対応項目に denoising と prompt、未対応項目に unknown が表示された。実 A1111 原本・実モデルを使った img2img・配布版は未検証。
+
 ## 上流原本の限定 export（2026-11-03）
 
 main 統合時、`StateManagerV2Suite` 5件、`RealNamedGenerationStatesCheck` と `ui/assembly` が exit 0。JAR SHA-256 は `10a83591df055c6df88467b5bfdaac49248228afca3ed36fda347cd9fe267d2b`。下記の実モデル・上流 JS 試験は分離 worktree によるもので、この main JAR や配布版の実測ではない。

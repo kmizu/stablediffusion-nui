@@ -39,6 +39,19 @@ class StateManagerV2Suite extends munit.FunSuite:
     assert(StateManagerV2.decode(gzip(fixture), PresetLimits(maxBytes = 200)).isLeft)
   }
 
+  test("imports img2img denoising strength without confusing txt2img hires settings") {
+    def sample(mode: String, default: String, changed: String) = gzip(s"""{"defaults":{"d":{"$mode/Denoising strength":$default}},"entries":{"1700000000000":{"saveVersion":"2.0","type":"$mode","defaults":"d","groups":["history"],"componentSettings":{"$mode/Denoising strength":$changed},"quickSettings":{}}}}""")
+    val img = StateManagerV2.decode(sample("img2img", "0.75", "0.35")).toOption.get.head
+    assertEquals(img.mapped(field("generation.denoisingStrength")), PresetAtom.Decimal(BigDecimal("0.35")))
+    assert(!img.unmapped.contains("img2img/Denoising strength"))
+    val wrong = StateManagerV2.decode(sample("img2img", "0.75", "\"invalid\"")).toOption.get.head
+    assert(!wrong.mapped.contains(field("generation.denoisingStrength")))
+    assert(wrong.unmapped.contains("img2img/Denoising strength"))
+    val txt = StateManagerV2.decode(sample("txt2img", "0.75", "0.35")).toOption.get.head
+    assert(!txt.mapped.contains(field("generation.denoisingStrength")))
+    assert(txt.unmapped.contains("txt2img/Denoising strength"))
+  }
+
   test("reads a synthetic fixture made with the upstream Web Streams gzip API") {
     val in = getClass.getResourceAsStream("/fixtures/state-manager-v2-webstreams.gz")
     assert(in != null, "Web Streams fixture missing")

@@ -136,7 +136,7 @@ object StateManagerV2:
       seed + "Extra" -> (key("generation", "variationEnabled"), Kind.Flag),
       "quickSettings/sd_model_checkpoint" -> (key("model", "checkpoint"), Kind.Text),
       "quickSettings/sd_vae" -> (key("model", "vae"), Kind.Text),
-      "quickSettings/CLIP_stop_at_last_layers" -> (key("model", "clipSkip"), Kind.Integer))
+      "quickSettings/CLIP_stop_at_last_layers" -> (key("model", "clipSkip"), Kind.Integer)) ++ (if mode == "img2img" then Map(root + "Denoising strength" -> (key("generation", "denoisingStrength"), Kind.Decimal)) else Map.empty)
 
   private def compatible(value: PresetAtom, kind: Kind): Option[PresetAtom] = (value, kind) match
     case (v: PresetAtom.Text, Kind.Text) => Some(v)
