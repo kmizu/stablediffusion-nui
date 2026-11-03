@@ -381,6 +381,45 @@ object RealGenerationHistoryCheck:
       val importedText = sdfx.core.png.PngMetadata.readParameters(importedImage).getOrElse("")
       require(importedText.contains("1girl, red kimono, cherry blossoms") && importedText.contains("Seed: 7109"), importedText)
       note(s"imported synthetic State Manager favourite, restored it and generated image $importedImage")
+      // Import img2img state separately; the source image is supplied explicitly because upstream state does not restore it.
+      val imgUpstream = run.resolve("synthetic-img2img-history.txt")
+      val imgJson = s"""{"defaults":{"d":{"img2img/Prompt":"source default","img2img/Sampling method":"Euler","img2img/Sampling steps":$steps,"img2img/Width":$side,"img2img/Height":$side,"img2img/Denoising strength":0.75,"customscript/seed.py/img2img/Seed":7111}},"entries":{"1700000000124":{"saveVersion":"2.0","type":"img2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"img2img/Prompt":"a blue ceramic teapot on a table","img2img/Denoising strength":0.35}}}}"""
+      val imgGz = new java.util.zip.GZIPOutputStream(Files.newOutputStream(imgUpstream))
+      imgGz.write(imgJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)); imgGz.close()
+      fx {
+        window.select(Mode.Img2Img)
+        window.openGenerationStates(Mode.Img2Img)
+        window.ctx.chooseStateManagerImport = () => Some(imgUpstream)
+      }
+      eventually("img2img history ready") { fx(!control[Button]("generation-history-import").isDisabled) }
+      fx { control[Button]("generation-history-import").fire() }
+      eventually("img2img import preview") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane])
+      }}
+      fx {
+        val pane = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene)).map(_.getRoot)
+          .collectFirst { case p: DialogPane => p }.get
+        require(pane.lookup("#state-manager-import-summary").asInstanceOf[TextArea].getText.contains("generation.denoisingStrength"))
+        pane.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      eventually("img2img imported favourite") { fx {
+        control[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        control[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.source.exists(_.format == "state-manager-v2"))
+      }}
+      fx {
+        val vm = window.vms(Mode.Img2Img)
+        vm.initImage.set(imageA.toString); vm.denoise.set(0.9)
+        val list = control[ListView[PresetRecord]]("generation-favourites-list")
+        list.getSelectionModel.clearSelection(); list.getSelectionModel.select(list.getItems.asScala.find(_.source.exists(_.format == "state-manager-v2")).get)
+      }
+      eventually("img2img restore ready") { fx(!control[Button]("generation-states-restore").isDisabled) }
+      confirmFire("generation-states-restore")
+      fx { require(math.abs(window.vms(Mode.Img2Img).denoise.get - 0.35) < 1e-9) }
+      val img2imgImage = generate()
+      val img2imgText = sdfx.core.png.PngMetadata.readParameters(img2imgImage).getOrElse("")
+      require(img2imgText.contains("Denoising strength: 0.35"), img2imgText)
+      screenshot("04-img2img-import.png")
+      note(s"imported and restored img2img denoising 0.35 and generated $img2imgImage")
       require(Files.isRegularFile(home.configDir.resolve("generation-history/library-v1.json")))
       Files.writeString(run.resolve("report.json"), ujson.write(ujson.Obj("status" -> "passed", "family" -> loaded.kind,
         "side" -> side, "steps" -> steps, "checks" -> ujson.Arr(notes.map(ujson.Str(_))*),

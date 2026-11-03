@@ -4,7 +4,9 @@
 
 上流 img2img の `img2img/Denoising strength` を native の `generation.denoisingStrength` に対応付けた。同名の txt2img 設定は hires 用なので対象外にし、型不一致は未対応として保持する。[A1111 の UI 実装](https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/master/modules/ui.py) の img2img スライダーを参照した。
 
-追加回帰は既存実装で RED、修正後 `StateManagerV2Suite` 6/6 と source-class の実 MainWindow offline import → favourites 全復元が成功し、上流合成データの変更値 0.35 が適用された。プレビュー `outputs/state-denoise-gui/state-manager-import-preview.png` を目視し、対応項目に denoising と prompt、未対応項目に unknown が表示された。実 A1111 原本・実モデルを使った img2img・配布版は未検証。
+追加回帰は既存実装で RED、修正後 `StateManagerV2Suite` 6/6 と source-class の実 MainWindow offline import → favourites 全復元が成功し、上流合成データの変更値 0.35 が適用された。プレビュー `outputs/state-denoise-gui/state-manager-import-preview.png` を目視し、対応項目に denoising と prompt、未対応項目に unknown が表示された。実 A1111 原本・配布版は未検証。
+
+追加で source-class の実 MainWindow から、合成した上流 img2img 保存データを取り込み、0.35 を復元して入力画像を別途設定し、実 img2img を生成した。SD1.5 `animekawa_v10`（512 px）と SDXL `waiIllustriousSDXL_v170`（832 px）が成功し、PNG metadata の `Denoising strength: 0.35` と画像を目視確認した。SHA-256 は順に `61675099907862f93465da8de5ad07a93cf9a72e91e7234a23b86bb2622adb4c`、`3f7e97ddb4bab88109b4de51eb0f28546ae88bacd6ffa498a46e64c0ff9fcee7`。結果は `outputs/state-denoise-real-sd15/history-real-7185777051756962551` と `outputs/state-denoise-real-sdxl/history-real-6241766390671936120`。実 A1111 原本と配布版は引き続き未検証。
 
 ## 上流原本の限定 export（2026-11-03）
 
