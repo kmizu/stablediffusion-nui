@@ -239,6 +239,8 @@ final class Generator(
         val decoded = sdfx.core.png.ScrambledPng.read(path, listener.imageSecret.map(_.use(identity)))
         if decoded.scrambled && decoded.passwordVerified.isEmpty then listener.onLog(ScrambledInput.LegacyWarning)
         decoded.image
+      override def writeTempImage(image: BufferedImage, path: Path): Unit =
+        sdfx.core.png.ScrambledPng.write(image, path, Nil, listener.imageSecret.map(_.use(identity)))
       def tempFile(suffix: String): Path =
         val t = self.tempFile(suffix)
         listener.onTempFile(t)

@@ -136,3 +136,21 @@ class Img2ImgWorkflowSuite extends munit.FunSuite:
     plugin.run(noMask, values("quick_mask" -> "Default", "mask_invert" -> "true"), ctx2)
     assertEquals(ctx2.generated.head, noMask)
   }
+
+  test("protected session writes the generated colour mask through protected temp image access") {
+    var observed: Option[java.nio.file.Path] = None
+    val ctx = new FakeContext:
+      override def imageScramblingEnabled = true
+      override def writeTempImage(image: java.awt.image.BufferedImage, path: java.nio.file.Path): Unit =
+        sdfx.core.png.ScrambledPng.write(image, path, Nil, Some("secret"))
+      override def generate(p: GenerationParams): Seq[sdfx.core.plugins.api.OutputImage] =
+        val path = java.nio.file.Path.of(p.img2img.get.mask.get)
+        assert(sdfx.core.png.PngMetadata.readTexts(path).contains("Encrypt"))
+        assertEquals(sdfx.core.png.ScrambledPng.read(path, Some("secret")).image.getWidth, 64)
+        observed = Some(path)
+        super.generate(p)
+    val input = ctx.initImage(64, 64)
+    val p = GenerationParams(img2img = Some(Img2ImgParams(input)))
+    plugin.run(p, values("quick_mask" -> "White"), ctx)
+    assert(observed.nonEmpty && !java.nio.file.Files.exists(observed.get))
+  }

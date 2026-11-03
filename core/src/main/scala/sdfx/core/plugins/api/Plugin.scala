@@ -118,6 +118,10 @@ trait PluginContext:
   /** Reads a job image using the host image access policy. */
   def readImage(path: Path): BufferedImage = sdfx.core.png.PngMetadata.readImage(path)
   def tempFile(suffix: String): Path
+  /** Write a temporary image using the host protection policy; protected hosts must override this. */
+  def writeTempImage(image: BufferedImage, path: Path): Unit =
+    require(!imageScramblingEnabled, "This host cannot write protected temporary images")
+    require(javax.imageio.ImageIO.write(image, "png", path.toFile), "Cannot write temporary PNG")
   def choices(source: ChoiceSource): Seq[String]
   def log(message: String): Unit
   def status(text: String, done: Int, total: Int): Unit

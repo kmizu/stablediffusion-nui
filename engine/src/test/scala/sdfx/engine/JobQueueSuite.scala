@@ -194,6 +194,29 @@ class JobQueueSuite extends munit.FunSuite:
       b.getRGB(0, 0, b.getWidth, b.getHeight, null, 0, b.getWidth)))
   }
 
+  test("script context writes protected temporary images that round trip and clean up") {
+    val session = new sdfx.core.png.ImageScrambleSession
+    session.unlock("mask secret")
+    var path: java.nio.file.Path = null
+    val plugin = new Plugin:
+      def id = "test_temp_mask"
+      def name = "test temp mask"
+      def kind = PluginKind.Script
+      override def run(p: GenerationParams, values: Values, ctx: PluginContext): JobOutput =
+        val mask = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        mask.setRGB(2, 3, 0xffffff)
+        path = ctx.tempFile(".png")
+        try
+          ctx.writeTempImage(mask, path)
+          assertEquals(sdfx.core.png.PngMetadata.readTexts(path).get("Encrypt"), Some("pixel_shuffle_3"))
+          assertEquals(ctx.readImage(path).getRGB(2, 3) & 0xffffff, 0xffffff)
+          assertEquals(ctx.readImage(path).getRGB(0, 0) & 0xffffff, 0)
+          JobOutput(Nil)
+        finally java.nio.file.Files.deleteIfExists(path)
+    await(queue.submit(Job(base).copy(script = Some(plugin -> Values.empty), imageSecret = session.snapshot)))
+    assert(path != null && !java.nio.file.Files.exists(path))
+  }
+
   test("script worker tools receive decoded images and remove temporary inputs") {
     val src = java.nio.file.Files.createTempFile("scrambled-tool-test", ".png")
     val image = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)

@@ -2,7 +2,6 @@ package sdfx.plugins
 
 import java.nio.file.{Files, Path, Paths}
 import java.awt.image.BufferedImage
-import javax.imageio.ImageIO
 import sdfx.core.model.GenerationParams
 import sdfx.core.plugins.api.*
 import sdfx.core.plugins.api.Control.*
@@ -70,7 +69,6 @@ class Img2ImgWorkflowPlugin extends Plugin:
         require(value.matches("#[0-9a-fA-F]{6}"), "Workflow: custom colour must be #RRGGBB")
         Integer.parseInt(value.substring(1), 16)
       case _ => throw new IllegalArgumentException(s"Workflow: unknown colour mask '$mode'")
-    if ctx.imageScramblingEnabled then throw new IllegalArgumentException("Workflow: colour mask is unavailable while image protection is enabled")
     val threshold = integer(v, "mask_threshold", 1, 1, 256)
     val invert = flag(v, "mask_invert")
     val source = ctx.readImage(Paths.get(p.img2img.get.initImage))
@@ -79,7 +77,7 @@ class Img2ImgWorkflowPlugin extends Plugin:
     val temp = ctx.tempFile(".png")
     try
       Option(temp.getParent).foreach(Files.createDirectories(_))
-      require(ImageIO.write(mask, "png", temp.toFile), "Workflow: cannot write mask PNG")
+      ctx.writeTempImage(mask, temp)
       val settings = ujson.Obj("mode" -> mode, "color" -> f"#$color%06x", "threshold" -> threshold, "invert" -> invert).render()
       val prepared = next.copy(img2img = next.img2img.map(_.copy(mask = Some(temp.toString), inpaintingMaskInvert = false)),
         extra = next.extra + ("Img2Img Workflow mask" -> settings))
@@ -126,13 +124,12 @@ object Img2ImgWorkflowPlugin:
   /** Threshold 1 means exact RGB; larger values allow up to threshold - 1 per channel. */
   def colorMask(src: BufferedImage, color: Int, threshold: Int, invert: Boolean): BufferedImage =
     require(threshold >= 1 && threshold <= 256, "Workflow: threshold must be in 1..256")
-    val out = new BufferedImage(src.getWidth, src.getHeight, BufferedImage.TYPE_BYTE_GRAY)
-    val raster = out.getRaster
+    val out = new BufferedImage(src.getWidth, src.getHeight, BufferedImage.TYPE_INT_RGB)
     val r = (color >> 16) & 255; val g = (color >> 8) & 255; val b = color & 255
     for y <- 0 until src.getHeight; x <- 0 until src.getWidth do
       val pixel = src.getRGB(x, y)
       val delta = math.max(math.abs(((pixel >> 16) & 255) - r),
         math.max(math.abs(((pixel >> 8) & 255) - g), math.abs((pixel & 255) - b)))
       val selected = ((pixel >>> 24) != 0) && ((delta < threshold) != invert)
-      raster.setSample(x, y, 0, if selected then 255 else 0)
+      out.setRGB(x, y, if selected then 0xffffff else 0x000000)
     out
