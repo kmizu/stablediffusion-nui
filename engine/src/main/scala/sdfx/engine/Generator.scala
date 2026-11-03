@@ -29,6 +29,7 @@ trait GenerationListener:
   private[engine] def payloadJobId: Option[String] = None
   private[engine] def submittedPayloadContext: Option[SubmittedPayloadContext] = None
   private[engine] def payloadCaptureOptions: Option[CaptureOptions] = None
+  private[engine] def inputProvenance: Option[(String, String)] = None
   private[engine] def nextPayloadKey(): PayloadKey = PayloadKey(s"direct-${java.util.UUID.randomUUID()}", 1)
   def onPreparedRequest(snapshot: PayloadSnapshot): Unit = ()
   def onPayloadLifecycle(key: PayloadKey, state: PayloadState, completionJson: Option[String]): Unit = ()
@@ -145,7 +146,8 @@ final class Generator(
     })
 
   /** A context bound to one job: events go to `listener`; every `generate` applies the active AlwaysOn plugins. */
-  def forJob(listener: GenerationListener, alwaysOn: Seq[(Plugin, Values)] = Nil, limits: JobLimits = JobLimits()): PluginContext =
+  def forJob(listener: GenerationListener, alwaysOn: Seq[(Plugin, Values)] = Nil, limits: JobLimits = JobLimits(),
+      provenanceProvider: () => Option[(String, String)] = () => None): PluginContext =
     val self = this
     val generations = new java.util.concurrent.atomic.AtomicInteger(0)
     val fastloadPlan = alwaysOn.find((plugin, values) => plugin.id == "controlnet_fastload" && plugin.isActive(values))
@@ -173,6 +175,7 @@ final class Generator(
       override private[engine] def payloadJobId: Option[String] = listener.payloadJobId
       override private[engine] def submittedPayloadContext: Option[SubmittedPayloadContext] = listener.submittedPayloadContext
       override private[engine] def payloadCaptureOptions: Option[CaptureOptions] = listener.payloadCaptureOptions
+      override private[engine] def inputProvenance: Option[(String, String)] = provenanceProvider()
       override private[engine] def nextPayloadKey(): PayloadKey = listener.nextPayloadKey()
       override def onPreparedRequest(snapshot: PayloadSnapshot): Unit = listener.onPreparedRequest(snapshot)
       override def onPayloadLifecycle(key: PayloadKey, state: PayloadState, completionJson: Option[String]): Unit =
@@ -231,7 +234,7 @@ final class Generator(
         out
       }
       def saveImage(img: BufferedImage, kind: String, params: GenerationParams, infotext: String): OutputImage =
-        self.saveWith(img, kind, params, infotext, listener)
+        self.saveWith(img, kind, params, infotext, scopedListener)
       override def readImage(path: Path): BufferedImage =
         val decoded = sdfx.core.png.ScrambledPng.read(path, listener.imageSecret.map(_.use(identity)))
         if decoded.scrambled && decoded.passwordVerified.isEmpty then listener.onLog(ScrambledInput.LegacyWarning)
@@ -655,7 +658,8 @@ final class Generator(
 
   private def runEngine(p: GenerationParams, listener: GenerationListener): (PreparedGeneration, GenerationResult) =
     if listener.isInterrupted then throw interruptedError
-    val original = prepare(EditorPreviewMetadata.forJob(p, listener.editorPreview.nonEmpty))
+    val prepared = prepare(EditorPreviewMetadata.forJob(p, listener.editorPreview.nonEmpty))
+    val original = prepared.copy(recorded = Img2ImgFolderRunner.recordedParams(prepared.recorded, listener.inputProvenance))
     ScrambledInput.withParams(original.request.params, home.tmpDir(settings()), listener.imageSecret, listener.onLog) { params =>
       runEnginePrepared(p, listener, original.copy(request = original.request.copy(params = params)))
     }
@@ -930,13 +934,23 @@ final class Generator(
   /** Saves an image to outputs/<kind>/<date>/ (`grid`/`grids` -> outputs/grids). */
   def saveWith(img: BufferedImage, kind: String, params: GenerationParams, infotext: String, listener: GenerationListener): OutputImage =
     val k = if kind == "grid" then "grids" else kind
-    val dst = OutputNaming.nextFile(outputsDir, k, params.seed, if k.contains("grid") then "-grid" else "")
-    try sdfx.core.png.ScrambledPng.write(img, dst, Seq(PngMetadata.ParametersKey -> infotext), listener.imageSecret.map(_.use(identity)))
+    val recorded = Img2ImgFolderRunner.recordedParams(params, listener.inputProvenance)
+    val source = listener.inputProvenance.collect {
+      case (staged, original) if params.img2img.exists(i => i.initImage == staged || i.initImage == original) => original
+    }
+    val text = source.fold(infotext) { path =>
+      val parsed = Infotext.parse(infotext)
+      if parsed.fields.nonEmpty then Infotext.render(parsed.prompt, parsed.negativePrompt, parsed.fields.updated("NUI img2img source", path))
+      else infotext
+    }
+    val dst = OutputNaming.nextFile(outputsDir, k, recorded.seed, if k.contains("grid") then "-grid" else "")
+    val texts = Seq(PngMetadata.ParametersKey -> text) ++ source.toSeq.map("NUI img2img source" -> _)
+    try sdfx.core.png.ScrambledPng.write(img, dst, texts, listener.imageSecret.map(_.use(identity)))
     catch
       case NonFatal(e) =>
         Files.deleteIfExists(dst)
         throw e
-    val out = OutputImage(dst, params, infotext, params.seed)
+    val out = OutputImage(dst, recorded, text, recorded.seed)
     listener.onImageSaved(out, grid = k.contains("grid"))
     out
 

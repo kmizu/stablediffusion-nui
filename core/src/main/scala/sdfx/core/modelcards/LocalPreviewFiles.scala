@@ -30,6 +30,8 @@ object LocalPreviewFiles:
     def windows: Boolean
     def driveType(root: Path): Either[String, String]
     def stamp(path: Path): Either[String, PathStamp]
+    /** Batch input scanning can tolerate a longer cold-start window for the Windows probe. */
+    def stampForBatch(path: Path): Either[String, PathStamp] = stamp(path)
     def realPath(path: Path): Either[String, Path]
     def openNoFollow(path: Path): Either[String, SeekableByteChannel]
 
@@ -279,10 +281,12 @@ object LocalPreviewFiles:
         attempt("Drive classification is unavailable")(value("drive").str))
       else Right("Fixed")
 
-    def stamp(path: Path): Either[String, PathStamp] =
+    def stamp(path: Path): Either[String, PathStamp] = stampWithTimeout(path, 2)
+    override def stampForBatch(path: Path): Either[String, PathStamp] = stampWithTimeout(path, 10)
+    private def stampWithTimeout(path: Path, timeoutSeconds: Int): Either[String, PathStamp] =
       attempt("Local file attributes are unavailable")(Files.readAttributes(path, classOf[BasicFileAttributes], NoFollow)).flatMap { attributes =>
         val metadata: Either[String, (Option[Path], Option[String])] =
-          if windows then WindowsProbe.query("stamp", path).flatMap { value =>
+          if windows then WindowsProbe.query("stamp", path, timeoutSeconds).flatMap { value =>
             attempt("Windows file identity or reparse information is unavailable") {
               val key = value("fileKey").str
               if !key.matches("win32-fileid:[0-9A-F]{16}:[0-9A-F]{32}") then
@@ -433,11 +437,11 @@ object LocalPreviewFiles:
       if c == -1 || line.length >= 32768 then throw new java.io.IOException("Invalid probe response")
       line.toString
 
-    def query(operation: String, path: Path): Either[String, ujson.Value] =
-      val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+    def query(operation: String, path: Path, timeoutSeconds: Int = 2): Either[String, ujson.Value] =
+      val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds.toLong)
       var acquired = false
       try
-        acquired = lock.tryLock(2, TimeUnit.SECONDS)
+        acquired = lock.tryLock(timeoutSeconds.toLong, TimeUnit.SECONDS)
         if !acquired || path.toString.length > 8192 || !busy.compareAndSet(false, true) then
           Left("Local drive probe is unavailable")
         else queryOwned(operation, path, deadline)

@@ -488,6 +488,68 @@ class McpToolsSuite extends munit.FunSuite:
     assert(eventually()(!Files.list(home.root.resolve("outputs/.tmp")).toList.toString.contains("sdfx-")))
   }
 
+  test("img2img folder queues allowed inputs and records original sources in saved PNGs") {
+    val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-input-test"))
+    val first = Files.write(folder.resolve("a.png"), Base64.getDecoder.decode(pngBase64(64, 64)))
+    val second = Files.write(folder.resolve("b.png"), Base64.getDecoder.decode(pngBase64(64, 64)))
+    val requested = if System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win") then
+      folder.getParent.resolve("FOLDER-INPUT-TEST") else folder
+    val sub = ok("img2img_folder_async", ujson.Obj("prompt" -> "folder test", "image_folder" -> requested.toString,
+      "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    val id = sub("structuredContent")("job_id").str
+    val done = ok("get_job", ujson.Obj("job_id" -> id, "wait_seconds" -> 60))("structuredContent")
+    assertEquals(done("status").str, "done", done.toString)
+    val images = done("images").arr
+    assertEquals(images.size, 2)
+    val recorded = images.map { image =>
+      val png = Paths.get(image("path").str)
+      sdfx.core.infotext.Infotext.parse(PngMetadata.readParameters(png).get).fields("NUI img2img source")
+    }.toSet
+    assertEquals(recorded, Set(first.toRealPath().toString, second.toRealPath().toString))
+    val outside = Files.createTempDirectory("mcp-folder-outside-")
+    try
+      val denied = call("img2img_folder_async", ujson.Obj("prompt" -> "x", "image_folder" -> outside.toString))
+      assert(denied("isError").bool, denied.toString)
+    finally Files.delete(outside)
+  }
+
+  test("img2img folder cancellation keeps finished images and permits a later generation") {
+    val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-cancel-test"))
+    for name <- Seq("a.png", "b.png") do
+      Files.write(folder.resolve(name), Base64.getDecoder.decode(pngBase64(64, 64)))
+    val saved = scala.concurrent.Promise[Unit]()
+    val remove = services.queue.addListener {
+      case e: sdfx.engine.JobEvent.ImageSaved if services.queue.current.exists(_.id == e.jobId) => saved.trySuccess(()); ()
+      case _ => ()
+    }
+    try
+      val sub = ok("img2img_folder_async", ujson.Obj("prompt" -> "folder cancel", "image_folder" -> folder.toString,
+        "width" -> 64, "height" -> 64, "steps" -> 30, "return_images" -> false,
+        "extra" -> ujson.Obj("step_delay" -> "0.04")))
+      val id = sub("structuredContent")("job_id").str
+      Await.result(saved.future, 45.seconds)
+      ok("cancel_job", ujson.Obj("job_id" -> id))
+      val result = call("get_job", ujson.Obj("job_id" -> id, "wait_seconds" -> 45, "return_images" -> false))("structuredContent")
+      assertEquals(result("status").str, "cancelled", result.toString)
+      assertEquals(result("images").arr.size, 1, result.toString)
+      assert(Files.isRegularFile(Paths.get(result("images")(0)("path").str)))
+      ok("txt2img", ujson.Obj("prompt" -> "recovery", "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    finally remove()
+  }
+
+  test("img2img folder MCP does not process protected pixels without a password session") {
+    val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-protected-test"))
+    val input = folder.resolve("protected.png")
+    val pixels = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.ScrambledPng.write(pixels, input, Nil, Some("mcp-folder-secret"))
+    val submitted = ok("img2img_folder_async", ujson.Obj("prompt" -> "protected input", "image_folder" -> folder.toString,
+      "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    val result = call("get_job", ujson.Obj("job_id" -> submitted("structuredContent")("job_id").str,
+      "wait_seconds" -> 30, "return_images" -> false))("structuredContent")
+    assertEquals(result("status").str, "failed", result.toString)
+    assertEquals(sdfx.core.png.PngMetadata.readTexts(input).get("Encrypt"), Some("pixel_shuffle_3"))
+  }
+
   test("progress notifications are emitted when a progressToken is given") {
     val rec = new Recorder
     val r = call("txt2img", ujson.Obj("prompt" -> "p", "steps" -> 5, "width" -> 64, "height" -> 64, "extra" -> ujson.Obj("step_delay" -> "0.02")),

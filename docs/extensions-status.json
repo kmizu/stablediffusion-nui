@@ -249,7 +249,7 @@
 "index": 41,
 "name": "Booru tag autocompletion",
 "url": "https://github.com/DominikDoom/a1111-sd-webui-tagcomplete.git",
-"status": "done:core:tag-autocomplete"
+"status": "todo:core:tag-autocomplete"
 },
 {
 "index": 42,
@@ -357,7 +357,7 @@
 "index": 59,
 "name": "Batch Face Swap",
 "url": "https://github.com/kex0/batch-face-swap.git",
-"status": "done:batch_face_swap"
+"status": "todo:batch_face_swap"
 },
 {
 "index": 60,
@@ -591,7 +591,7 @@
 "index": 98,
 "name": "Clip Interrogator",
 "url": "https://github.com/pharmapsychotic/clip-interrogator-ext.git",
-"status": "done:core:clip_interrogator"
+"status": "todo:core:clip_interrogator"
 },
 {
 "index": 99,

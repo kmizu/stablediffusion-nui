@@ -116,6 +116,26 @@ final class GenerationPanel(
   val wdBatchEnabled = new SimpleBooleanProperty(false)
   val wdBatchInput = new SimpleStringProperty("")
   val wdBatchOutputName = new SimpleStringProperty("")
+  val imgFolderEnabled = new SimpleBooleanProperty(false)
+  val imgFolderInput = new SimpleStringProperty("")
+
+  private def imgFolderSection: Node =
+    val enabled = new CheckBox("Process every image in a folder")
+    enabled.setId("img2img-folder-enabled")
+    enabled.selectedProperty.bindBidirectional(imgFolderEnabled)
+    val input = W.textField(imgFolderInput)
+    input.setId("img2img-folder-input")
+    val browse = W.iconButton("…", "Choose an input image folder") {
+      val chooser = new DirectoryChooser()
+      chooser.setTitle("Choose Img2Img image folder")
+      Option(chooser.showDialog(ctx.stage)).foreach(f => imgFolderInput.set(f.getAbsolutePath))
+    }
+    input.disableProperty.bind(imgFolderEnabled.not())
+    browse.disableProperty.bind(imgFolderEnabled.not())
+    val note = W.label("Images are inspected when the queued job starts. Each image uses the current settings and extensions. Outputs use the normal Img2Img output folder.", "hint")
+    note.setWrapText(true)
+    W.card("Img2Img folder", W.form().full(enabled).full(note)
+      .add("Image folder", W.hbox(6, W.hgrow(input), browse), "Folder containing input images").grid)
 
   private def wdBatchSection: Node =
     val enabled = new CheckBox("Interrogate each image with WD v3 before Img2Img")
@@ -319,7 +339,9 @@ final class GenerationPanel(
     v.getChildren.add(problems)
     v.getChildren.add(W.card("Prompt", prompts.view))
     imageSection.foreach(v.getChildren.add)
-    if mode == Mode.Img2Img then v.getChildren.add(wdBatchSection)
+    if mode == Mode.Img2Img then
+      v.getChildren.add(imgFolderSection)
+      v.getChildren.add(wdBatchSection)
     v.getChildren.addAll(sampling, size, seed)
     val states = W.button("Named generation states…", "Save or restore a complete named settings snapshot") { openStates(mode) }
     states.setId(s"generation-states-open-${mode.key}")

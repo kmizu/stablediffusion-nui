@@ -694,19 +694,35 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     if Option(tabs.getSelectionModel.getSelectedItem).flatMap(modeOf).isEmpty then select(mode)
     val panel = panels(mode)
     val wdEnabled = mode == Mode.Img2Img && panel.wdBatchEnabled.get
+    val folderEnabled = mode == Mode.Img2Img && panel.imgFolderEnabled.get
+    if folderEnabled && wdEnabled then
+      ctx.error("Choose either Img2Img folder or WD batch, not both.")
+      return
+    val folder = if folderEnabled then
+      try
+        val value = panel.imgFolderInput.get.trim
+        require(value.nonEmpty, "Choose an input image folder")
+        val path = Path.of(value).toAbsolutePath.normalize()
+        require(Files.isDirectory(path), "Input image folder does not exist")
+        Some(path.toString)
+      catch
+        case NonFatal(e) =>
+          ctx.error(s"Cannot prepare Img2Img folder: ${Fx.message(e)}")
+          return
+    else None
     val wdAvailable = services.supervisor.hello.exists(_.features.contains("batch_interrogate_wd_v3_partial"))
     val wdChoice = WdBatchUiState.validate(wdEnabled, wdAvailable, panel.wdBatchInput.get, panel.wdBatchOutputName.get) match
       case Left(message) =>
         ctx.error(message)
         return
       case Right(value) => value
-    if editorPreview.nonEmpty && (plugins(mode).scriptJob.nonEmpty || wdChoice.nonEmpty) then
+    if editorPreview.nonEmpty && (plugins(mode).scriptJob.nonEmpty || wdChoice.nonEmpty || folder.nonEmpty) then
       ctx.error("Embedding editor preview cannot run with a script or WD batch.")
       return
     // never reuse a mask exported for an earlier job: it is re-exported from the canvas below
     vm.maskImage.set("")
     val difference = panel.difference.filter(_.enabled)
-    val problems = vm.validate(batchImages = wdChoice.nonEmpty, differenceActive = difference.nonEmpty) ++
+    val problems = vm.validate(batchImages = wdChoice.nonEmpty || folder.nonEmpty, differenceActive = difference.nonEmpty) ++
       difference.toList.flatMap(d => Option.when(!scala.util.Try(Files.isRegularFile(Path.of(d.basePath))).getOrElse(false))(
         "Choose an existing base image for Inpaint Difference"))
     if problems.nonEmpty then
@@ -730,7 +746,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
         if tempFiles.exists(_.toString == vm.maskImage.get) then vm.maskImage.set("")
         if !disposed then ctx.info("Wait for the model selection to finish before generating")
         return
-      if editorPreview.nonEmpty && (ordinary.script.nonEmpty || wdChoice.nonEmpty) then
+      if editorPreview.nonEmpty && (ordinary.script.nonEmpty || wdChoice.nonEmpty || folder.nonEmpty) then
         // A script can change while an asynchronous mask export is in flight.
         ctx.temps.registerJob(ordinary.id, tempFiles)
         ctx.temps.releaseJob(ordinary.id)
@@ -739,7 +755,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
         return
       ctx.recordPrompt(vm.prompt.get, vm.negativePrompt.get)
       val job = wdChoice match
-        case None => ordinary
+        case None => ordinary.copy(img2imgFolder = folder.map(sdfx.engine.Img2ImgFolderSpec(_)))
         case Some((input, name)) =>
           val spec = try
             val source = Path.of(input).toAbsolutePath.normalize()

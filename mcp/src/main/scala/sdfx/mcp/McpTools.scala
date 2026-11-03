@@ -89,7 +89,7 @@ final class McpTools(
   private final case class GenRequest(params: GenerationParams, returnImages: Boolean, maxSide: Int, temps: Seq[Path],
       alwaysOn: Seq[(Plugin, Values)])
 
-  private def parseGen(a: Args, img2img: Boolean, requirePrompt: Boolean = true): GenRequest =
+  private def parseGen(a: Args, img2img: Boolean, requirePrompt: Boolean = true, folderInput: Boolean = false): GenRequest =
     val temps = Seq.newBuilder[Path]
     try
       ensureCatalog()
@@ -159,15 +159,17 @@ final class McpTools(
         (spec, field) => { val (path, tmp) = Images.materialize(spec, field, pathPolicy, base, tempFile); tmp.foreach(temps += _); path },
         allowInitImageFallback = img2img)
       val i2i = Option.when(img2img) {
-        val (init, t1) = Images.materialize(a.reqStr("init_image"), "init_image", pathPolicy, base, tempFile)
-        t1.foreach(temps += _)
+        val init = if folderInput then "folder-input" else
+          val (path, t1) = Images.materialize(a.reqStr("init_image"), "init_image", pathPolicy, base, tempFile)
+          t1.foreach(temps += _)
+          path.toString
         val mask = a.str("mask").filter(_.trim.nonEmpty).map { m =>
           val (mp, t2) = Images.materialize(m, "mask", pathPolicy, base, tempFile)
           t2.foreach(temps += _)
           mp
         }
         Img2ImgParams(
-          initImage = init.toString,
+          initImage = init,
           mask = mask.map(_.toString),
           denoisingStrength = a.num("denoising_strength", 0, 1).getOrElse(0.75),
           resizeMode = enumOrInt(a, "resize_mode", ResizeModes),
@@ -180,7 +182,7 @@ final class McpTools(
       }
 
       val (dw, dh) = i2i match
-        case Some(i) if !a.has("width") || !a.has("height") =>
+        case Some(i) if !folderInput && (!a.has("width") || !a.has("height")) =>
           val (w, h) = Images.size(java.nio.file.Paths.get(i.initImage))
           def f8(v: Int) = math.max(64, math.min(2048, v) / 8 * 8)
           (f8(w), f8(h))
@@ -723,6 +725,18 @@ final class McpTools(
     val props = if img2img then (common.filterNot(_._1 == "hires") ++ i2i) else common
     Schema.obj(props ++ ExtendedGeneration.schema, if img2img then Seq("prompt", "init_image") else Seq("prompt"))
 
+  private val folderExcluded = Set("init_image", "mask", "mask_blur", "inpainting_fill", "inpaint_full_res",
+    "inpaint_full_res_padding", "inpainting_mask_invert")
+  private def folderSchema: ujson.Obj =
+    val schema = genSchema(true)
+    val props = schema("properties").obj
+    folderExcluded.foreach(props.remove)
+    props("image_folder") = Schema.str("Input folder within an allowed local directory; files are inspected when the job starts.")
+    props("width") = Schema.int("Output width; defaults to 512 for SD1.5 or 1024 for SDXL.", Some(64), Some(4096))
+    props("height") = Schema.int("Output height; defaults to 512 for SD1.5 or 1024 for SDXL.", Some(64), Some(4096))
+    schema("required") = ujson.Arr("prompt", "image_folder")
+    schema
+
   private val imagesOutputSchema: ujson.Obj = Schema.obj(
     Seq(
       "job_id" -> Schema.str("Queue job id."),
@@ -840,6 +854,19 @@ final class McpTools(
         checkPendingCap()
         val req = parseGen(Args(a, genKeys(true)), img2img = true)
         submitAsync(Job(Job.newId(), req.params, alwaysOn = req.alwaysOn, origin = Origin, limits = limits), "img2img", req)
+      }),
+    tool("img2img_folder_async", "Image folder to image (async)",
+      "Process each image in an allowed local folder with the same Img2Img settings and AlwaysOn extensions. Poll get_job for progress and results.",
+      folderSchema)((a, _) => {
+        checkPendingCap()
+        val args = Args(a, genKeys(true).filterNot(folderExcluded) :+ "image_folder")
+        val folder = pathPolicy.resolveDirectory(args.reqStr("image_folder"), "image_folder", outputsDir.toAbsolutePath)
+        val roots = pathPolicy.allowedRoots.flatMap(p => scala.util.Try(p.toRealPath()).toOption).filter(folder.startsWith(_))
+        if roots.isEmpty then throw ToolError("image_folder is no longer inside an allowed directory")
+        val req = parseGen(args, img2img = true, folderInput = true)
+        val spec = sdfx.engine.Img2ImgFolderSpec(folder.toString, roots.map(_.toString))
+        submitAsync(Job(Job.newId(), req.params, alwaysOn = req.alwaysOn, origin = Origin, limits = limits,
+          img2imgFolder = Some(spec)), "img2img", req)
       }),
     tool("get_job", "Get async job",
       "Status, progress (0..1) and, when finished, the images of a job started with *_async or run_script async. wait_seconds blocks until the job finishes or the time passes.",

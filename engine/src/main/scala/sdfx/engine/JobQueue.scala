@@ -30,7 +30,8 @@ final case class Job(
     captureOptions: Option[CaptureOptions] = None,
     wdBatch: Option[WdBatchSpec] = None,
     imageSecret: Option[sdfx.core.png.ImageScrambleSecret] = None,
-    editorPreview: Option[EditorPreviewPayload] = None
+    editorPreview: Option[EditorPreviewPayload] = None,
+    img2imgFolder: Option[Img2ImgFolderSpec] = None
 )
 
 /** Kept only in the in-memory queue and private worker request. */
@@ -39,6 +40,9 @@ final case class EditorPreviewPayload(json: String):
 
 /** Explicit partial WD operation: folder and a new destination directory. */
 final case class WdBatchSpec(imagesRoot: String, outputParent: String, outputName: String)
+
+/** Optional allowed roots constrain MCP folder jobs; GUI selections have no such restriction. */
+final case class Img2ImgFolderSpec(path: String, allowedRoots: Seq[String] = Nil)
 
 object Job:
   private val counter = new AtomicLong(0)
@@ -75,17 +79,20 @@ object JobRunner:
     * Script jobs: the script receives the raw params and every `ctx.generate` it makes gets AlwaysOn processing.
     */
   def run(job: Job, generator: Generator, listener: GenerationListener): JobOutput =
-    if job.editorPreview.nonEmpty && (job.script.nonEmpty || job.wdBatch.nonEmpty) then
-      throw EngineError(Protocol.ErrorCodes.Unsupported, "Embedding editor preview cannot run with a script or WD batch")
+    if job.editorPreview.nonEmpty && (job.script.nonEmpty || job.wdBatch.nonEmpty || job.img2imgFolder.nonEmpty) then
+      throw EngineError(Protocol.ErrorCodes.Unsupported, "Embedding editor preview cannot run with a script or folder batch")
+    if job.img2imgFolder.nonEmpty && job.wdBatch.nonEmpty then
+      throw EngineError(Protocol.ErrorCodes.InvalidParams, "Choose only one folder batch mode")
     if job.wdBatch.nonEmpty then
       if job.script.nonEmpty || job.alwaysOn.nonEmpty then
         throw EngineError(Protocol.ErrorCodes.Unsupported, "WD batch does not support scripts or active extensions")
       return generator.runWdBatch(job.params, job.wdBatch.get, listener, job.limits)
-    val ctx = generator.forJob(listener, job.alwaysOn, job.limits)
-    job.script match
-      case Some((plugin, values)) => plugin.run(job.params, values, ctx)
+    var provenance: Option[(String, String)] = None
+    val ctx = generator.forJob(listener, job.alwaysOn, job.limits, () => provenance)
+    def runOne(params: GenerationParams): JobOutput = job.script match
+      case Some((plugin, values)) => plugin.run(params, values, ctx)
       case None =>
-        val images = ctx.generate(job.params)
+        val images = ctx.generate(params)
         val grids =
           if images.size > 1 && !ctx.isInterrupted && GridNumbers.enabled(images.head.params.extra) then
             val tiles = images.map(o => GridNumbers.render(
@@ -98,6 +105,21 @@ object JobRunner:
             Seq(ctx.saveImage(Grid.plain(tiles), "grids", p, Infotext.write(p, ImageFacts(seed = p.seed))))
           else Nil
         JobOutput(images, grids)
+    job.img2imgFolder match
+      case None => runOne(job.params)
+      case Some(folder) =>
+        val folderPath = Path.of(folder.path)
+        val allowed = folder.allowedRoots.map(Path.of(_))
+        if allowed.nonEmpty then VerifiedFolderInput.ensureSupported()
+        def check(): Unit =
+          if ctx.isInterrupted then throw EngineError(Protocol.ErrorCodes.Interrupted, "interrupted")
+          if allowed.nonEmpty then Img2ImgFolderRunner.checkAllowedFolder(folderPath, allowed)
+        Img2ImgFolderRunner.run(folderPath, job.params, ctx.tempFile,
+          (params, original) =>
+            provenance = Some(params.img2img.get.initImage -> original.toString)
+            try runOne(params) finally provenance = None,
+          (path, done, total) => ctx.status(s"Img2Img folder: ${path.getFileName}", done, total),
+          () => check(), allowed)
 
   def isInterruption(e: Throwable): Boolean = e match
     case ee: EngineError => ee.isInterrupted
