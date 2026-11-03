@@ -432,6 +432,28 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("aesthetic_gradients"))
   }
 
+  test("reported A1111 aesthetic metadata with an empty text field is restored") {
+    // A user-reported 2022 AUTO1111 settings record, not an upstream-generated PNG fixture:
+    // https://www.reddit.com/r/StableDiffusion/comments/yzq43d/
+    val dir = Files.createTempDirectory("mcp-aesthetic-reported-")
+    val path = dir.resolve("reported.png")
+    val params = "test prompt\nSteps: 100, Sampler: DPM++ 2M Karras, CFG scale: 9, Seed: 1428485975, Size: 768x512, " +
+      "Model hash: 3675a327, Aesthetic LR: 0.0001, Aesthetic weight: 0.1, Aesthetic steps: 5, " +
+      "Aesthetic embedding: frknstein, Aesthetic slerp: False, Aesthetic text: , " +
+      "Aesthetic text negative: False, Aesthetic slerp angle: 0.1"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> params))
+    val result = InspectGenerationMetadata.inspect(path.toString, new PathPolicy(() => Seq(dir)), dir)
+    val candidate = result("always_on")("aesthetic_gradients")
+    assertEquals(candidate("embedding").str, "frknstein")
+    assertEquals(candidate("weight").num, 0.1)
+    assertEquals(candidate("steps").num, 5.0)
+    assertEquals(candidate("slerp").bool, false)
+    assertEquals(candidate("negative").bool, false)
+    assertEquals(candidate("text").str, "")
+    assertEquals(candidate("slerp_angle").num, 0.1)
+    assert(!result("unapplied_fields").obj.keySet.exists(k => sdfx.plugins.AestheticGradientsPlugin.InfotextKeys.contains(k)))
+  }
+
   test("fingerprinted aesthetic metadata resolves only matching currently allowed registered files") {
     val dir = Files.createTempDirectory("mcp-aesthetic-inspect-")
     val custom = Files.createDirectory(dir.resolve("custom"))

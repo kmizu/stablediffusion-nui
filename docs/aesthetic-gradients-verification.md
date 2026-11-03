@@ -21,7 +21,11 @@
 
 ### 原拡張の実物候補（追加調査）
 
-[上流 issue #18](https://github.com/AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients/issues/18) の報告者は SD1.5 の動作例として画像を掲示している。添付 `207487537-8de045dc-70e3-4c96-8576-b26b04927854.png` を一時取得したところ、SHA-256 は `73a46f46b65e45d4e933a85fb03913815f4171dbb7c746e56a09e5b7e7cbad87`、3072×2304、PNG 情報に `parameters` はなかった。表示例としては参考になるが、元拡張の生成パラメータ互換を検査できる fixture ではない。もう一つの `207481485-3b6065f7-6157-40dd-b76f-1c3f4a6e3f94.png` は取得が応答せず、この時点では未確認。添付画像は個別の許諾条件が確認できないため Git や配布物に含めない。
+[上流 issue #18](https://github.com/AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients/issues/18) の報告者は SD1.5 の動作例として画像を掲示している。添付 `207487537-8de045dc-70e3-4c96-8576-b26b04927854.png` を一時取得したところ、SHA-256 は `73a46f46b65e45d4e933a85fb03913815f4171dbb7c746e56a09e5b7e7cbad87`、3072×2304、PNG 情報に `parameters` はなかった。表示例としては参考になるが、元拡張の生成パラメータ互換を検査できる fixture ではない。もう一つの `207481485-3b6065f7-6157-40dd-b76f-1c3f4a6e3f94.png` は初回取得が応答しなかったが、再試行で取得できた（SHA-256 `d21d63b771084e78a7d78882a64ff82fdb8580d5ffdb190203e77c9e92c361f8`、1536×1280）。こちらにも `parameters` はなかった。添付画像は個別の許諾条件が確認できないため Git や配布物に含めない。
+
+### 利用者が報告した生成設定の読込み
+
+2022 年の [Reddit 投稿](https://www.reddit.com/r/StableDiffusion/comments/yzq43d/) で、投稿者は A1111 を使ったと述べ、Aesthetic LR、weight、steps、embedding、slerp、空の text、negative、angle を含む設定テキストを提示している。これは利用者の報告であり、出力 PNG の bytes や、その時の拡張 revision を確認したものではない。投稿の個人に関する prompt は使用せず、設定部分を小さな合成 PNG に入れて MCP `InspectGenerationMetadata` へ渡す回帰テストを追加した。空の text を含む各値が型付き candidate に復元され、対象の各キーが未適用欄に残らないことを確認。`mcp/testOnly *InspectGenerationMetadataSuite` は 33/33、exit 0。元の PNG や embedding の内容、画像の再現性の証明ではない。
 
 ### 研究 embedding の実生成（2026-11-03）
 
@@ -33,7 +37,7 @@
 
 2026-11-03 に GitHub の tree メタデータを確認したところ、対象拡張の固定 revision `2624e5dd4902cb731287b426ad483e741ece85bb` には `.pt` ファイルがなく、PNG は `ss.png` のみだった。公開 release もない。したがって、この調査では拡張が出力した embedding や生成パラメータ入り PNG の正規 fixture を確保できていない。
 
-拡張 README が参照する研究用リポジトリ [vicgalle/stable-diffusion-aesthetic-gradients](https://github.com/vicgalle/stable-diffusion-aesthetic-gradients/tree/30ca347d39eb7c92dd651a513cf4f795ed995708) には `.pt` が8件あり、README は埋め込みの形状を `1×768` と説明している。ただし、これらが対象の A1111 拡張から出力されたファイルだという証拠はなく、個々の埋め込みや元データの利用条件も今回の資料からは確定していない。これらのファイルはダウンロードしておらず、実物互換の検証には使っていない。元拡張のコードは読んでいない。
+拡張 README が参照する研究用リポジトリ [vicgalle/stable-diffusion-aesthetic-gradients](https://github.com/vicgalle/stable-diffusion-aesthetic-gradients/tree/30ca347d39eb7c92dd651a513cf4f795ed995708) には `.pt` が8件あり、README は埋め込みの形状を `1×768` と説明している。ただし、これらが対象の A1111 拡張から出力されたファイルだという証拠はなく、個々の埋め込みや元データの利用条件も今回の資料からは確定していない。この初期調査ではダウンロードしていなかった。その後の一時取得と NUI による検証は上記の追加節に記す。元拡張のコードは読んでいない。
 
 > 現在の状態: GUI・MCP で作成でき、実 GUI・配布版 MCP の SD1.5／SDXL、配布版 dry-run の Windows chooser を検証済み。配布版 GUI でも chooser から両モデル生成まで一続きで確認した。元拡張の PNG／embedding との互換性などは未検証で、issue #2 は open。操作方法は [日本語ガイド](aesthetic-embeddings.md) を参照。以下の追試は時系列の記録で、各段階での未検証事項は後の追試で解消したものを含む。
 
