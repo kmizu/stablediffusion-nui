@@ -24,6 +24,7 @@
 - #23 履歴・お気に入りの MCP read-only 一覧と ID 指定詳細も main に部分統合。公式 SDK で stdio／HTTP の読み取りと原本非返却・保存 bytes 不変を検証し、main の `McpToolsSuite` 40件と assembly を再実行。詳細は同文書。配布版 transport と生成連携はこの試験では未検証。
 - #23 履歴・お気に入り検索と mode 切替中の旧一覧操作防止を main に部分統合。分離 worktree の SD1.5/SDXL 実 GUI と main の履歴14件・実 GUI・assembly を確認。callback の到着順を人工的に逆転する試験と配布 EXE は未検証。`docs/state-manager-verification.md` を参照。#23 は open。
 - #23 履歴・お気に入りの名前変更を main に部分統合。同一 ID の両方を更新し、重複・古い選択を拒否。分離 worktree の SD1.5/SDXL 実 GUI と main の履歴16件・実 GUI・assembly を確認。別 JVM の同時改名と配布 EXE は未検証。詳細は同文書。#23 は open。
+- 継続中の未統合 worktree: #23 import thumbnail は `C:/Users/Mizushima/.codex/worktrees/state-import-thumbnails/stablediffusion-nui`、実装・実 GUI 検証中。#21 panorama video は `C:/Users/Mizushima/.codex/worktrees/panorama21-completion/stablediffusion-nui` の `676440e` 以降を確認。実験 GUI と動画 decoder は未受入、過去に timeout・decoder error があり、media 同梱ライセンスも未確認。#6 顔 pass 専用 checkpoint も別 worktree で設計中。いずれも未 commit 差分・稼働中プロセスを確認し、無断破棄しない。
 - 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
 - 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 
