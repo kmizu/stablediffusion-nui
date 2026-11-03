@@ -579,6 +579,32 @@ object RealNamedGenerationStatesCheck:
         require(node[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 1, "repeat import duplicated favourites")
       }
       checked("State Manager gzip import previews unknown settings, preserves provenance and restores a favourite")
+      val actualUpstreamFixture = Paths.get("core/src/test/resources/fixtures/state-manager-v2-upstream-stubbed.gz").toAbsolutePath
+      fx {
+        window.openGenerationStates(Mode.Txt2Img)
+        window.ctx.chooseStateManagerImport = () => Some(actualUpstreamFixture)
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(1)
+      }
+      eventually("upstream import ready") { fx(!node[Button]("generation-history-import").isDisabled) }
+      fx { node[Button]("generation-history-import").fire() }
+      eventually("upstream fixture preview") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane])
+      }}
+      fx {
+        val pane = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene)).map(_.getRoot)
+          .collectFirst { case p: DialogPane => p }.get
+        require(pane.lookup("#state-manager-import-summary").asInstanceOf[TextArea].getText.contains("txt2img/Unknown extension"))
+        pane.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      eventually("upstream fixture imported") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 1) }
+      fx {
+        node[ListView[PresetRecord]]("generation-history-list").getSelectionModel.clearAndSelect(0)
+        node[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmButton("generation-states-restore-field")
+      fx { require(window.vms(Mode.Txt2Img).prompt.get == "actual upstream saved prompt") }
+      screenshot("upstream-stubbed-fixture-import")
+      checked("actual upstream JavaScript fixture imports and restores prompt with simulated A1111 dependencies")
       Files.writeString(output.resolve("named-states-native-report.json"), ujson.write(ujson.Obj(
         "status" -> "passed", "home" -> home.root.toString, "library" -> library.toString,
         "checks" -> ujson.Arr.from(checks), "screenshots" -> ujson.Arr.from(screenshots)), indent = 2))

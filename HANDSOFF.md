@@ -21,6 +21,7 @@
 - #6 Img2Img フォルダ入力は main に部分統合。GUI と MCP の一括処理、元画像 metadata、Windows handle による許可範囲検証、SD1.5/SDXL 実 MCP を分離 worktree で確認。main では engine 44件・MCP 43件・assembly を確認。MCP は非 Windows／network drive を拒否し、多数の画像では検査が遅くなる。配布版・全組合せ・別 checkpoint 等は未了。`docs/img2img-folder-ja.md` と `docs/superpowers/plans/2026-11-03-batch-face-folder.md` を参照。#6 は open。
 - #23 お気に入りは main に部分統合。複数登録・解除、履歴消去時の保護、保存とサムネイルの競合対策、共通 PresetStore の保存成功後の誤報修正を実装。SD1.5/SDXL 実 GUI と、main の保存・履歴テスト計36件、実 GUI、assembly を確認。非協調プロセスや配布版 GUI などの限界は `docs/state-manager-verification.md`。上流 storage import 等が残り #23 は open、リリース件数には数えない。
 - #23 State Manager V2 gzip の部分 import も main に統合。合成 fixture の preview・未知項目保持・履歴とお気に入りへの保存、SD1.5/SDXL 実 GUI 生成、main の parser 3件・履歴13件・実 GUI・assembly を確認。上流実物ファイル、直接 IndexedDB、配布 GUI と全設定互換は未確認。`docs/state-manager-v2-import-wip.md` を参照。#23 は引き続き open。
+- #23 上流保存コードを固定 revision の JS のまま実行し、A1111/UI を模擬して作成した fixture も main に追加。decoder 4件、実 GUI import、公式 SDK stdio/HTTP の読取りを確認。実際に A1111 を動かして保存したデータではない。詳細は同文書。
 - #23 履歴・お気に入りの MCP read-only 一覧と ID 指定詳細も main に部分統合。公式 SDK で stdio／HTTP の読み取りと原本非返却・保存 bytes 不変を検証し、main の `McpToolsSuite` 40件と assembly を再実行。詳細は同文書。配布版 transport と生成連携はこの試験では未検証。
 - #23 履歴・お気に入り検索と mode 切替中の旧一覧操作防止を main に部分統合。分離 worktree の SD1.5/SDXL 実 GUI と main の履歴14件・実 GUI・assembly を確認。callback の到着順を人工的に逆転する試験と配布 EXE は未検証。`docs/state-manager-verification.md` を参照。#23 は open。
 - #23 履歴・お気に入りの名前変更を main に部分統合。同一 ID の両方を更新し、重複・古い選択を拒否。分離 worktree の SD1.5/SDXL 実 GUI と main の履歴16件・実 GUI・assembly を確認。別 JVM の同時改名と配布 EXE は未検証。詳細は同文書。#23 は open。

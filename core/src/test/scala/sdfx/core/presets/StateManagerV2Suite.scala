@@ -47,3 +47,18 @@ class StateManagerV2Suite extends munit.FunSuite:
     assertEquals(state.mapped(field("generation.prompt")), PresetAtom.Text("web streams fixture"))
     assert(state.unmapped.contains("txt2img/Unknown"))
   }
+
+  test("reads data produced by pinned upstream JavaScript with simulated A1111 dependencies") {
+    val in = getClass.getResourceAsStream("/fixtures/state-manager-v2-upstream-stubbed.gz")
+    assert(in != null, "upstream-produced fixture missing")
+    val bytes = try in.readAllBytes() finally in.close()
+    val entry = StateManagerV2.decode(bytes).toOption.get.head
+    assertEquals(entry.sourceId, "1700000000123")
+    assertEquals(entry.groups, Set("history"))
+    assertEquals(entry.mapped(field("generation.prompt")), PresetAtom.Text("actual upstream saved prompt"))
+    assertEquals(entry.mapped(field("generation.negativePrompt")), PresetAtom.Text("blur"))
+    assertEquals(entry.mapped(field("generation.steps")), PresetAtom.Integer(20))
+    assertEquals(entry.mapped(field("generation.seed")), PresetAtom.Integer(123))
+    assertEquals(entry.mapped(field("model.clipSkip")), PresetAtom.Integer(2))
+    assert(entry.unmapped.contains("txt2img/Unknown extension"))
+  }
