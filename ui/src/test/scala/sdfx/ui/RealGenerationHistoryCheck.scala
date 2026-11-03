@@ -185,6 +185,27 @@ object RealGenerationHistoryCheck:
         val filtered = control[ListView[PresetRecord]]("generation-favourites-list")
         require(filtered.getItems.size == 1, "favourites search should find the kimono prompt")
         filtered.getSelectionModel.clearAndSelect(0)
+      }
+      val renameTask = new FutureTask[Unit](new Callable[Unit] {
+        def call(): Unit = control[Button]("generation-favourites-rename").fire()
+      })
+      Platform.runLater(renameTask)
+      eventually("rename dialog") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane]) || renameTask.isDone
+      }}
+      fx {
+        val dialog = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene)).map(_.getRoot)
+          .collectFirst { case pane: DialogPane => pane }.get
+        dialog.lookup(".text-field").asInstanceOf[TextField].setText("kimono favourite")
+        dialog.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      renameTask.get(30, TimeUnit.SECONDS)
+      eventually("renamed favourite ready") { fx {
+        val list = control[ListView[PresetRecord]]("generation-favourites-list")
+        list.getItems.size == 1 && list.getItems.get(0).name == "kimono favourite" &&
+          !control[Button]("generation-favourites-rename").isDisabled
+      }}
+      fx {
         control[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
       }
       confirmFire("generation-states-restore-field")

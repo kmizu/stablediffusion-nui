@@ -92,6 +92,25 @@ object GenerationHistory:
     storeFavourites(store(library, mode, entries(library, mode).filterNot(r => ids(r.id))), mode,
       favourites(library, mode).filterNot(r => ids(r.id)))
 
+  def rename(library: PresetLibrary, mode: Mode, id: UUID, expectedName: String, name: String): Either[PresetError, PresetLibrary] =
+    def problem(code: String, message: String) = PresetError(Vector(PresetIssue(code, mode.key, message)))
+    val clean = Option(name).getOrElse("").trim
+    val histories = entries(library, mode)
+    val favs = favourites(library, mode)
+    val matching = (histories ++ favs).filter(_.id == id)
+    if clean.isEmpty || clean.codePointCount(0, clean.length) > 256 || clean.codePoints().toArray.exists(Character.isISOControl) then
+      Left(problem("name", "Enter a printable name of 1–256 characters"))
+    else if matching.isEmpty || matching.exists(_.name != expectedName) then
+      Left(problem("stale-selection", "The selected history entry changed or no longer exists"))
+    else if (histories ++ favs).exists(r => r.id != id && r.name == clean) then
+      Left(problem("duplicate-name", "Another history entry already has that name"))
+    else if clean == expectedName then Right(library)
+    else
+      val updatedHistory = histories.map(r => if r.id == id then r.copy(name = clean) else r)
+      val updatedFavourites = favs.map(r => if r.id == id then r.copy(name = clean) else r)
+      val afterHistory = if histories.exists(_.id == id) then store(library, mode, updatedHistory) else library
+      Right(if favs.exists(_.id == id) then storeFavourites(afterHistory, mode, updatedFavourites) else afterHistory)
+
   /** Mixed selections add all; if all selected are already favourites, remove all. */
   def toggleFavourites(library: PresetLibrary, mode: Mode, ids: Set[UUID]): (PresetLibrary, Vector[UUID]) =
     val saved = favourites(library, mode)
@@ -298,6 +317,13 @@ final class GenerationHistoryStore(directory: Path, limit: Int, dispatch: (() =>
         if ids.nonEmpty && ids.subsetOf(available) then Right(())
         else Left(PresetError(Vector(PresetIssue("stale-selection", mode.key, "Selected history entries are no longer available"))))
       }).map(_ => ())
+      dispatch(() => { done(result); if result.isRight then listener() })
+    }
+
+  def rename(mode: Mode, id: UUID, expectedName: String, name: String)(done: Either[PresetError, Unit] => Unit): Unit =
+    run {
+      val result = mutate(lib => (GenerationHistory.rename(lib, mode, id, expectedName, name).toOption.get, None, Vector.empty),
+        lib => GenerationHistory.rename(lib, mode, id, expectedName, name).map(_ => ())).map(_ => ())
       dispatch(() => { done(result); if result.isRight then listener() })
     }
 

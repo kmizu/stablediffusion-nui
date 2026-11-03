@@ -23,6 +23,7 @@
 - #23 State Manager V2 gzip の部分 import も main に統合。合成 fixture の preview・未知項目保持・履歴とお気に入りへの保存、SD1.5/SDXL 実 GUI 生成、main の parser 3件・履歴13件・実 GUI・assembly を確認。上流実物ファイル、直接 IndexedDB、配布 GUI と全設定互換は未確認。`docs/state-manager-v2-import-wip.md` を参照。#23 は引き続き open。
 - #23 履歴・お気に入りの MCP read-only 一覧と ID 指定詳細も main に部分統合。公式 SDK で stdio／HTTP の読み取りと原本非返却・保存 bytes 不変を検証し、main の `McpToolsSuite` 40件と assembly を再実行。詳細は同文書。配布版 transport と生成連携はこの試験では未検証。
 - #23 履歴・お気に入り検索と mode 切替中の旧一覧操作防止を main に部分統合。分離 worktree の SD1.5/SDXL 実 GUI と main の履歴14件・実 GUI・assembly を確認。callback の到着順を人工的に逆転する試験と配布 EXE は未検証。`docs/state-manager-verification.md` を参照。#23 は open。
+- #23 履歴・お気に入りの名前変更を main に部分統合。同一 ID の両方を更新し、重複・古い選択を拒否。分離 worktree の SD1.5/SDXL 実 GUI と main の履歴16件・実 GUI・assembly を確認。別 JVM の同時改名と配布 EXE は未検証。詳細は同文書。#23 は open。
 - 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
 - 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 

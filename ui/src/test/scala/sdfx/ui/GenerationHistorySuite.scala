@@ -27,6 +27,49 @@ class GenerationHistorySuite extends munit.FunSuite:
   private def values(n: Int): Map[FieldKey, PresetAtom] =
     Map(FieldKey(Vector("generation", "steps")) -> PresetAtom.Integer(n))
 
+  test("rename updates both references while preserving identity and rejects stale or duplicate names") {
+    val (one, first, _) = GenerationHistory.append(empty, Mode.Txt2Img, values(1), at, 10)
+    val (two, second, _) = GenerationHistory.append(one, Mode.Txt2Img, values(2), at, 10)
+    val (both, _) = GenerationHistory.toggleFavourites(two, Mode.Txt2Img, Set(first.get.id))
+    val updated = GenerationHistory.rename(both, Mode.Txt2Img, first.get.id, first.get.name, "  cherry  ").toOption.get
+    val history = GenerationHistory.entries(updated, Mode.Txt2Img).find(_.id == first.get.id).get
+    val favourite = GenerationHistory.favourites(updated, Mode.Txt2Img).head
+    assertEquals(history.name, "cherry")
+    assertEquals(favourite, history)
+    assertEquals(history.fields, first.get.fields)
+    assert(GenerationHistory.rename(updated, Mode.Txt2Img, first.get.id, first.get.name, "stale").isLeft)
+    assert(GenerationHistory.rename(updated, Mode.Txt2Img, first.get.id, "cherry", second.get.name).isLeft)
+    assert(GenerationHistory.rename(updated, Mode.Txt2Img, first.get.id, "cherry", " ").isLeft)
+    assert(GenerationHistory.rename(updated, Mode.Img2Img, first.get.id, "cherry", "other").isLeft)
+  }
+
+  test("concurrent rename keeps one winner and stale failure leaves stored bytes unchanged") {
+    val dir = Files.createTempDirectory("sdfx-history-rename-")
+    val a = new GenerationHistoryStore(dir, 10, thunk => thunk())
+    val b = new GenerationHistoryStore(dir, 10, thunk => thunk())
+    val saved = new CountDownLatch(1)
+    var record: Option[PresetRecord] = None
+    a.record(Mode.Txt2Img, values(1), r => { record = r.toOption.flatten; saved.countDown() })
+    assert(saved.await(20, TimeUnit.SECONDS) && record.nonEmpty)
+    val first = record.get
+    val finished = new CountDownLatch(2)
+    val results = new java.util.concurrent.ConcurrentLinkedQueue[Either[PresetError, Unit]]()
+    for (store, name) <- Vector(a -> "A", b -> "B") do
+      store.rename(Mode.Txt2Img, first.id, first.name, name) { r => results.add(r); finished.countDown() }
+    assert(finished.await(20, TimeUnit.SECONDS))
+    val outcomes = results.toArray.toVector.map(_.asInstanceOf[Either[PresetError, Unit]])
+    assertEquals(outcomes.count(_.isRight), 1)
+    assertEquals(outcomes.count(_.isLeft), 1)
+    val path = dir.resolve("library-v1.json")
+    val before = Files.readAllBytes(path).toVector
+    val rejected = new CountDownLatch(1)
+    var failure: Either[PresetError, Unit] = null
+    a.rename(Mode.Txt2Img, first.id, first.name, "stale") { r => failure = r; rejected.countDown() }
+    assert(rejected.await(20, TimeUnit.SECONDS) && failure.isLeft)
+    assertEquals(Files.readAllBytes(path).toVector, before)
+    a.close(); b.close()
+  }
+
   test("history search requires each comma term across supported fields without case sensitivity") {
     val fields = Map(FieldKey(Vector("generation", "prompt")) -> PresetAtom.Text("Blue Fox"),
       FieldKey(Vector("generation", "negativePrompt")) -> PresetAtom.Text("blurry"),

@@ -365,6 +365,55 @@ object RealNamedGenerationStatesCheck:
         require(list.getItems.size == 2)
       }
       checked("favourites search requires all terms and clears hidden selection")
+      fx { node[ListView[PresetRecord]]("generation-favourites-list").getSelectionModel.clearAndSelect(0) }
+      val renameTask = new FutureTask[Unit](new Callable[Unit]:
+        def call(): Unit = node[Button]("generation-favourites-rename").fire())
+      Platform.runLater(renameTask)
+      eventually("rename dialog") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane]) || renameTask.isDone
+      }}
+      fx {
+        val dialog = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene))
+          .map(_.getRoot).collectFirst { case d: DialogPane => d }.get
+        dialog.lookup(".text-field").asInstanceOf[TextField].setText("favourite renamed")
+        dialog.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      renameTask.get(30, TimeUnit.SECONDS)
+      eventually("renamed in favourites and history") { fx {
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.name == "favourite renamed") &&
+          node[ListView[PresetRecord]]("generation-history-list").getItems.asScala.exists(_.name == "favourite renamed")
+      }}
+      checked("history and favourite names change together")
+      fx {
+        node[TextField]("generation-favourites-search").setText("favourite renamed")
+        val list = node[ListView[PresetRecord]]("generation-favourites-list")
+        require(list.getItems.size == 1)
+        list.getSelectionModel.clearAndSelect(0)
+      }
+      val filteredRename = new FutureTask[Unit](new Callable[Unit]:
+        def call(): Unit = node[Button]("generation-favourites-rename").fire())
+      Platform.runLater(filteredRename)
+      eventually("filtered rename dialog") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane]) || filteredRename.isDone
+      }}
+      fx {
+        val dialog = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene))
+          .map(_.getRoot).collectFirst { case d: DialogPane => d }.get
+        dialog.lookup(".text-field").asInstanceOf[TextField].setText("new title")
+        dialog.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      filteredRename.get(30, TimeUnit.SECONDS)
+      eventually("renamed entry hidden by filter") { fx {
+        val list = node[ListView[PresetRecord]]("generation-favourites-list")
+        list.getItems.isEmpty && list.getSelectionModel.getSelectedItems.isEmpty &&
+          node[TextArea]("generation-states-status").getText.contains("renamed")
+      }}
+      screenshot("named-states-rename-filtered")
+      fx { node[TextField]("generation-favourites-search").clear() }
+      eventually("renamed favourite visible again") { fx {
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.name == "new title")
+      }}
+      checked("renaming an entry out of the filter clears selection")
       fx {
         val list = node[ListView[PresetRecord]]("generation-favourites-list")
         list.getSelectionModel.clearAndSelect(0)

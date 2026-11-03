@@ -142,6 +142,8 @@ final class NamedGenerationStatesPane(
     favouritesDelete.setDisable(historyPending || historyLoading || historySelected.isEmpty)
     historyFavourite.setDisable(historyPending || historyLoading || historySelected.isEmpty)
     favouritesToggle.setDisable(historyPending || historyLoading || historySelected.isEmpty)
+    historyRename.setDisable(historyPending || historyLoading || historySelected.size != 1)
+    favouritesRename.setDisable(historyPending || historyLoading || historySelected.size != 1)
     historyClear.setDisable(historyPending || historyLoading || historyEntries.isEmpty)
     historyImport.setDisable(historyPending || historyLoading)
     reload.setDisable(pending)
@@ -316,6 +318,35 @@ final class NamedGenerationStatesPane(
   historyFavourite.setId("generation-history-favourite")
   private val favouritesToggle = W.button("Remove favourites", "Remove the selected entries from favourites") { toggleSelectedFavourites() }
   favouritesToggle.setId("generation-favourites-toggle")
+  private def renameSelectedHistory(): Unit =
+    historySelected match
+      case Vector(record) =>
+        val target = mode
+        val dialog = new TextInputDialog(record.name)
+        dialog.initOwner(ctx.stage)
+        dialog.setTitle("Rename history entry")
+        dialog.setHeaderText("Rename the selected entry")
+        dialog.setContentText("Name:")
+        val answer = dialog.showAndWait()
+        if answer.isPresent && !closed then
+          if mode != target || historySelected != Vector(record) then
+            status.setText("The selected entry or mode changed; nothing was renamed.")
+          else
+            historyPending = true
+            refreshButtons()
+            history.rename(target, record.id, record.name, answer.get()) { result =>
+              historyPending = false
+              if !closed then
+                result match
+                  case Left(error) => failure(error)
+                  case Right(_) => status.setText("History entry renamed.")
+                refreshButtons()
+            }
+      case _ => ()
+  private val historyRename = W.button("Rename", "Rename the selected entry in history and favourites") { renameSelectedHistory() }
+  historyRename.setId("generation-history-rename")
+  private val favouritesRename = W.button("Rename", "Rename the selected entry in history and favourites") { renameSelectedHistory() }
+  favouritesRename.setId("generation-favourites-rename")
   private val historyClear = W.button("Clear history", "Remove non-favourite history entries of this mode") {
     val target = mode
     if confirm("Clear history?", s"Delete all non-favourite ${target.key} history entries, including those hidden by search? Favourites are kept.") then
@@ -424,10 +455,10 @@ final class NamedGenerationStatesPane(
   namedTab.setId("generation-states-tab-named")
   namedTab.setClosable(false)
   private val historyTab = new Tab("History", new VBox(8, autosave, historySearch, historyList,
-    new HBox(8, keep, historyFavourite, historyDelete, historyClear, historyImport)))
+    new FlowPane(8, 6, keep, historyRename, historyFavourite, historyDelete, historyClear, historyImport)))
   historyTab.setId("generation-states-tab-history")
   historyTab.setClosable(false)
-  private val favouritesTab = new Tab("Favourites", new VBox(8, favouritesSearch, favouritesList, new HBox(8, favouritesToggle, favouritesDelete)))
+  private val favouritesTab = new Tab("Favourites", new VBox(8, favouritesSearch, favouritesList, new FlowPane(8, 6, favouritesRename, favouritesToggle, favouritesDelete)))
   favouritesTab.setId("generation-states-tab-favourites")
   favouritesTab.setClosable(false)
   tabs.getTabs.addAll(namedTab, historyTab, favouritesTab)

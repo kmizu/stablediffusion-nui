@@ -1,5 +1,15 @@
 # State Manager history and category restore (#23, partial)
 
+## 2026-11-03 履歴とお気に入りの名前変更
+
+main 統合時、`GenerationHistorySuite` 16件、`RealNamedGenerationStatesCheck` と `ui/assembly` が exit 0。JAR SHA-256 は `df9adb4cca0cf98a664166002b09a7ea6b17fb8523e112b0b3d2c7d0bb8ec723`。下記の実モデル試験は分離 worktree の source-class GUI で、この JAR や配布版の実測ではない。
+
+上流の項目名編集に対応し、一件を選んで Rename できる。ID と settings・source metadata・thumbnail を維持し、同じ ID が history / favourites の両方にあれば両方を更新する。同一 mode の重複名・無効名・選択時の名前が既に変わった項目は拒否。旧名に基づく二つの同時保存では片方だけ成功し、拒否後の JSON bytes が不変であることを 2 store / 同一 JVM で確認した。別 JVM の同時改名は未試験。
+
+`GenerationHistorySuite` 16/16、offline 実 MainWindow は両群の名前変更・改名で検索対象から外れた項目の選択解除と再表示を確認。`outputs/history-rename-final/named-states-favourites.png` と `named-states-history-search.png` を目視し、画面内のボタンと改名結果が見えることを確認した。配布版・物理操作は未検証。
+
+source-class 実 MainWindow で favourites を検索・改名後、prompt を復元して実生成し、PNG metadata を照合。SD1.5 512×512 と SDXL 832×832 は各8 steps で `HISTORY_REAL_OK`、結果は `outputs/history-rename-real-sd15/history-real-9773342379648639244` と `outputs/history-rename-real-sdxl/history-real-3970178151943878629`。生成した `00002-7102.png` を目視し、いずれも桜と赤い着物の人物を確認。SHA-256 は順に `720006d73e6113b03c2435a3123a4467e69a31eb6293118c54b8c1711e134533`、`c92e297e7a04cba17c2d6933696fafc08f8447176bd21019d764c205cc381803`。
+
 ## 2026-11-03 履歴検索と mode 切替
 
 main への部分統合時、`GenerationHistorySuite` 14件、`RealNamedGenerationStatesCheck`、`ui/assembly` が exit 0。JAR SHA-256 は `f4c7ca9245c0bcc1f003f482c7cef3a186971963e87dfdc2efb53085cda184fe`。下記の実モデル試験は分離 worktree の source-class GUI によるもので、この main JAR や配布版の実測ではない。
