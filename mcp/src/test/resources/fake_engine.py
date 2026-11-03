@@ -70,6 +70,7 @@ state = {
     "loaded": None,
     "vae": None,
     "last_generation": None,
+    "last_fastload": None,
     "requests": [],
     "load_count": 0,
 }
@@ -180,6 +181,14 @@ def handle_work(rid, typ, params):
                 with open(params['path'], 'rb') as f:
                     data = f.read()
                 result(rid, {'test_input_path': params['path'], 'test_input_base64': base64.b64encode(data).decode()})
+            elif params.get('operation') == 'prepare_generation':
+                with open(params['path'], 'rb') as f:
+                    data = f.read()
+                state['last_fastload'] = {'path': params['path'], 'bytes': base64.b64encode(data).decode()}
+                if data == b'fail-fastload':
+                    error(rid, 'invalid_params', 'fixture Fastload failure')
+                else:
+                    result(rid, {'load_skipped': True, 'save': False, 'units': {'type': 'list', 'items': []}})
             else:
                 error(rid, 'unsupported', 'fake Fastload supports version only')
         elif typ == "model_keyword":
@@ -285,7 +294,7 @@ def main():
     if not opt("--no-hello"):
         send({"id": None, "type": "hello", "protocol": 1, "engine_version": "fake-" + str(opt("--tag", "0")),
               "python": sys.version.split()[0], "torch": None, "diffusers": None, "cuda": False, "device": "cpu",
-              "vram_mb": 0, "dry_run": True, "features": ["fake"]})
+              "vram_mb": 0, "dry_run": True, "features": ["fake", "controlnet_fastload_data"]})
     threading.Thread(target=worker, daemon=True).start()
     stdin = open(sys.stdin.fileno(), "r", encoding="utf-8", closefd=False)
     for line in stdin:
@@ -348,7 +357,7 @@ def main():
                 stdout.flush()
             result(rid, {})
         elif typ == "get_state":
-            result(rid, {"loaded": state["loaded"], "vae": state["vae"], "last_generation": state["last_generation"],
+            result(rid, {"loaded": state["loaded"], "vae": state["vae"], "last_generation": state["last_generation"], "last_fastload": state["last_fastload"],
                          "load_count": state["load_count"], "pid": os.getpid()})
         elif typ == "list_models":
             result(rid, {"models": [dict(f, kind="sd15") for f in list_dir(params.get("dirs", []), {".safetensors", ".ckpt"})]})

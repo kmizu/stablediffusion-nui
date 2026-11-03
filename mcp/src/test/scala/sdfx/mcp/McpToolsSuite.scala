@@ -406,6 +406,135 @@ class McpToolsSuite extends munit.FunSuite:
     assert(Files.exists(input))
   }
 
+  test("generation-time Fastload sends verified bytes through a job-owned snapshot") {
+    val path = home.outputs(services.settings).resolve("generation-fastload.cni")
+    Files.createDirectories(path.getParent)
+    val bytes = Array[Byte](17, 0, -7, 42)
+    Files.write(path, bytes)
+    val result = call("txt2img", ujson.Obj("prompt" -> "snapshot", "width" -> 64, "height" -> 64,
+      "steps" -> 1, "return_images" -> false, "always_on" -> ujson.Obj("controlnet_fastload" ->
+        ujson.Obj("enabled" -> true, "mode" -> "load_only", "priority" -> "loaded_first", "path" -> path.toString))))
+    assert(!result("isError").bool, textOf(result))
+    val seen = Await.result(services.client.raw("get_state"), 10.seconds)("last_fastload")
+    val snapshot = Paths.get(seen("path").str)
+    assertNotEquals(snapshot, path)
+    assertEquals(Base64.getDecoder.decode(seen("bytes").str).toSeq, bytes.toSeq)
+    assertEquals(Files.readAllBytes(path).toSeq, bytes.toSeq)
+    assert(!Files.exists(snapshot), "job-owned Fastload snapshot must be cleaned after the job")
+  }
+
+  test("generation-time Fastload rejects protected PNG before staging") {
+    val path = home.outputs(services.settings).resolve("protected-generation-fastload.png")
+    Files.createDirectories(path.getParent)
+    sdfx.core.png.ScrambledPng.write(new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB),
+      path, Nil, Some("private-secret"))
+    val tmp = home.tmpDir(services.settings)
+    def files: Set[java.nio.file.Path] =
+      val s = Files.list(tmp)
+      try { import scala.jdk.CollectionConverters.*; s.iterator().asScala.toSet }
+      finally s.close()
+    val before = files
+    val result = call("txt2img", ujson.Obj("prompt" -> "protected", "width" -> 64, "height" -> 64,
+      "steps" -> 1, "return_images" -> false, "always_on" -> ujson.Obj("controlnet_fastload" ->
+        ujson.Obj("enabled" -> true, "mode" -> "load_only", "priority" -> "loaded_first", "path" -> path.toString))))
+    assert(result("isError").bool)
+    assert(textOf(result).contains("protected image"), textOf(result))
+    assertEquals(files, before)
+  }
+
+  test("failed Fastload preparation cleans its snapshot and permits recovery") {
+    val path = home.outputs(services.settings).resolve("failed-fastload.cni")
+    Files.createDirectories(path.getParent)
+    Files.writeString(path, "fail-fastload")
+    val response = call("txt2img", ujson.Obj("prompt" -> "fail", "width" -> 64, "height" -> 64,
+      "steps" -> 1, "return_images" -> false, "always_on" -> ujson.Obj("controlnet_fastload" ->
+        ujson.Obj("enabled" -> true, "mode" -> "load_only", "priority" -> "loaded_first", "path" -> path.toString))))
+    assert(response("isError").bool, response.toString)
+    val seen = Await.result(services.client.raw("get_state"), 10.seconds)("last_fastload")
+    val snapshot = Paths.get(seen("path").str)
+    assert(eventually()(!Files.exists(snapshot)))
+    assertEquals(Files.readString(path), "fail-fastload")
+    val recovered = ok("txt2img", ujson.Obj("prompt" -> "recover", "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    assertEquals(recovered("structuredContent")("images").arr.size, 1)
+  }
+
+  test("cancelling a generation cleans the job-owned Fastload snapshot") {
+    val source = home.outputs(services.settings).resolve("generation-fastload-cancel.cni")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Array[Byte](6, 7, 8))
+    val tmp = home.tmpDir(services.settings)
+    def snapshots: Set[java.nio.file.Path] =
+      val s = Files.list(tmp)
+      try { import scala.jdk.CollectionConverters.*; s.iterator().asScala.filter(_.toString.endsWith(".cni")).toSet }
+      finally s.close()
+    val before = snapshots
+    val started = scala.concurrent.Promise[Unit]()
+    var id = ""
+    val remove = services.queue.addListener {
+      case event: sdfx.engine.JobEvent.Progress if event.jobId == id => started.trySuccess(()); ()
+      case _ => ()
+    }
+    try
+      val submitted = ok("txt2img_async", ujson.Obj("prompt" -> "cancel snapshot", "width" -> 64, "height" -> 64,
+        "steps" -> 100, "return_images" -> false, "extra" -> ujson.Obj("step_delay" -> "0.05"),
+        "always_on" -> ujson.Obj("controlnet_fastload" ->
+          ujson.Obj("enabled" -> true, "mode" -> "load_only", "priority" -> "loaded_first", "path" -> source.toString))))
+      id = submitted("structuredContent")("job_id").str
+      val added = snapshots -- before
+      assertEquals(added.size, 1)
+      val snapshot = added.head
+      Await.result(started.future, 45.seconds)
+      assert(Files.isRegularFile(snapshot))
+      ok("cancel_job", ujson.Obj("job_id" -> id))
+      val result = call("get_job", ujson.Obj("job_id" -> id, "wait_seconds" -> 45))
+      assertEquals(result("structuredContent")("status").str, "cancelled")
+      assert(eventually()(!Files.exists(snapshot)), "snapshot must be deleted after cancellation")
+      assert(Files.exists(source))
+    finally remove()
+  }
+
+  test("interrupted synchronous caller retains Fastload snapshot until worker finishes") {
+    val source = home.outputs(services.settings).resolve("generation-fastload-interrupt.cni")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Array[Byte](9, 8, 7))
+    val tmp = home.tmpDir(services.settings)
+    def snapshots: Set[java.nio.file.Path] =
+      val s = Files.list(tmp)
+      try { import scala.jdk.CollectionConverters.*; s.iterator().asScala.filter(_.toString.endsWith(".cni")).toSet }
+      finally s.close()
+    val before = snapshots
+    val started = scala.concurrent.Promise[Unit]()
+    val remove = services.queue.addListener {
+      case _: sdfx.engine.JobEvent.Progress => started.trySuccess(()); ()
+      case _ => ()
+    }
+    val thrown = new java.util.concurrent.atomic.AtomicReference[Throwable]()
+    val caller = new Thread(() => {
+      try
+        call("txt2img", ujson.Obj("prompt" -> "interrupt snapshot", "width" -> 64, "height" -> 64,
+          "steps" -> 100, "return_images" -> false, "extra" -> ujson.Obj("step_delay" -> "0.03", "ignore_interrupt" -> "true"),
+          "always_on" -> ujson.Obj("controlnet_fastload" ->
+            ujson.Obj("enabled" -> true, "mode" -> "load_only", "priority" -> "loaded_first", "path" -> source.toString))))
+        ()
+      catch case e: Throwable => thrown.set(e)
+    })
+    caller.start()
+    try
+      Await.result(started.future, 45.seconds)
+      val added = snapshots -- before
+      assertEquals(added.size, 1)
+      val snapshot = added.head
+      caller.interrupt(); caller.join(3000)
+      assert(!caller.isAlive, "synchronous caller did not stop")
+      assert(thrown.get().isInstanceOf[InterruptedException], s"unexpected result ${thrown.get()}")
+      assert(Files.exists(snapshot), "worker can still be using the snapshot")
+      assert(eventually()( !Files.exists(snapshot) ), "snapshot must be deleted after worker completion")
+      assert(Files.exists(source))
+    finally
+      remove()
+      if caller.isAlive then { caller.interrupt(); caller.join(3000) }
+  }
+
   test("CLIP Interrogator is discoverable and rejects bad input, out-of-policy files and protected sessions") {
     val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
     val tool = ts.find(_("name").str == "clip_interrogate").getOrElse(fail("CLIP Interrogator tool missing"))

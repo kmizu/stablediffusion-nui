@@ -9,7 +9,8 @@ private[mcp] final class AlwaysOnInputs(
     image: (String, String) => String, localFile: (String, String) => String,
     directory: Option[(String, String) => String] = None,
     activeControlNet: Boolean = false,
-    aestheticName: Option[(String, String, Option[String]) => String] = None
+    aestheticName: Option[(String, String, Option[String]) => String] = None,
+    fastloadFile: Option[(String, String) => String] = None
 ):
   def available(tab: Tab): Seq[Plugin] = plugins().filter(p => p.kind == PluginKind.AlwaysOn && p.tabs.contains(tab))
 
@@ -86,8 +87,9 @@ private[mcp] final class AlwaysOnInputs(
                 .getOrElse(throw ToolError(s"$field: embedding not found inside the allowed folders"))
           else if plugin.id == "controlnet_fastload" && key == "path" && v.nonEmpty then
             def setting(name: String): String = args.str(name).getOrElse(controls.find(_.key == name).map(_.default).getOrElse(""))
-            if setting("mode") == "save_only" || (activeControlNet && setting("priority") == "current_first") then ""
-            else localFile(v, field)
+            val enabled = controls.collectFirst { case Control.Check("enabled", _, d) => args.bool("enabled").getOrElse(d) }.getOrElse(true)
+            if !enabled || setting("mode") == "save_only" || (activeControlNet && setting("priority") == "current_first") then ""
+            else fastloadFile.getOrElse(throw ToolError(s"$field: verified Fastload input is unavailable"))(v, field)
           else if key.endsWith("_custom_model") || key == "head" || key == "image_encoder" then
             val repo = v.stripPrefix("hf://")
             val remoteEncoder = key == "image_encoder" && repo.matches("[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*")

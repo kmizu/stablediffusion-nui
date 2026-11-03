@@ -92,3 +92,17 @@ class AlwaysOnFilePolicySuite extends munit.FunSuite:
     assertEquals(input.validate(fastload, ujson.Obj("priority" -> "current_first", "path" -> "missing.cni")).str("path"), "")
     intercept[ToolError] { input.validate(fastload, ujson.Obj("priority" -> "loaded_first", "path" -> "missing.cni")) }
   }
+
+  test("Fastload loads through the verified snapshot resolver, not generic file policy") {
+    val fastload = new sdfx.plugins.ControlNetFastloadPlugin
+    var staged = Vector.empty[String]
+    val input = new AlwaysOnInputs(() => Seq(fastload), _ => Nil, (_, _) => fail("not an image"),
+      (_, _) => fail("generic file resolver must not handle Fastload"),
+      fastloadFile = Some((value, _) => { staged :+= value; "verified-snapshot.cni" }))
+    val values = input.validate(fastload, ujson.Obj("enabled" -> true, "mode" -> "load_only", "path" -> "input.cni"))
+    assertEquals(values.str("path"), "verified-snapshot.cni")
+    assertEquals(staged, Vector("input.cni"))
+    assertEquals(input.validate(fastload, ujson.Obj("enabled" -> true, "mode" -> "save_only", "path" -> "missing.cni")).str("path"), "")
+    assertEquals(input.validate(fastload, ujson.Obj("enabled" -> false, "path" -> "missing.cni")).str("path"), "")
+    assertEquals(staged, Vector("input.cni"))
+  }

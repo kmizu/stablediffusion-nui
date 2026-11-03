@@ -67,6 +67,17 @@ try:
     fastload = response(4)
     assert not fastload.get("isError"), fastload
     assert "linux-probe-model" in json.dumps(fastload), fastload
+    original_cni = encode_fastload(b"", [{"enabled": False, "model": "linux-fixture"}])
+    cni.write_bytes(original_cni)
+    send({"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "txt2img", "arguments": {
+        "prompt": "test", "width": 64, "height": 64, "steps": 1, "seed": 12,
+        "return_images": False, "model_keyword": False, "always_on": {"controlnet_fastload": {
+            "enabled": True, "mode": "load_only", "priority": "loaded_first", "path": str(cni)}}}}})
+    generated = response(5)
+    assert not generated.get("isError"), generated
+    assert len(generated["structuredContent"]["images"]) == 1, generated
+    assert cni.read_bytes() == original_cni
+    assert not list((home / "outputs" / ".tmp").glob("*.cni"))
     (home / "receipt.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     print("LINUX_MCP_SNAPSHOT_OK", home, flush=True)
 finally:

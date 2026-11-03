@@ -306,6 +306,7 @@ final class McpTools(
     case Failed(partial: JobOutput, error: String)
 
   private def runBlocking(job: Job, ctx: ToolContext, temps: Seq[Path]): Outcome =
+    var handedOff = false
     try
       if ctx.isCancelled then Outcome.Cancelled(JobOutput(Nil))
       else
@@ -320,6 +321,8 @@ final class McpTools(
         }
         try
           val f = submitCapped(job)
+          f.onComplete(_ => temps.foreach(Images.deleteQuietly))(scala.concurrent.ExecutionContext.parasitic)
+          handedOff = true
           ctx.onCancel { () =>
             // JobQueue.cancel misses a job between dequeue and start; retry once shortly after
             services.queue.cancelResult(job.id).foreach { outcome =>
@@ -345,7 +348,7 @@ final class McpTools(
               val partial = saved.result
               if partial.all.nonEmpty then Outcome.Failed(partial, error) else throw ToolError(error)
         finally remove()
-    finally temps.foreach(Images.deleteQuietly)
+    finally if !handedOff then temps.foreach(Images.deleteQuietly)
 
   private def imagesJson(out: JobOutput): ujson.Arr =
     ujson.Arr.from(out.grids.map(imageJson(_, grid = true)) ++ out.images.map(imageJson(_, grid = false)))
@@ -564,6 +567,24 @@ final class McpTools(
         ToolResult(Seq(Content.text(text), Content.text(ujson.write(base))), Some(base), isError = aj.status == "failed")
 
   private def pluginInput(addTemp: Path => Unit, activeControlNet: Boolean = false): AlwaysOnInputs =
+    def fastloadFile(spec: String, field: String): String =
+      val path = pathPolicy.resolve(spec, field, outputsDir.toAbsolutePath.normalize())
+      val data = Images.readVerifiedBytes(path, pathPolicy, field)
+      val png = Array[Byte](-119, 80, 78, 71, 13, 10, 26, 10)
+      if data.length >= png.length && java.util.Arrays.equals(data.take(png.length), png) then
+        Images.rejectProtectedPng(data, field)
+      val name = path.getFileName.toString
+      val dot = name.lastIndexOf('.')
+      val suffix = if dot >= 0 && name.substring(dot).matches("\\.[A-Za-z0-9]{1,8}") then name.substring(dot) else ".data"
+      val snapshot = tempFile(suffix)
+      try
+        Files.write(snapshot, data)
+        addTemp(snapshot)
+        snapshot.toString
+      catch
+        case e: Throwable =>
+          Images.deleteQuietly(snapshot)
+          throw e
     def aestheticName(name: String, field: String, hash: Option[String]): String =
       val base = outputsDir.toAbsolutePath.normalize()
       def permitted(path: Path): Boolean =
@@ -584,7 +605,7 @@ final class McpTools(
         pathPolicy.resolveDirectory(spec, field, outputsDir.toAbsolutePath)
       else pathPolicy.resolve(spec, field, outputsDir.toAbsolutePath)).toString,
       Some((spec, field) => pathPolicy.resolveDirectory(spec, field, outputsDir.toAbsolutePath).toString), activeControlNet,
-      Some(aestheticName))
+      Some(aestheticName), Some(fastloadFile))
 
   // ---- scripts ---------------------------------------------------------------------------------------------
 

@@ -29,7 +29,8 @@ Two transports:
   flags used by the helper. Other platforms and unsupported environments reject these local path inputs; use base64 or
   a data URI for generation input. Local image files are limited to 48 MiB. The staging directory must be trusted: a local process
   allowed to alter the server's `.tmp` files can still replace a staged file before a later read. Other file and
-  directory tools and the generation-time Fastload AlwaysOn input have not yet been hardened against path replacement races.
+  directory tools have not yet been hardened against path replacement races. Generation-time Fastload input is
+  also snapshotted when used, with its original bytes and extension; unused input is not read.
 - **HTTP token.** The bearer token is optional. Without one, **any local process or other user on this machine** can
   generate images, switch the model, interrupt or clear the GUI's queue and read images from the allowed folders.
   Browsers are blocked (only absent or `http(s)://localhost|127.0.0.1|[::1]` Origins and loopback Host headers pass),
