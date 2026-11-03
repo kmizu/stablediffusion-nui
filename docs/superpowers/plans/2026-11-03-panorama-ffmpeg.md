@@ -51,3 +51,5 @@ stderr を 8192 bytes まで保持しつつ残りを並行 drain する変更で
 指数表記再現 test は `1.6E-6` と期待する `0.0000016` の差で RED。`BigDecimal.valueOf(seconds).toPlainString` に変更後、decoder suite 8/8 GREEN、playback suite も成功（sbt cache）。実 GUI は再試験待ち。
 
 時刻修正後の実 MainWindow `RealPanoramaVideoCheck` は `REAL_PANORAMA_VIDEO_OK`・exit 0。60 秒赤／青動画で未設定通知・静止画切替・pause・速度・seek・終端と再開を確認し、実 SD1.5／SDXL の生成静止画を反復した 512×256 H.264 動画で両方の投影画素を比較した。`outputs/panorama-video-ui/real-video-0.png` と `real-video-1.png` を目視し窓・室内および本棚の投影を確認。GUI は dry-run worker、生成モデルの再実行ではなく反復静止画動画で、一般動画のコーデック・性能を示さない。終了後 ffmpeg／ffprobe の残存は観測されなかった。全画面動画・保護・不正媒体・設定 chooser・配布版・長時間再生・Infinite Zoom 接続などは未検証または未実装。
+
+main 統合候補 jar SHA-256 `67f74674f9f15e14f761a18306b6b87f2b57f46a48022c7d4fef9eb4ba64cb3e` を固定し、`scripts/package_windows.ps1` で独立検証用 ZIP（SHA-256 `dbf1f3ad230a9aabd2e2ec1a012c5155b54cd53dda0c7e92da43ff97180aa360`）を作成。展開後の jar hash 一致を確認した。展開した `SDNUI.exe` を dry-run で起動し、実ファイル選択ダイアログから ffmpeg を選んで保存、動画選択、再生中の青、pause 後に先頭へ seek した赤、全画面の赤を目視した。全画面を Escape で戻す操作は自動化から対象に届かず未確認で、最後はこの検証用 exe のみ停止。終了後に ffmpeg／ffprobe の残存はなかった。これは公開 ZIP の検証ではなく、再起動後の設定再読込や一般動画の品質は確認していない。
