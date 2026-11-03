@@ -24,6 +24,7 @@ class Img2ImgWorkflowPlugin extends Plugin:
     Text("mask_color", "Custom colour (#RRGGBB)", "#ffffff"),
     IntField("mask_threshold", "Colour threshold (1 = exact)", 1, 256, 1),
     Check("mask_invert", "Invert colour selection"),
+    Check("return_mask", "Return colour mask as image"),
     Section("phase1", "Phase 1", expanded = false),
     IntField("phase1_width", "Width", 64, 4096, 512), IntField("phase1_height", "Height", 64, 4096, 768),
     IntField("phase1_count", "Images", 1, 100, 4), Slider("phase1_denoise", "Denoising", 0, 1, 0.01, 0.5),
@@ -53,7 +54,9 @@ class Img2ImgWorkflowPlugin extends Plugin:
   override def run(p: GenerationParams, v: Values, ctx: PluginContext): JobOutput =
     Support.requireImg2Img(p, name)
     val mode = v.str("quick_mask", "Default")
+    val returnMask = flag(v, "return_mask")
     if mode == "Default" then
+      require(!returnMask, "Workflow: returning an existing mask is not supported; choose a colour mask")
       val next = phaseParams(p, v, ctx, None)
       val invert = flag(v, "mask_invert")
       val withMask = if invert && next.img2img.exists(_.mask.nonEmpty) then
@@ -93,7 +96,15 @@ class Img2ImgWorkflowPlugin extends Plugin:
       val prepared = next.copy(img2img = next.img2img.map(_.copy(initImage = input.toString,
         mask = Some(maskPath.toString), inpaintingMaskInvert = false)),
         extra = next.extra + ("Img2Img Workflow mask" -> settings))
-      JobOutput(ctx.generateWithInputSnapshot(prepared, original))
+      val outputs = ctx.generateWithInputSnapshot(prepared, original)
+      val returned = if returnMask && outputs.nonEmpty && !ctx.isInterrupted then
+        val result = outputs.head
+        val params = result.params.copy(seed = result.seed,
+          img2img = result.params.img2img.map(_.copy(mask = None)),
+          extra = result.params.extra + ("Img2Img Workflow output" -> "mask"))
+        Seq(ctx.saveImage(mask, "img2img", params, Support.infotext(params, result.seed)))
+      else Nil
+      JobOutput(outputs ++ returned)
     finally temps.foreach { path =>
       try Files.deleteIfExists(path)
       catch case scala.util.control.NonFatal(e) => ctx.log(s"Workflow temporary cleanup failed for $path: ${e.getMessage}")

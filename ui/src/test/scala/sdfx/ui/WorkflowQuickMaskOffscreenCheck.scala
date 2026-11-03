@@ -3,7 +3,7 @@ package sdfx.ui
 import javafx.application.Platform
 import javafx.embed.swing.SwingFXUtils
 import javafx.scene.{Node, Parent}
-import javafx.scene.control.{ComboBox, ScrollPane, TitledPane}
+import javafx.scene.control.{CheckBox, ComboBox, ScrollPane, TitledPane}
 import javafx.stage.Stage
 import sdfx.core.config.{AppHome, Settings}
 import sdfx.engine.{AppServices, EngineLaunch, JobEvent}
@@ -60,8 +60,10 @@ object WorkflowQuickMaskOffscreenCheck:
           case c: ComboBox[?] if c.getItems.asScala.map(_.toString).contains("White") => c.asInstanceOf[ComboBox[String]]
         }.get
         mask.setValue("White")
+        val returnedMask = nodes(quick).collectFirst { case c: CheckBox if c.getText == "Return colour mask as image" => c }.get
+        returnedMask.fire()
         val form = window.plugins(Mode.Img2Img).form("img2img_workflow").get
-        require(form.values.str("quick_mask") == "White")
+        require(form.values.str("quick_mask") == "White" && form.values.bool("return_mask"))
         require(!nodes(quick).exists { case c: ComboBox[?] => c.getItems.asScala.map(_.toString).contains("Phase 1"); case _ => false },
           "phase selector must not be nested in Quick Mask")
         window.root.resize(1440, 900); window.root.applyCss(); window.root.layout()
@@ -84,7 +86,8 @@ object WorkflowQuickMaskOffscreenCheck:
       val queued = events.asScala.collectFirst { case e: JobEvent.JobQueued => e.job }.getOrElse(sys.error("job not queued"))
       require(queued.script.exists((plugin, values) => plugin.id == "img2img_workflow" && values.str("quick_mask") == "White"))
       val finished = events.asScala.collectFirst { case e: JobEvent.JobFinished => e.output }.getOrElse(sys.error("generation failed: " + events.asScala.mkString(", ")))
-      require(finished.images.nonEmpty && finished.images.head.params.extra.contains("Img2Img Workflow mask"))
+      require(finished.images.size == 2 && finished.images.head.params.extra.contains("Img2Img Workflow mask"))
+      require(finished.images.last.params.extra.get("Img2Img Workflow output").contains("mask"))
       println("WORKFLOW_QUICKMASK_OFFSCREEN_OK")
     finally
       if window != null then fx { window.dispose(); window.stage.close() }

@@ -39,10 +39,14 @@ async def run(a):
         params = {"init_image": str(src), "prompt": "anime portrait, looking at viewer", "negative_prompt": "lowres, blurry",
                   "width": a.side, "height": a.side, "steps": 12, "cfg_scale": 5, "seed": 2468,
                   "sampler_name": "Euler", "denoising_strength": 0.65, "model_keyword": False}
-        values = {"phase": "None", "quick_mask": "White", "mask_threshold": 1}
+        values = {"phase": "None", "quick_mask": "White", "mask_threshold": 1, "return_mask": True}
         result = await call("run_script", {"script_id": "img2img_workflow", "params": params, "values": values, "return_images": False})
-        assert len(result["images"]) == 1, result
-        for item in result["images"]:
+        assert len(result["images"]) == 2, result
+        mask_result = Image.open(result["images"][1]["path"]).convert("RGB")
+        assert mask_result.getpixel((0, 0)) == (255, 255, 255)
+        assert mask_result.getpixel((a.side // 2, a.side // 2)) == (0, 0, 0)
+        assert "Img2Img Workflow output" in Image.open(result["images"][1]["path"]).info["parameters"]
+        for item in result["images"][:1]:
             with Image.open(item["path"]) as im:
                 assert im.size == (a.side, a.side)
                 metadata = im.info.get("parameters", "")
@@ -58,7 +62,7 @@ async def run(a):
         diff = ImageChops.difference(workflow_image, reference_image)
         assert diff.getbbox() is None, ImageStat.Stat(diff).mean
         assert hashlib.sha256(src.read_bytes()).hexdigest() == original
-        receipt.update(success=True, images=[x["path"] for x in result["images"]], direct_image=direct["images"][0]["path"], source_sha256=original, workflow_direct_rgb_equal=True)
+        receipt.update(success=True, images=[result["images"][0]["path"]], returned_mask=result["images"][1]["path"], direct_image=direct["images"][0]["path"], source_sha256=original, workflow_direct_rgb_equal=True)
     (out / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
     print("WORKFLOW_QUICKMASK_REAL_OK", flush=True)
 

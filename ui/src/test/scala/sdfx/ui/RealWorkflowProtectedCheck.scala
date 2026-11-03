@@ -35,7 +35,7 @@ object RealWorkflowProtectedCheck:
     val input = output.resolve("input-protected.png")
     ScrambledPng.write(img, input, Nil, Some("workflow test secret"))
     val plugin = new Img2ImgWorkflowPlugin
-    val values = Values(Values.defaults(plugin.controls).map ++ Map("quick_mask" -> "White", "mask_threshold" -> "1"))
+    val values = Values(Values.defaults(plugin.controls).map ++ Map("quick_mask" -> "White", "mask_threshold" -> "1", "return_mask" -> "true"))
     try
       services.start()
       services.loadCheckpoint(checkpoint.toString, remember = false)
@@ -44,8 +44,15 @@ object RealWorkflowProtectedCheck:
         img2img = Some(Img2ImgParams(input.toString, denoisingStrength = .65)))
       val job = Job(p).copy(script = Some(plugin -> values), imageSecret = session.snapshot)
       val result = Await.result(services.queue.submit(job), 10.minutes)
-      require(result.images.size == 1)
+      require(result.images.size == 2)
       val saved = result.images.head.path
+      val maskPath = result.images.last.path
+      require(PngMetadata.readTexts(maskPath).contains("Encrypt"))
+      require(PngMetadata.readParameters(maskPath).exists(_.contains("Img2Img Workflow output")))
+      val decodedMask = ScrambledPng.read(maskPath, Some("workflow test secret")).image
+      require((decodedMask.getRGB(0, 0) & 0xffffff) == 0xffffff)
+      require((decodedMask.getRGB(side / 2, side / 2) & 0xffffff) == 0)
+      require(scala.util.Try(ScrambledPng.read(maskPath, None)).isFailure)
       require(PngMetadata.readTexts(saved).contains("Encrypt"))
       val decoded = ScrambledPng.read(saved, Some("workflow test secret")).image
       require(decoded.getWidth == side && decoded.getHeight == side)

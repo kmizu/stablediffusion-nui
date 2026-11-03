@@ -208,3 +208,27 @@ class Img2ImgWorkflowSuite extends munit.FunSuite:
     badCrc(badCrc.length - 1) = (badCrc.last ^ 1).toByte
     intercept[IllegalArgumentException](Img2ImgWorkflowPlugin.requireSafePng(badCrc))
   }
+
+  test("return mask emits a labelled image after the generated image") {
+    val ctx = new FakeContext
+    val source = java.nio.file.Path.of(ctx.initImage(64, 64))
+    val image = ctx.solid(64, 64, 0xffffff)
+    image.setRGB(0, 0, 0x223344)
+    javax.imageio.ImageIO.write(image, "png", source.toFile)
+    val p = GenerationParams(img2img = Some(Img2ImgParams(source.toString)))
+    val result = plugin.run(p, values("quick_mask" -> "White", "return_mask" -> "true"), ctx)
+    assertEquals(result.images.size, 2)
+    assertEquals(ctx.saved.size, 1)
+    assertEquals(ctx.saved.head._2.getRGB(0, 0) & 0xffffff, 0)
+    assertEquals(ctx.saved.head._2.getRGB(1, 0) & 0xffffff, 0xffffff)
+    assertEquals(ctx.saved.head._3.extra.get("Img2Img Workflow output"), Some("mask"))
+    assert(ctx.saved.head._4.contains("Img2Img Workflow output"))
+  }
+
+  test("returning an existing mask is rejected before generation until it is supported") {
+    val ctx = new FakeContext
+    val source = ctx.initImage(64, 64)
+    val p = GenerationParams(img2img = Some(Img2ImgParams(source, mask = Some(source))))
+    intercept[IllegalArgumentException](plugin.run(p, values("quick_mask" -> "Default", "return_mask" -> "true"), ctx))
+    assertEquals(ctx.generated.size, 0)
+  }

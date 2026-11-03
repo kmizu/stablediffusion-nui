@@ -2,7 +2,7 @@
 
 作者の公開ガイドは、入力画像の白・黒・任意色から threshold で選択領域を作り、反転して inpaint に使えると説明している。threshold 1 は完全一致、数値を増やすと近い色も含む。色距離の式は公開説明にないため、独立実装では RGB 各成分の最大差が threshold - 1 以下なら白とし、他は黒とする。これは上流の画素単位の完全一致を保証しない。実行時は透明画素を含む入力を拒否する。
 
-まず生成時のカラー mask と反転を追加する。Default は元の mask と設定を保持し、反転を明示した場合は既存 mask の反転設定を切り替える。None phase でも明示した mask は適用する。元の画像を保護付き access で読み、生成の間だけ temp PNG を保持する。image protection が有効な session では、この派生 mask を保護付き一時画像として書き出し、既存の worker 入力復号を使う。ホストが保護書込みを実装していなければ拒否する。上流の Return mask、FX 限定、FX・overlay は別途未実装として残す。入力と threshold の検証・失敗時の cleanup・以前の既定動作を回帰テストする。MCP、GUI、両モデルと画像を確認するまで統合・完了と扱わない。
+まず生成時のカラー mask と反転を追加する。Default は元の mask と設定を保持し、反転を明示した場合は既存 mask の反転設定を切り替える。None phase でも明示した mask は適用する。元の画像を保護付き access で読み、生成の間だけ temp PNG を保持する。image protection が有効な session では、この派生 mask を保護付き一時画像として書き出し、既存の worker 入力復号を使う。ホストが保護書込みを実装していなければ拒否する。カラー mask を画像として返す部分を追加する。既存 mask の出力、FX 限定、FX・overlay は別途未実装として残す。入力と threshold の検証・失敗時の cleanup・以前の既定動作を回帰テストする。MCP、GUI、両モデルと画像を確認するまで統合・完了と扱わない。
 
 ## 2026-11-03 の部分検証
 
@@ -28,3 +28,7 @@ PNG parser の追補: 重複 IHDR の RED を確認し、chunk CRC、header の�
 更新版を公式 MCP SDK と source-class 保護 session で SD1.5／SDXL の各 12 steps に再試験し、合成 PNG を入力に生成、暗号化結果と一時ファイル削除を確認。MCP で同一手書き mask の標準 img2img、保護 session での復号結果はいずれも同モデル・同 seed で全 RGB 一致。2 モデルの復号画像も目視した。SDXL での人工 fixture の背景は既存 inpaint の対照と同様ほぼ変化しない。記録は `outputs/quickmask62-snapshot-{sd15,sdxl}/receipt.json`、保護画像は `outputs/quickmask62-snapshot-protected-{sd15,sdxl}`。自然画像、上流との mask 画素比較、実際に表示した GUI、配布 EXE は未確認。MCP のユーザー指定元 path は事前 snapshot に変換されるため、その元 path の provenance は本作業で保証していない。
 
 追加で folder 入力の元ファイル 2 件を script がそれぞれ snapshot したとき、出力の params と独立 PNG chunk が各元ファイルを指すことを fake engine の queue テストで確認（1/1）。初回はテスト側の Scala `toRealPath()` 呼び出し漏れで compile failure、修正後 pass。実 GPU の folder 組合せは未確認。
+
+Return colour mask 追補: 選択時は生成後に mask をもう 1 枚返し、PNG parameters の `Img2Img Workflow output: mask` で判別できる。既存 mask を使う Default では明示拒否。キャンセル時は判定直後に保存が競合し得るため、不出力を保証しない。mask PNG の source path は parameters に残る場合があるが独立 chunk は保証しない。plugin 16/16、実 MainWindow の非表示 dry-run で mask 選択・2 枚出力を確認、フォーム snapshot は `outputs/quickmask62-return-offscreen/workflow-quickmask-controls.png`。
+
+JAR SHA-256 `d6b8f1f80c2b700272bfed7aa7e2de78357848535dc44a890e5bbdf3dfee4a6e`、関連 24 class 一致。SD1.5／SDXL の公式 MCP SDK と保護 session で元の生成画像と返された mask を確認。標準 img2img 対照との生成結果・保護／非保護の生成結果は両モデルとも全 RGB 一致、mask の白／黒部分と保護を確認し、4 枚を目視。合成 PNG のみで、自然画像、可視 GUI、配布版、Default mask の画像出力、FX・overlay 等は未確認／未実装。`outputs/quickmask62-return-{sd15,sdxl}/receipt.json` と `outputs/quickmask62-return-protected-{sd15,sdxl}`。
