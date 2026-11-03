@@ -59,7 +59,7 @@ S = {
     137: "todo:core:localization", 138: "todo:core:localization", 139: "todo:core:localization",
     140: "todo:core:localization", 141: "todo:core:localization", 142: "todo:core:localization",
     143: "todo:core:localization", 144: "todo:core:localization", 145: "todo:model_organizer",
-    146: "done:core:model-presets", 147: "done:cn_animation", 148: "todo:model_converter", 149: "done:core:prompt-tools",
+    146: "done:core:model-presets", 147: "done:cn_animation", 148: "todo:model_converter", 149: "todo:core:prompt-tools",
     150: "todo:model_organizer", 151: "todo:adetailer", 152: "todo:weight_gradient", 153: "todo:one_button_prompt",
     154: "todo:model_organizer", 155: "todo:image_editor", 156: "todo:stable_sr", 157: "done:core:job-queue",
     158: "na:server-ops", 159: "na:webui-api", 160: "na:webui-ux", 161: "todo:lua_scripting", 162: "todo:model_downloader",

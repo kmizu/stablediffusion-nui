@@ -897,7 +897,7 @@
 "index": 149,
 "name": "sd-webui-prompt-all-in-one",
 "url": "https://github.com/Physton/sd-webui-prompt-all-in-one",
-"status": "done:core:prompt-tools"
+"status": "todo:core:prompt-tools"
 },
 {
 "index": 150,
