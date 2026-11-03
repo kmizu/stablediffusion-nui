@@ -360,6 +360,52 @@ class McpToolsSuite extends munit.FunSuite:
     assert(rejected("isError").bool)
   }
 
+  test("ControlNet Fastload inspect sends a temporary byte-exact snapshot to the worker") {
+    val path = home.outputs(services.settings).resolve("source-fastload.cni")
+    Files.createDirectories(path.getParent)
+    val source = Array[Byte](17, 0, 42, -1)
+    Files.write(path, source)
+    val result = ok("controlnet_fastload", ujson.Obj("operation" -> "inspect", "path" -> path.toString))("structuredContent")
+    val sent = Paths.get(result("test_input_path").str)
+    assertNotEquals(sent, path)
+    assertEquals(Base64.getDecoder.decode(result("test_input_base64").str).toSeq, source.toSeq)
+    assert(!Files.exists(sent), "worker snapshot must be removed after the worker finishes")
+    assertEquals(Files.readAllBytes(path).toSeq, source.toSeq)
+  }
+
+  test("timed-out Fastload inspection retains its snapshot until the worker finishes") {
+    val input = home.outputs(services.settings).resolve("fastload-timeout-source.cni")
+    Files.createDirectories(input.getParent)
+    Files.write(input, Array[Byte](7, 8, 9))
+    var staged: Option[java.nio.file.Path] = None
+    val tool = new ControlNetFastloadTool(services, tools.pathPolicy, home.outputs(services.settings), _ => (),
+      suffix => { val p = Files.createTempFile(input.getParent, "fastload-timeout-", suffix); staged = Some(p); p },
+      timeout = 100.millis)
+    intercept[java.util.concurrent.TimeoutException] {
+      tool.call(ujson.Obj("operation" -> "inspect", "path" -> input.toString), ToolContext.none)
+    }
+    val path = staged.getOrElse(fail("no staged file"))
+    assert(Files.exists(path), "worker has not finished reading")
+    val deadline = System.nanoTime() + 10.seconds.toNanos
+    while Files.exists(path) && System.nanoTime() < deadline do Thread.sleep(25)
+    assert(!Files.exists(path), "staged file must be removed after worker completion")
+  }
+
+  test("Fastload rejects protected PNG before dispatch and removes its snapshot") {
+    val input = home.outputs(services.settings).resolve("protected-fastload.png")
+    Files.createDirectories(input.getParent)
+    val pixels = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.ScrambledPng.write(pixels, input, Nil, Some("private-test-secret"))
+    var staged: Option[java.nio.file.Path] = None
+    val tool = new ControlNetFastloadTool(services, tools.pathPolicy, home.outputs(services.settings), _ => (),
+      suffix => { val p = Files.createTempFile(input.getParent, "fastload-protected-", suffix); staged = Some(p); p })
+    intercept[ToolError] {
+      tool.call(ujson.Obj("operation" -> "inspect", "path" -> input.toString), ToolContext.none)
+    }
+    assert(staged.isEmpty, "protected bytes must be rejected before staging")
+    assert(Files.exists(input))
+  }
+
   test("CLIP Interrogator is discoverable and rejects bad input, out-of-policy files and protected sessions") {
     val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
     val tool = ts.find(_("name").str == "clip_interrogate").getOrElse(fail("CLIP Interrogator tool missing"))

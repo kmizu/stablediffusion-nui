@@ -23,13 +23,13 @@ Two transports:
   and relative paths resolve against the outputs folder. UNC / network paths (`\\host\share`, `//host`) are always
   refused, so no SMB connection is ever opened. The error is the same for "missing" and "not allowed". Base64 and
   `data:` URIs are always accepted.
-  For `init_image`, `mask`, image controls using `Images.materialize`, and `get_image`, Windows and Linux read a verified file handle.
+  For `init_image`, `mask`, image controls using `Images.materialize`, `get_image`, and `controlnet_fastload` inspection, Windows and Linux read a verified file handle.
   Generation inputs are staged as byte-for-byte snapshots; `get_image` uses the verified bytes directly for image and metadata.
   Linux requires `/usr/bin/python3` and the standard `openat`
   flags used by the helper. Other platforms and unsupported environments reject these local path inputs; use base64 or
   a data URI for generation input. Local image files are limited to 48 MiB. The staging directory must be trusted: a local process
   allowed to alter the server's `.tmp` files can still replace a staged file before a later read. Other file and
-  directory tools have not yet been hardened against path replacement races.
+  directory tools and the generation-time Fastload AlwaysOn input have not yet been hardened against path replacement races.
 - **HTTP token.** The bearer token is optional. Without one, **any local process or other user on this machine** can
   generate images, switch the model, interrupt or clear the GUI's queue and read images from the allowed folders.
   Browsers are blocked (only absent or `http(s)://localhost|127.0.0.1|[::1]` Origins and loopback Host headers pass),

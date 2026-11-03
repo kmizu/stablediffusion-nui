@@ -58,6 +58,15 @@ try:
     assert not returned.get("isError"), returned
     payload = next(x for x in returned["content"] if x["type"] == "image")
     assert base64.b64decode(payload["data"]) == image.read_bytes()
+    sys.path.insert(0, str(source / "python"))
+    from sdfx.controlnet_fastload import encode_fastload
+    cni = allowed / "input.cni"
+    cni.write_bytes(encode_fastload(b"", [{"enabled": False, "model": "linux-probe-model"}]))
+    send({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "controlnet_fastload", "arguments": {
+        "operation": "inspect", "path": str(cni)}}})
+    fastload = response(4)
+    assert not fastload.get("isError"), fastload
+    assert "linux-probe-model" in json.dumps(fastload), fastload
     (home / "receipt.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     print("LINUX_MCP_SNAPSHOT_OK", home, flush=True)
 finally:

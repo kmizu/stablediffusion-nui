@@ -174,6 +174,12 @@ def handle_work(rid, typ, params):
         elif typ == "controlnet_fastload_data":
             if params.get('operation') == 'version':
                 result(rid, {'version': 1, 'upstream_version': 1.1})
+            elif params.get('operation') == 'inspect':
+                if os.path.basename(params['path']).startswith('fastload-timeout-'):
+                    time.sleep(1)
+                with open(params['path'], 'rb') as f:
+                    data = f.read()
+                result(rid, {'test_input_path': params['path'], 'test_input_base64': base64.b64encode(data).decode()})
             else:
                 error(rid, 'unsupported', 'fake Fastload supports version only')
         elif typ == "model_keyword":
