@@ -100,7 +100,9 @@ def test_offline_mode_refuses_openclip_url_downloads():
         ci.check_openclip_offline({"hf_hub": "laion/example/"}, "ViT-SO400M-14-SigLIP", {"text_cfg": {"hf_tokenizer_name": "cached-model"}})
 
 
-def test_hub_routing_never_falls_back_to_unchecked_direct_url():
+def test_hub_routing_never_falls_back_to_unchecked_direct_url(monkeypatch):
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
     cfg = {"url": "https://example.invalid/model.pt", "hf_hub": "test/model/"}
     ci.require_openclip_hub(cfg, True)
     with pytest.raises(EngineError, match="Hugging Face"):
