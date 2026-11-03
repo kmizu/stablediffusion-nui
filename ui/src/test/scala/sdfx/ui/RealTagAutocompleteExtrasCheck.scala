@@ -127,6 +127,7 @@ object RealTagAutocompleteExtrasCheck:
         field("tac-extra").setText(extraCsv.toString); field("tac-chants-file").setText(chantsJson.toString)
         root.lookup("#tac-colormap").asInstanceOf[TextArea].setText("""{"danbooru":{"4":["red","blue"],"1":["gold","purple"]},"extra":{"0":["lime","orange"]}}""")
         root.lookup("#tac-wiki").asInstanceOf[CheckBox].setSelected(true)
+        root.lookup("#tac-live-translation").asInstanceOf[CheckBox].setSelected(true)
         root.lookup("#tac-delay").asInstanceOf[javafx.scene.control.Spinner[Integer]].getEditor.setText("250")
         root.lookup("#tac-wildcard-path-mode").asInstanceOf[javafx.scene.control.ComboBox[String]].getSelectionModel.select(1)
         check("dialog exposes the new options")(Seq("tac-underscores", "tac-escape", "tac-comma", "tac-alias", "tac-wildcards",
@@ -139,6 +140,15 @@ object RealTagAutocompleteExtrasCheck:
       check("dialog Save persisted paths in settings")(services.settings.tagComplete.translationCsv.contains(translationCsv.toString) &&
         services.settings.tagAutocompleteCsv.contains(tagCsv.toString) && services.settings.tagComplete.chantsJson.contains(chantsJson.toString))
       check("wiki link enabled and saved")(services.settings.tagComplete.showWikiLinks)
+      fx {
+        area.setText("blue hair")
+        val preview = window.stage.getScene.lookup("#txt2img-prompt-translation").asInstanceOf[javafx.scene.layout.FlowPane]
+        val translated = preview.getChildren.asScala.collectFirst { case b: Button => b }.get
+        check("live translation appears")(translated.getText.contains("青い髪"))
+        translated.fire()
+        check("live translation selects original prompt")(area.getSelectedText == "blue hair")
+        shot("00-live-translation.png")
+      }
       fx { area.requestFocus() }
       eventually("prompt focus") { fx { area.isFocused } }
       fx {
@@ -277,13 +287,13 @@ object RealTagAutocompleteExtrasCheck:
       }
 
       // 3. Generate the completed prompt through the ordinary Generate path.
-      def generate(prompt: String, label: String): (Path, sdfx.core.infotext.ParsedInfotext) =
+      def generate(prompt: String, label: String, steps: Int = 8): (Path, sdfx.core.infotext.ParsedInfotext) =
         events.clear()
         fx {
           val vm = window.vms(Mode.Txt2Img)
           vm.prompt.set(prompt); vm.negativePrompt.set("blurry")
           val size = if sdxl then (832, 1216) else (512, 512)
-          vm.width.set(size._1); vm.height.set(size._2); vm.steps.set(8); vm.seed.set(4242)
+          vm.width.set(size._1); vm.height.set(size._2); vm.steps.set(steps); vm.seed.set(4242)
           vm.batchSize.set(1); vm.batchCount.set(1); vm.cfgScale.set(6.0); vm.sampler.set("Euler a")
           window.plugins(Mode.Txt2Img).selectedScript.set("dynamic_prompts")
           window.plugins(Mode.Txt2Img).form("dynamic_prompts").get.props("wildcard_dirs").set(wildcardDir.toString)
@@ -300,6 +310,26 @@ object RealTagAutocompleteExtrasCheck:
       Files.copy(pathA, run.resolve("generated-completed.png"), StandardCopyOption.REPLACE_EXISTING)
       check("PNG prompt keeps the completed text (wildcard resolved by Dynamic Prompts)")(
         infoA.prompt.contains("masterpiece, blue hair, (best quality, highres)") && infoA.prompt.contains("a red fox") && !infoA.prompt.contains("__animals__"))
+      if sdxl then
+        def togglePreview(on: Boolean): Unit = fx {
+          val cfg = services.settings.tagComplete.copy(showTranslationPreview = on)
+          require(window.ctx.tagDictionary.apply(services.settings.tagAutocompleteCsv, cfg).isRight)
+        }
+        def samePixels(a: Path, b: Path): Boolean =
+          val x = ImageIO.read(a.toFile); val y = ImageIO.read(b.toFile)
+          x.getWidth == y.getWidth && x.getHeight == y.getHeight &&
+            (0 until x.getHeight).forall(row => (0 until x.getWidth).forall(col => x.getRGB(col, row) == y.getRGB(col, row)))
+        togglePreview(false)
+        val (without8, _) = generate(completed, "preview off 8 steps")
+        Files.copy(without8, run.resolve("preview-off-8.png"), StandardCopyOption.REPLACE_EXISTING)
+        check("preview on/off 8 steps have identical pixels")(samePixels(pathA, without8))
+        togglePreview(true)
+        val (with20, _) = generate(completed, "preview on 20 steps", 20)
+        Files.copy(with20, run.resolve("preview-on-20.png"), StandardCopyOption.REPLACE_EXISTING)
+        togglePreview(false)
+        val (without20, _) = generate(completed, "preview off 20 steps", 20)
+        Files.copy(without20, run.resolve("preview-off-20.png"), StandardCopyOption.REPLACE_EXISTING)
+        check("preview on/off 20 steps have identical pixels")(samePixels(with20, without20))
       loraStem.foreach { stem =>
         // The first version of this check looked for a "Lora hashes" field; this app's infotext does not write one
         // (the tag itself is kept in the prompt), so the assertion was changed to the tag and the trigger words.

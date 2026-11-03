@@ -27,6 +27,10 @@ final class TagDictionary(ctx: UiContext):
   private var colors: TagCategoryColors.Palette = Map.empty
   private final case class Key(tags: Option[String], translation: Option[String], legacy: Boolean, extra: Option[String], chants: Option[String])
 
+  private var changeListeners = Vector.empty[() => Unit]
+  def onChange(f: () => Unit): Unit = changeListeners :+= f
+  private def changed(): Unit = changeListeners.foreach(_())
+  def translations: Map[String, String] = loaded.translations
   def tags: Vector[CompletionTag] = loaded.tags
   def config: TagCompleteSettings = ctx.services.settings.tagComplete
   def wikiUri(item: Suggestion): Option[java.net.URI] =
@@ -111,6 +115,7 @@ final class TagDictionary(ctx: UiContext):
       version += 1
       val ticket = version
       loaded = CompletionData()
+      changed()
       sdfx.ui.Fx.async {
         def part[A](path: Option[String], what: String)(read: Path => A): Option[A] =
           path.map(p => try read(Paths.get(p)) catch case e: Exception => throw new IllegalArgumentException(s"$what: ${e.getMessage}", e))
@@ -119,7 +124,7 @@ final class TagDictionary(ctx: UiContext):
           extra = part(wanted.extra, "Extra tag CSV")(CompletionEngine.loadExtra).getOrElse(Vector.empty),
           translations = part(wanted.translation, "Translation CSV")(CompletionEngine.loadTranslations(_, wanted.legacy)).getOrElse(Map.empty),
           chants = part(wanted.chants, "Chants file")(CompletionEngine.loadChants).getOrElse(Vector.empty))
-      }(result => if ticket == version then loaded = result)(
+      }(result => if ticket == version then { loaded = result; changed() })(
         e => if ticket == version then ctx.error(s"Cannot load tag completion data: ${e.getMessage}"))
     scanFailure.foreach(throw _)
 
@@ -176,6 +181,7 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
   private val chantsField = pathField("tac-chants-file", cfg.chantsJson)
   private def box(id: String, label: String, on: Boolean): CheckBox =
     val c = new CheckBox(label); c.setId(id); c.setSelected(on); c.setMnemonicParsing(false); c
+  private val liveTranslation = box("tac-live-translation", "Show tag translations below prompts", cfg.showTranslationPreview)
   private val legacy = box("tac-legacy", "Translation file uses the old 3-column format", cfg.translationLegacy)
   private val extraAfter = box("tac-extra-after", "Show extra file tags after the normal tags", cfg.extraAfter)
   private val underscores = box("tac-underscores", "Replace _ with space on insertion", cfg.replaceUnderscores)
@@ -222,7 +228,7 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
     val csv = new FileChooser.ExtensionFilter("CSV", "*.csv")
     val options = new GridPane()
     options.setHgap(16); options.setVgap(4)
-    Seq(underscores, escape, comma, alias, onlyAlias, wildcards, networks, chantsBox, trigger, preview, legacy, extraAfter, wiki)
+    Seq(underscores, escape, comma, alias, onlyAlias, wildcards, networks, chantsBox, trigger, preview, legacy, extraAfter, wiki, liveTranslation)
       .zipWithIndex.foreach((c, i) => options.add(c, i % 2, i / 2))
     val maxRow = new HBox(6, new Label("Maximum results"), max)
     val help = new Label("Up/Down: select · Enter/Tab: insert · Escape: close · __ wildcards · < extra networks")
@@ -249,7 +255,7 @@ final class TagSettingsPane(tagCsv: Option[String], cfg: TagCompleteSettings, ow
       wildcards = wildcards.isSelected, extraNetworks = networks.isSelected, chants = chantsBox.isSelected,
       loraTriggerWords = trigger.isSelected, extraNetworkPreview = preview.isSelected, categoryColorMap = colors.getText,
       wildcardPathMode = pathModes.lift(pathMode.getSelectionModel.getSelectedIndex).getOrElse(cfg.wildcardPathMode), completionDelayMs = ms,
-      showWikiLinks = wiki.isSelected))
+      showWikiLinks = wiki.isSelected, showTranslationPreview = liveTranslation.isSelected))
 
 /** What the popup needs from its owner. */
 trait CompletionSource:

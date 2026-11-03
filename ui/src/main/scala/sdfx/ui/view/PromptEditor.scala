@@ -5,7 +5,7 @@ import javafx.collections.{FXCollections, ObservableList, ListChangeListener}
 import javafx.geometry.Pos
 import javafx.scene.control.*
 import javafx.scene.input.{KeyCode, KeyEvent}
-import javafx.scene.layout.{StackPane, VBox}
+import javafx.scene.layout.{FlowPane, StackPane, VBox}
 import sdfx.core.model.{LoraSyntax, LoraRef, PromptStyle}
 import sdfx.engine.CatalogSnapshot
 import sdfx.ui.vm.{NegativeSuggestions, PromptEdit, PromptInsertionTarget}
@@ -189,6 +189,28 @@ final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: Strin
   }
   negativeSuggestions.setId(s"$modeKey-negative-suggestions")
 
+  private def translated(area: TextArea, id: String): FlowPane =
+    val pane = new FlowPane(5, 3)
+    pane.setId(id)
+    def refresh(): Unit =
+      val enabled = ctx.tagDictionary.config.showTranslationPreview && ctx.tagDictionary.config.translationCsv.nonEmpty
+      pane.setVisible(enabled); pane.setManaged(enabled)
+      pane.getChildren.clear()
+      if enabled then
+        val captured = area.getText
+        val hits = sdfx.ui.vm.TagTranslationPreview.find(captured, ctx.tagDictionary.translations)
+        hits.foreach { hit =>
+          val tag = captured.substring(hit.start, hit.end)
+          val button = new Button(s"${sdfx.ui.vm.TagTranslationPreview.display(hit.translation)} (${sdfx.ui.vm.TagTranslationPreview.display(tag)})")
+          button.setOnAction(_ => if area.getText == captured then { area.requestFocus(); area.selectRange(hit.start, hit.end) })
+          pane.getChildren.add(button)
+        }
+    area.textProperty.addListener((_, _, _) => refresh())
+    ctx.tagDictionary.onChange(() => refresh())
+    if ctx.tagDictionary.config.showTranslationPreview && ctx.tagDictionary.config.translationCsv.nonEmpty then ctx.tagDictionary.ensureLoaded()
+    refresh()
+    pane
+
   val view: VBox =
     val names = W.label("", "hint")
     names.setId(s"$modeKey-prompt-style-order")
@@ -219,7 +241,7 @@ final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: Strin
       manual.setManaged(!manualLoras.isEmpty)
     manualLoras.addListener((_: ListChangeListener.Change[? <: LoraRef]) => updateManual())
     updateManual()
-    val v = new VBox(6, withCounter(promptArea), withCounter(negativeArea), negativeSuggestions, toolbar, selected, manual)
+    val v = new VBox(6, withCounter(promptArea), translated(promptArea, s"$modeKey-prompt-translation"), withCounter(negativeArea), translated(negativeArea, s"$modeKey-negative-translation"), negativeSuggestions, toolbar, selected, manual)
     v.getStyleClass.add("prompt-editor")
     W.tip(promptArea, "Ctrl+Up / Ctrl+Down change the attention weight of the selection or the word under the caret")
     v
