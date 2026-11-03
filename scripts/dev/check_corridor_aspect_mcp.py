@@ -21,8 +21,14 @@ async def run(args):
                 "model_dirs": {"checkpoints": [args.models]}, "last_model": args.checkpoint,
                 "vram_mode": "sequential_offload" if args.sdxl else "model_offload", "dtype": "fp16"}
     (home / "config" / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
-    command = [args.java, "-cp", args.jar, "sdfx.mcp.McpMain", "--home", str(home)]
+    if args.launcher:
+        packaged = Path(args.launcher).resolve().parent / "app" / "stablediffusion-nui.jar"
+        assert hashlib.sha256(packaged.read_bytes()).digest() == hashlib.sha256(Path(args.jar).read_bytes()).digest()
+        command = [str(Path(args.launcher).resolve()), "--mcp", "--home", str(home)]
+    else:
+        command = [args.java, "-cp", args.jar, "sdfx.mcp.McpMain", "--home", str(home)]
     env = dict(os.environ, PYTHONPATH=str(Path(args.source).resolve() / "python"))
+    env.pop("SDFX_HOME", None)
     receipt = {"checkpoint": args.checkpoint, "jar_sha256": hashlib.sha256(Path(args.jar).read_bytes()).hexdigest(),
                "transport": "stdio", "calls": []}
     async with Client(StdioServerParameters(command=command[0], args=command[1:], env=env), read_timeout_seconds=900) as client:
@@ -76,5 +82,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     for name in ("java", "jar", "source", "python", "models", "checkpoint", "output"):
         parser.add_argument("--" + name, required=True)
+    parser.add_argument("--launcher")
     parser.add_argument("--sdxl", action="store_true")
     asyncio.run(run(parser.parse_args()))
