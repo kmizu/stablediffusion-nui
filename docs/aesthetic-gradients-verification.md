@@ -19,6 +19,10 @@
 
 研究リポジトリの [LICENSE](https://github.com/vicgalle/stable-diffusion-aesthetic-gradients/blob/30ca347d39eb7c92dd651a513cf4f795ed995708/LICENSE) は CreativeML Open RAIL-M だが、個々の embedding と生成元データの権利条件を今回確認できていない。ファイルは調査用であり Git や配布物に含めない。対象拡張の生成 PNG／embedding 自体の互換、研究側 embedding を使う生成と元拡張の結果比較は引き続き未確認。#2 は open のまま。
 
+### 原拡張の実物候補（追加調査）
+
+[上流 issue #18](https://github.com/AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients/issues/18) の報告者は SD1.5 の動作例として画像を掲示している。添付 `207487537-8de045dc-70e3-4c96-8576-b26b04927854.png` を一時取得したところ、SHA-256 は `73a46f46b65e45d4e933a85fb03913815f4171dbb7c746e56a09e5b7e7cbad87`、3072×2304、PNG 情報に `parameters` はなかった。表示例としては参考になるが、元拡張の生成パラメータ互換を検査できる fixture ではない。もう一つの `207481485-3b6065f7-6157-40dd-b76f-1c3f4a6e3f94.png` は取得が応答せず、この時点では未確認。添付画像は個別の許諾条件が確認できないため Git や配布物に含めない。
+
 ### 研究 embedding の実生成（2026-11-03）
 
 `aivazovsky.pt` を実行ごとの許可済み出力フォルダに複製し SHA-256 一致を確認して、公式 MCP SDK の stdio から実 SD1.5 `animekawa_v10` と SDXL `waiIllustriousSDXL_v170` をそれぞれ実行した。512×512、seed 173、Euler 12 steps、weight 0.3・aesthetic steps 5。両方で基準画像と適用画像が異なり、PNG の embedding hash が原本と一致し、その設定からの再生成は RGB 一致した。元と適用後の両画像を目視し、SD1.5・SDXL とも青いティーポットと背景の違いを確認した。結果は `outputs/aesthetic2-real-{sd15,sdxl}/receipt.json`、実行用スクリプトは `scripts/dev/check_aesthetic_external_fixture.py`。fixture は取得元と同一の hash で利用し、配布しない。
