@@ -44,6 +44,18 @@ private[mcp] object HistoryGenerationDraft:
     integer("generation.batchSize", "batch_size", 1, 16)
     integer("generation.batchCount", "n_iter", 1, 16)
     decimal("generation.cfgScale", "cfg_scale", 0, 30)
+    // The GUI preserves disabled variation values but sends strength 0 when its gate is off.
+    record.fields.get(field("generation.variationEnabled")) match
+      case Some(PresetAtom.Flag(enabled)) =>
+        handled += field("generation.variationEnabled")
+        if enabled then
+          integer("generation.subseed", "subseed", -1, 4294967295L)
+          decimal("generation.subseedStrength", "subseed_strength", 0, 1)
+        else params("subseed_strength") = ujson.Num(0)
+      case Some(_) =>
+        handled += field("generation.variationEnabled")
+        invalid += "generation.variationEnabled"
+      case None => ()
     if mode != "txt2img" then decimal("generation.denoisingStrength", "denoising_strength", 0, 1)
     if params.value.get("batch_size").map(_.num.toInt).getOrElse(1) * params.value.get("n_iter").map(_.num.toInt).getOrElse(1) > 16 then
       params.value.remove("batch_size"); params.value.remove("n_iter")

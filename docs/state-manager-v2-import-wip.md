@@ -10,6 +10,16 @@ History / Favourites の複数選択から、取り込み済み State Manager V2
 
 source-class 実 MainWindow で合成上流 entry を import し、原本 gzip を export して未知項目を再読込み、設定を復元して画像生成した。SD1.5 512×512 と SDXL 832×832、各8 steps とも `HISTORY_REAL_OK`（`outputs/state-original-export-sd15/history-real-9213264370341606357`、`outputs/state-original-export-sdxl/history-real-602944522953993998`）。生成した `00007-7109.png` は両方とも桜と赤い着物の人物と目視し、SHA-256 は順に `214aeb334ff1a06e3dd3fb85488eb666c0d0063455c1825b7cfa0d1d5f7f42cd` と `ea98780bea283320740110a305c1ca98378347ec95d4ea0fb56481cdb01a6e47`。合成 entry と source-class GUI の検証で、実 A1111 や配布版での export ではない。
 
+## MCP variation 候補（2026-11-03）
+
+履歴に variation の有効・無効が明示されている場合、`prepare` は有効時に seed と strength を範囲確認して変換し、無効時は送信 strength を 0 にする。無効時の保存値は未変換項目に残す。有効状態が不明・不正なら推測せず、値を未変換として示す。既存の draft と同様に生成や再現は保証しない。
+
+focused RED 4件は既存実装で失敗し、修正後は focused 4件・MCP 46件と `ui/assembly` が成功。JAR SHA-256 は `97340b1cb8f9470ab8bff32187e396801c1a2fe7a1785247b7e1c83fe82c57f0`。公式 SDK の stdio と HTTP で有効・無効の候補と未変換項目を確認（`outputs/history-variation-stdio/receipt.json`、`outputs/history-variation-http/receipt.json`）。初回は試験用 JSON の flag 値を真偽値にしてしまい読み取りで拒否され、文字列に修正して再試験した。
+
+main では MCP 46件と variation 4件が成功。最初の `ui/assembly` は古い JAR を up-to-date と誤判定し、JAR の `HistoryGenerationDraft` とコンパイル済み class の SHA-256 が不一致だった。古い JAR を `outputs/variation-stale-assembly.jar` に退避し出力 JAR を削除して再 assembly したところ class の SHA-256 が一致し、JAR 全体も上記 `97340b...` と一致した。今後の配布前もクラスと JAR の一致を確認する。
+
+公式 SDK stdio で variation seed 42、strength 0.75 の候補を明示的に txt2img へ渡し、SD1.5 `animekawa_v10` と SDXL `waiIllustriousSDXL_v170` で生成。両画像を目視し、PNG metadata に両値が記録されたことを確認した。画像 SHA-256 は順に `5f78fc2f21b5f6c26fdf94d67274bc6b02e344dcfbcbf0246a0235894e5b5887`、`5e1cdb2d467b1edb0930dec780bf9fc798fbb3ae16cad32c6fd544c694f832c1`。実験は fixture の分離コピーと source-built JAR を使用し、無効時の実生成、元画像との一致、配布版は未検証。
+
 ## MCP の生成引数候補（2026-11-03）
 
 `generation_history` の `prepare` は指定履歴から対応する基本項目だけを生成ツールの引数候補に変換し、生成は開始しない。不正な値、未変換項目、不足する prompt・入力画像・マスクを明示する。State Manager V2 原本にはさらに未対応設定があり得る。候補の生成時には model catalog や画像の総量を検証せず、生成ツールでの検証が必要。既定値・拡張・元画像を含む差異により元画像の再現は保証しない。

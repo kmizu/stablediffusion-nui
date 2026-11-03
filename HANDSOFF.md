@@ -33,6 +33,7 @@
 - #23 Clear history は明示名付き項目と favourites を保護するよう main で修正。旧版で改名済みの項目は記録がないため再度 Rename が必要。分離 worktree の SD1.5/SDXL 実 GUI と main の履歴20件・実 GUI・assembly を確認。詳細は同文書。#23 は open。
 - 継続中の未統合 worktree: #21 panorama video は `C:/Users/Mizushima/.codex/worktrees/panorama21-completion/stablediffusion-nui` の `676440e` 以降を確認。実験 GUI と動画 decoder は未受入、過去に timeout・decoder error があり、media 同梱ライセンスも未確認。#6 顔 pass 専用 checkpoint も別 worktree で設計中。いずれも未 commit 差分・稼働中プロセスを確認し、無断破棄しない。
 - 共有 GPU は `outputs/.gpu.lock` を原子的に取得して使い、自分が取得したロックだけを解放する。外部プロセスには触れない。sbt も同時実行を避ける。
+- sbt 2 の `ui/assembly` がコード変更後にも古い JAR を up-to-date と誤判定した事例あり。variation の main 統合では JAR 内 class と compiled class の SHA-256 不一致を確認し、古い JAR を `outputs/variation-stale-assembly.jar` に退避して出力を削除、再 assembly で一致を確認。リリース前は JAR に最新の全対象 class が入っているか検証する。
 - 後続作業は新しいコミット・worktree・GPU 状態を `git status`、`git log` と検証結果で確認してから再開する。上記は記録時点のスナップショット。
 
 # Stable Diffusion NUI 引継ぎ — 2026-10-31（2026-11-01 Claude追記）
