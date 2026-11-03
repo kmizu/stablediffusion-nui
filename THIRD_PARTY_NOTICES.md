@@ -16,6 +16,7 @@ description of their behaviour only.
 
 | Project | Use | License | What |
 |---|---|---|---|
+| [Inzaniak/sd-webui-workflow](https://github.com/Inzaniak/sd-webui-workflow) | reimplemented | no license file published at pinned source | Unlicensed behavior reference cb68fa94ee232bb33cee7dfcfd586e4c57d77c3b; phase settings independently reimplemented from README and the author's public workflow guide only; no upstream code copied. Mask, overlay and effects are not yet implemented. |
 | [mlfoundations/open_clip](https://github.com/mlfoundations/open_clip) | optional dependency and adapted loader | MIT ([text](licenses/mlfoundations__open_clip.txt)) | OpenCLIP 2.32.0 for CLIP Interrogator; state-dict normalization adapted from factory.py at bf5d49c with unsafe torch.load retry removed. Optional user-installed dependency; model weights are downloaded separately, not bundled. Model licences vary by pretrained weight. |
 | [huggingface/pytorch-image-models](https://github.com/huggingface/pytorch-image-models) | optional dependency | Apache-2.0 ([text](licenses/huggingface__pytorch-image-models.txt)) | timm 1.0.15, used by optional OpenCLIP ConvNeXt and other image encoders; user installed, not bundled |
 | [rspeer/python-ftfy](https://github.com/rspeer/python-ftfy) | optional dependency | Apache-2.0 ([text](licenses/rspeer__python-ftfy.txt)) | ftfy 6.3.1, optional OpenCLIP text preprocessing; user installed, not bundled |

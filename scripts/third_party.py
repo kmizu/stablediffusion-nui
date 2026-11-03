@@ -21,6 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # (repo, how it is used, what)
 BASE = [
+    ("Inzaniak/sd-webui-workflow", "reimplemented", "Unlicensed behavior reference cb68fa94ee232bb33cee7dfcfd586e4c57d77c3b; phase settings independently reimplemented from README and the author's public workflow guide only; no upstream code copied. Mask, overlay and effects are not yet implemented."),
     ("mlfoundations/open_clip", "optional dependency and adapted loader", "OpenCLIP 2.32.0 for CLIP Interrogator; state-dict normalization adapted from factory.py at bf5d49c with unsafe torch.load retry removed. Optional user-installed dependency; model weights are downloaded separately, not bundled. Model licences vary by pretrained weight."),
     ("huggingface/pytorch-image-models", "optional dependency", "timm 1.0.15, used by optional OpenCLIP ConvNeXt and other image encoders; user installed, not bundled"),
     ("rspeer/python-ftfy", "optional dependency", "ftfy 6.3.1, optional OpenCLIP text preprocessing; user installed, not bundled"),
@@ -353,6 +354,8 @@ PINNED_LICENSES = {
 # Audited source has no license file. Do not fetch another branch or invent a license text.
 # (commit, notice label)
 PINNED_UNLICENSED = {
+    "Inzaniak/sd-webui-workflow": (
+        "cb68fa94ee232bb33cee7dfcfd586e4c57d77c3b", "no license file published at pinned source"),
     "light-and-ray/sd-webui-cn-in-extras-tab": (
         "857262300ae8b849cfa0ed2c2802e93bf160ebd0", "no license file published at pinned source"),
     "Malisius/booru2prompt": (

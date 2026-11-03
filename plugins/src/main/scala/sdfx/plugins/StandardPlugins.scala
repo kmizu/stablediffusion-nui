@@ -51,6 +51,7 @@ object StandardPlugins:
     new OutpaintPlugin,
     new OutpaintMk2Plugin,
     new Img2ImgAltPlugin,
+    new Img2ImgWorkflowPlugin,
     new LatentUpscalePlugin,
     new SvdPlugin,
     new Zero123Plugin,
