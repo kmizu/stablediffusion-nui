@@ -1,12 +1,12 @@
 # Handoff: bundling the A1111 extension index into stablediffusion-nui
 
-Latest checkpoint (2026-10-31, after #45 acceptance): start with [HANDSOFF.md](../HANDSOFF.md). It records the 9/10 count, #17 implementation, MCP external SDK acceptance work, and the remaining release gate.
+Current checkpoint (2026-11-03): start with [HANDSOFF.md](../HANDSOFF.md). The previous v0.1 release is published; the next batch has 1/10 accepted issues (#26). Stop work after the next release is published and its downloaded artifact is verified. The older counts and checkpoints below are historical.
 
-## Active goal: practical MCP workflows and releases every ten issues
+## Historical MCP goal recorded on 2026-10-31
 
 On 2026-10-31 the user made AI-agent MCP use an explicit goal: discover models/capabilities, select models, generate/edit, inspect progress/results, cancel, and operate supported extensions. Verify actual external MCP clients over both stdio and Streamable HTTP with SD1.5 and SDXL; direct AppServices calls do not establish transport evidence. Preserve the issue-resolution work and release every ten resolved issues. Root MCP worktree is `C:/Users/Mizushima/.codex/worktrees/affc/stablediffusion-nui`. The first gap is AlwaysOn discovery/per-job configuration; also audit complete generation fields and PNG replay. Connection examples still contain historical paths and need refresh.
 
-## Ten-issue batch history
+## Historical ten-issue batch before v0.1
 
 On 2026-10-30 the user cleared the previous 20-issue goal and set a new goal to resolve ten issues and release. Treat the new goal as ten further issue resolutions from this reset; #48, #61, #82, #46, #47, #16, #87, #85 and #45 are accepted, making the count 9/10. The earlier ten resolved waves remain project history, not automatic completion of the new objective. Preserve all original scope, real-model and package checks, push and verify before counting, then publish and download/hash-verify the release.
 
@@ -14,7 +14,7 @@ On 2026-10-30 the user cleared the previous 20-issue goal and set a new goal to 
 
 On 2026-10-31 the user raised multilingual support as a future goal to make the app accessible to more people. Consider localization of settings, errors, and model guidance after the current ten-issue release goal; languages and implementation scope have not yet been specified.
 
-## Current progress: 9/10 accepted
+## Historical progress before v0.1: 9/10 accepted
 
 #45 Embedding Editor was pushed as `440a119c1a7126c59d23405c34f161450e9a86f7`, verified local/remote matching with a clean product tree, and closed 2026-10-31T03:35:25Z. Full Torch CPU pytest exited 0; Scala passed 1,493 tests with one skip; focused ledger tests passed 25. Fresh extracted-package SD1.5 model-offload and SDXL sequential-offload passed preview, inversion, exact recovery and collision-safe save/backup/reload with image inspection. Independent review found no remaining Critical or Important issues. See `embedding-editor-verification.md` for evidence and limits. #17 remains underway; the next release is due after one further resolution.
 
