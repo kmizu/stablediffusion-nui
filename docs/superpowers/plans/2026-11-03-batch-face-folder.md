@@ -2,6 +2,8 @@
 
 main に部分統合時、`VerifiedFolderInputSuite`、`Img2ImgFolderManifestSuite`、`Img2ImgFolderRunnerSuite`、`JobQueueSuite` 計44件、`McpToolsSuite` 43件、`ui/assembly` が exit 0。JAR SHA-256 は `c2ffb54da092c4930dadaab039da41c872e292d6ce710d786ecfd4afacede70f`。下記の実モデル試験は分離 worktree の JAR と source によるもので、main JAR と配布版の実測ではない。#6 は別 checkpoint などが残り open。
 
+Windows helper の非表示指定を追加後、分離 worktree で SD1.5/SDXL の公式 MCP・2入力・顔処理・grid と元パスを再確認。main では handle／runner 14件と assembly が exit 0、JAR SHA-256 `e5e516124ca75f812d7be7520dc943e02c50e4df000caf1d6a8e1dc5b667529c`。main JAR 自体の実モデル検証ではない。
+
 上流の README は img2img で単一画像か画像フォルダを選び、各画像に Batch Face Swap を適用することを説明する。元コードは無許諾なので読まず、既存 Img2Img と AlwaysOn を使う独立実装とする。顔だけ別チェックポイントは別の未完了要件。
 
 1. バッチの入力列挙・検証は専用コンポーネントで実装し、順序、対応拡張子、上限、非通常ファイル、変更と中断を検証する。入力の内容は job ごとに確定させ、元ファイルを変更しない。

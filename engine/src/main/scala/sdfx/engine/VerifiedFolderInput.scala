@@ -97,7 +97,7 @@ private[engine] object VerifiedFolderInput:
     val systemRoot = Option(System.getenv("SystemRoot")).getOrElse(throw new IllegalStateException("Windows system root unavailable"))
     val exe = Path.of(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe").toString
     val encoded = Base64.getEncoder.encodeToString(script.getBytes(UTF_16LE))
-    val process = new ProcessBuilder(exe, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded)
+    val process = new ProcessBuilder(exe, "-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encoded)
       .redirectError(ProcessBuilder.Redirect.DISCARD).start()
     val outputGate = new Object
     var outputOpen = true
