@@ -10,6 +10,16 @@ History / Favourites の複数選択から、取り込み済み State Manager V2
 
 source-class 実 MainWindow で合成上流 entry を import し、原本 gzip を export して未知項目を再読込み、設定を復元して画像生成した。SD1.5 512×512 と SDXL 832×832、各8 steps とも `HISTORY_REAL_OK`（`outputs/state-original-export-sd15/history-real-9213264370341606357`、`outputs/state-original-export-sdxl/history-real-602944522953993998`）。生成した `00007-7109.png` は両方とも桜と赤い着物の人物と目視し、SHA-256 は順に `214aeb334ff1a06e3dd3fb85488eb666c0d0063455c1825b7cfa0d1d5f7f42cd` と `ea98780bea283320740110a305c1ca98378347ec95d4ea0fb56481cdb01a6e47`。合成 entry と source-class GUI の検証で、実 A1111 や配布版での export ではない。
 
+## MCP の生成引数候補（2026-11-03）
+
+`generation_history` の `prepare` は指定履歴から対応する基本項目だけを生成ツールの引数候補に変換し、生成は開始しない。不正な値、未変換項目、不足する prompt・入力画像・マスクを明示する。State Manager V2 原本にはさらに未対応設定があり得る。候補の生成時には model catalog や画像の総量を検証せず、生成ツールでの検証が必要。既定値・拡張・元画像を含む差異により元画像の再現は保証しない。
+
+`McpToolsSuite` 46/46 と `ui/assembly` は成功。source-built JAR SHA-256 は `4ddf6ebf8a7e37b7ead9c726ece2df62751b5490001196c60d490a309c9ce726`。公式 MCP SDK の stdio / HTTP では GUI 経由で取り込んだ上流 JS 生成 fixture の分離コピーを使い、範囲外 seed と幅が候補に含まれず、未対応項目と inpaint の不足画像・マスクが表示され、キューと履歴ファイルが変わらないことを確認した（`outputs/history-draft-stdio/receipt.json`、`outputs/history-draft-http/receipt.json`）。stdio では読み取り後の終了が非同期 engine 起動を中断しており、この試験は実モデル生成や配布版の検証ではない。実 A1111 で保存した原本も未検証。
+
+main 統合時も `McpToolsSuite` 46件と `ui/assembly` は exit 0。JAR の SHA-256 は上記 source-built JAR と一致する。
+
+追加の実モデル試験では、取り込み fixture の分離コピーにテスト用の prompt・seed・寸法を設定し、公式 MCP SDK の stdio で `prepare` を呼び、その返り値を明示的な `txt2img` に渡した。モデル選択は別途 `set_model` で行った。SD1.5 `animekawa_v10`（512 px）と SDXL `waiIllustriousSDXL_v170`（832 px）が成功し、青いティーポットの画像を両方目視した。画像 SHA-256 はそれぞれ `f2a3fac3c5b70eebdf499ed393092142f172f6e1ede6e229bc6bedf5fda1e954`、`6222abb5badd34403943fce2a289d4fcab97f5e754343bf763109f0f7d7c4d6b`。詳細は `outputs/history-draft-real-sd15/receipt.json` と `outputs/history-draft-real-sdxl/receipt.json`。元画像の再現、img2img/inpaint の実生成、配布版ではなく source-built JAR を使用した試験である。
+
 ## MCP 履歴検索（2026-11-03）
 
 main 統合時も MCP 44件・履歴20件・`ui/assembly` が exit 0。生成 JAR の SHA-256 は `23b28fc8bb8d8414321f056632b9f5fe1ea19bdb91e2a96a995f47f9c0eb1102` で、下記 SDK transport 試験に使用した JAR と一致した。

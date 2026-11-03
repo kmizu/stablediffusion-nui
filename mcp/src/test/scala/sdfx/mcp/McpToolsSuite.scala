@@ -105,6 +105,49 @@ class McpToolsSuite extends munit.FunSuite:
     assertEquals(store.load().toOption.get.library, library)
   }
 
+  test("generation history prepares a partial generation draft and reports omitted or invalid values") {
+    import sdfx.core.presets.*
+    def key(a: String, b: String) = FieldKey(Vector(a, b))
+    val fields = Map(key("generation", "prompt") -> PresetAtom.Text("a blue fox"),
+      key("generation", "negativePrompt") -> PresetAtom.Text("blur"),
+      key("generation", "steps") -> PresetAtom.Integer(8),
+      key("generation", "width") -> PresetAtom.Integer(512),
+      key("generation", "height") -> PresetAtom.Integer(512),
+      key("generation", "seed") -> PresetAtom.Integer(9007199254740993L),
+      key("plugin", "untranslated") -> PresetAtom.Text("preserve"))
+    val record = PresetRecord(java.util.UUID.randomUUID(), "draft", fields, None, Set.empty, Vector.empty, Vector.empty)
+    val library = PresetLibrary(1, Vector(PresetCollection("history-txt2img", fields.keySet, Vector.empty, Vector(record), Vector.empty)), Vector.empty)
+    val store = new PresetStore(home.configDir.resolve("generation-history"), PresetLimits(maxCollections = 6))
+    assert(store.save(store.load().toOption.get.revision, library).isRight)
+    val draft = ok("generation_history", ujson.Obj("action" -> "prepare", "mode" -> "txt2img", "id" -> record.id.toString))("structuredContent")
+    assertEquals(draft("tool").str, "txt2img")
+    assertEquals(draft("params")("prompt").str, "a blue fox")
+    assertEquals(draft("params")("negative_prompt").str, "blur")
+    assertEquals(draft("params")("steps").num.toInt, 8)
+    assert(!draft("params").obj.contains("seed"))
+    assert(draft("invalid_fields").arr.exists(_.str == "generation.seed"))
+    assert(draft("omitted_fields").arr.exists(_.str == "plugin.untranslated"))
+    assert(!draft("replay_guaranteed").bool)
+    assertEquals(store.load().toOption.get.library, library)
+    val generated = ok("txt2img", draft("params"))
+    assert(generated("structuredContent").obj.contains("images"))
+  }
+
+  test("history draft identifies required images and rejects invalid dimensions and combined batch") {
+    import sdfx.core.presets.*
+    def key(s: String) = FieldKey(Vector("generation", s))
+    val fields = Map(key("width") -> PresetAtom.Integer(513), key("batchSize") -> PresetAtom.Integer(8),
+      key("batchCount") -> PresetAtom.Integer(4), key("subseed") -> PresetAtom.Integer(123))
+    val r = PresetRecord(java.util.UUID.randomUUID(), "inpaint", fields, None, Set.empty, Vector.empty, Vector.empty)
+    val result = HistoryGenerationDraft.build(r, "inpaint")
+    assertEquals(result("tool").str, "img2img")
+    assertEquals(result("required_inputs").arr.map(_.str).toSeq, Seq("init_image", "mask"))
+    assertEquals(result("missing_fields").arr.map(_.str).toSeq, Seq("prompt", "init_image", "mask"))
+    assertEquals(result("invalid_fields").arr.map(_.str).toSet, Set("generation.width", "generation.batchSize", "generation.batchCount"))
+    assert(result("omitted_fields").arr.exists(_.str == "generation.subseed"))
+    assert(!result("params").obj.contains("batch_size") && !result("params").obj.contains("n_iter"))
+  }
+
   test("Aesthetic embedding creation is discoverable and refuses paths outside the permitted roots") {
     val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
     val tool = ts.find(_("name").str == "aesthetic_embedding").getOrElse(fail("aesthetic embedding tool missing"))

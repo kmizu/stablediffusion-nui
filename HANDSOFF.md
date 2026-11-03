@@ -25,6 +25,7 @@
 - #23 上流保存コードを固定 revision の JS のまま実行し、A1111/UI を模擬して作成した fixture も main に追加。decoder 4件、実 GUI import、公式 SDK stdio/HTTP の読取りを確認。実際に A1111 を動かして保存したデータではない。詳細は同文書。
 - #23 履歴・お気に入りの MCP read-only 一覧と ID 指定詳細も main に部分統合。公式 SDK で stdio／HTTP の読み取りと原本非返却・保存 bytes 不変を検証し、main の `McpToolsSuite` 40件と assembly を再実行。詳細は同文書。配布版 transport と生成連携はこの試験では未検証。
 - #23 MCP 履歴一覧の query／offset／limit を main に追加。公式 SDK で stdio／HTTP の検索・2ページ・原本非返却・保存 bytes 不変、main で MCP 44件・履歴20件・assembly を確認。JAR は SDK 試験時と hash 一致。名前・一致や件数から私的情報が推測され得る。配布版は未確認。詳細は同文書。
+- #23 MCP 履歴から生成引数の部分 draft を作る `prepare` を main に追加。未対応・不正設定と必要な画像を明示し、生成は呼び出し側が別途指示する。公式 SDK の stdio／HTTP および SD1.5／SDXL txt2img、main の MCP 46件・assembly を確認、JAR hash 一致。再現保証・img2img/inpaint 実生成・配布版は未確認。詳細は同文書。
 - #23 履歴・お気に入り検索と mode 切替中の旧一覧操作防止を main に部分統合。分離 worktree の SD1.5/SDXL 実 GUI と main の履歴14件・実 GUI・assembly を確認。callback の到着順を人工的に逆転する試験と配布 EXE は未検証。`docs/state-manager-verification.md` を参照。#23 は open。
 - #23 履歴・お気に入りの名前変更を main に部分統合。同一 ID の両方を更新し、重複・古い選択を拒否。分離 worktree の SD1.5/SDXL 実 GUI と main の履歴16件・実 GUI・assembly を確認。別 JVM の同時改名と配布 EXE は未検証。詳細は同文書。#23 は open。
 - #23 import thumbnail は main に部分統合。大きさを制限した埋め込み PNG を検査して保存、失敗時は履歴を保持して件数を表示。分離 worktree で SD1.5/SDXL 実 GUI、main で履歴18件・実 GUI・assembly を確認。実上流ファイルと配布版は未検証。`docs/state-manager-v2-import-wip.md` 参照。#23 は open。
