@@ -84,6 +84,12 @@ class McpToolsSuite extends munit.FunSuite:
     try
       assert(call("prompt_library", ujson.Obj("action" -> "list"))("isError").bool)
     finally Files.write(file, before)
+    Files.delete(file)
+    try
+      val empty = ok("prompt_library", ujson.Obj("action" -> "list"))("structuredContent")
+      assertEquals(empty("entries").arr.size, 0)
+      assert(!Files.exists(file))
+    finally Files.write(file, before)
   }
 
   test("generation history MCP lists entries and reads exact typed fields without source metadata") {
