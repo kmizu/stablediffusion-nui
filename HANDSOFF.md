@@ -2,13 +2,14 @@
 
 ## 2026-11-03 作業中の追記
 
+- 2026-11-03 更新: #6 Batch Face Swap を `81f05de` で受け入れ・push、GitHub close を確認。#26 と合わせて次リリース向け 2/10。README 明示機能と実機／配布候補、同期・非同期 MCP 途中結果を確認。Python 全体 3067 pass / 3 skip。Scala 全体は既存保護画像テスト 1件の前提違いで失敗し、他は pass、修正後の当該2件は pass（全体再実行は未了）。残る別 MCP read path-race は別途修正中。後続の古い #6 open 表記はこの追記が優先。
 - ユーザーの方針: issue を速く解決し、10件ごとにリリース。MCP から AI が使えることを重視。日本語マニュアルで十分、必要な画面はキャプチャする。次のリリース番号は未決定なので推測しない。
 - 2026-11-03 追加指示: **次のリリースを公開し、配布物の確認が終わったら作業を停止する。** 次のバッチを始めない。
 - main `1d97f13b72a17f1ea93fdc90130e14b46f80867e` は push 済み（作業時に remote と一致を確認）。この追記以降のコミットは `git log` と remote で確認する。`.claude/` は未追跡の既存 worktrees なので消さない。
 - ネガティブ候補 `c484556`: 画質・人体・文字のセットと個別調整、日本語説明。実 GUI と SD1.5/SDXL、展開版 MCP を確認。詳細は `docs/negative-suggestions-verification.md`。抽出版 GUI 自体の実生成は未確認。公開済み v0.1 より後の実装で、次のリリースに含める。
 - #2 追加検証: 研究側固定 revision の embedding 8件を安全読込し、うち aivazovsky.pt を実 MCP の SD1.5／SDXL に適用、PNG hash と再生成の RGB 一致を確認。研究側 fixture であり A1111 元拡張の出力互換の証拠ではない。配布条件未確認のため fixture を同梱しない。詳細は `docs/aesthetic-gradients-verification.md`。#2 は open。
 - #2 Aesthetic Gradients `c4abab3`: GUI/MCP の embedding 作成、PNG 復元の SHA 照合、日本語マニュアル。実 GUI と展開版 MCP で SD1.5/SDXL を確認。Scala 全体と Python CPU 全体も通過。`674cb79` で SDXL の強い重みについて日英の案内を追加、明示値は変えない。配布 EXE GUI でも Windows chooser から実 embedding 作成・適用・両モデルで生成する一連を確認。元拡張との実物互換性などが未確認のため issue は open、台帳は todo のまま。詳細は `docs/aesthetic-gradients-verification.md` と `docs/aesthetic-embeddings.md`。
-- #26 CreaPrompt: main `2284f49` に統合・push し、GitHub issue closed を確認。実 GUI と配布版 MCP で SD1.5・SDXL を検証し画像を目視。main の `sbt test ui/assembly` は exit 0、テストの一部はキャッシュでスキップされた。生成した JAR は配布版実測時の JAR と SHA-256 が一致。抽出版 GUI 自体の実生成などの限界は `docs/creaprompt-verification.md` に記載。新リリースへの issue 件数は 1/10。
+- #26 CreaPrompt: main `2284f49` に統合・push し、GitHub issue closed を確認。実 GUI と配布版 MCP で SD1.5・SDXL を検証し画像を目視。main の `sbt test ui/assembly` は exit 0、テストの一部はキャッシュでスキップされた。生成した JAR は配布版実測時の JAR と SHA-256 が一致。抽出版 GUI 自体の実生成などの限界は `docs/creaprompt-verification.md` に記載。当時の新リリースへの issue 件数は 1/10。
 - #62 Img2Img Workflow は段階別の寸法・枚数・denoising を main に部分統合。実 MCP の SD1.5／SDXL 生成・cancel 復帰、source-class dry-run GUI を確認。mask／overlay／effects、実モデル GUI と配布版は未対応／未検証。third_party 生成は既存 Physton の gh API エラーで中断し、追加 notice は手動で記録。`docs/superpowers/plans/2026-11-03-img2img-workflow62.md` 参照、#62 は open。
 - #97 現在の視点を img2img／Inpaint／Extras に送る機能も部分統合。静止画 GUI 27組・動画 GUI、画素、保存失敗、保護 session 切替、dispose を検証。配布版・強制終了などは未確認。`docs/panorama-tools97-wip-ja.md` 参照、#97 は open。
 - #97 パノラマの前後左右上下ボタンを main に部分統合。分離 worktree の静止画 GUI 22組と動画 GUI、両モデル由来の画像・投影を確認。FOV を保ち全画面と同じ視点を使う。配布版、一般動画、再投影合成・極補正・sketch 等は未確認／未実装。`docs/panorama-tools97-wip-ja.md` 参照、#97 は open。

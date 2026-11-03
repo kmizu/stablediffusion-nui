@@ -1,6 +1,6 @@
 # Handoff: bundling the A1111 extension index into stablediffusion-nui
 
-Current checkpoint (2026-11-03): start with [HANDSOFF.md](../HANDSOFF.md). The previous v0.1 release is published; the next batch has 1/10 accepted issues (#26). Stop work after the next release is published and its downloaded artifact is verified. The older counts and checkpoints below are historical.
+Current checkpoint (2026-11-03): start with [HANDSOFF.md](../HANDSOFF.md). The previous v0.1 release is published; the next batch has 2/10 accepted issues (#26 and #6). Stop work after the next release is published and its downloaded artifact is verified. The older counts and checkpoints below are historical.
 
 ## Historical MCP goal recorded on 2026-10-31
 
