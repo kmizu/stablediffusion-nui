@@ -51,7 +51,8 @@ async def run(a, receipt):
         assert injected, state
         failed=await wait(job)
         new_files=sorted(set(str(p) for p in (images/'img2img').rglob('*.png'))-before)
-        assert failed['status']=='failed' and new_files, (failed,new_files)
+        assert failed['status']=='failed' and len(failed['images'])==1 and new_files, (failed,new_files)
+        assert failed['images'][0]['path'] in new_files, (failed,new_files)
         shutil.copyfile(a.input_two,inputs/'b.png'); assert {p.name:sha(p) for p in inputs.iterdir()}==originals
         recovered=await wait(await submit(face)); assert recovered['status']=='done' and len(recovered['images'])==2,recovered
         facehash=receipt['face_sha256'][:10]

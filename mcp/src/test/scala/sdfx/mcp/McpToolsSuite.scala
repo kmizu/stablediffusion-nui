@@ -643,6 +643,50 @@ class McpToolsSuite extends munit.FunSuite:
     finally remove()
   }
 
+  test("failed folder job reports already saved images, error and original provenance") {
+    val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-failure-partial"))
+    val first = folder.resolve("a.png")
+    Files.write(first, Base64.getDecoder.decode(pngBase64(64, 64)))
+    val second = folder.resolve("b.png")
+    val pixels = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.ScrambledPng.write(pixels, second, Nil, Some("failure-test-secret"))
+    val submission = ok("img2img_folder_async", ujson.Obj("prompt" -> "partial failure", "image_folder" -> folder.toString,
+      "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    val id = submission("structuredContent")("job_id").str
+    val raw = call("get_job", ujson.Obj("job_id" -> id, "wait_seconds" -> 45, "return_images" -> false))
+    assert(raw("isError").bool, raw.toString)
+    val result = raw("structuredContent")
+    assertEquals(result("status").str, "failed")
+    assert(result("error").str.nonEmpty)
+    assertEquals(result("images").arr.size, 1, result.toString)
+    val output = Paths.get(result("images")(0)("path").str)
+    assert(Files.isRegularFile(output))
+    assertEquals(sdfx.core.infotext.Infotext.parse(PngMetadata.readParameters(output).get).fields("NUI img2img source"), first.toRealPath().toString)
+    val next = ok("txt2img", ujson.Obj("prompt" -> "recovery", "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    assertEquals(next("structuredContent")("images").arr.size, 1)
+  }
+
+  test("failed async folder does not return images saved by another queued job") {
+    val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-failure-isolation"))
+    Files.write(folder.resolve("a.png"), Base64.getDecoder.decode(pngBase64(64, 64)))
+    val pixels = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.ScrambledPng.write(pixels, folder.resolve("b.png"), Nil, Some("failure-isolation-secret"))
+    val first = ok("txt2img_async", ujson.Obj("prompt" -> "unrelated", "width" -> 64, "height" -> 64,
+      "steps" -> 30, "extra" -> ujson.Obj("step_delay" -> "0.04"), "return_images" -> false))
+    val firstId = first("structuredContent")("job_id").str
+    assert(eventually()(services.queue.current.exists(_.id == firstId)))
+    val second = ok("img2img_folder_async", ujson.Obj("prompt" -> "failure isolation", "image_folder" -> folder.toString,
+      "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    val firstResult = ok("get_job", ujson.Obj("job_id" -> firstId, "wait_seconds" -> 45, "return_images" -> false))("structuredContent")
+    val raw = call("get_job", ujson.Obj("job_id" -> second("structuredContent")("job_id").str, "wait_seconds" -> 45, "return_images" -> false))
+    assert(raw("isError").bool)
+    val secondResult = raw("structuredContent")
+    assertEquals(secondResult("status").str, "failed")
+    assertEquals(secondResult("images").arr.size, 1, secondResult.toString)
+    assert(firstResult("images")(0)("path").str != secondResult("images")(0)("path").str)
+    assertEquals(sdfx.core.infotext.Infotext.parse(PngMetadata.readParameters(Paths.get(secondResult("images")(0)("path").str)).get).fields("NUI img2img source"), folder.resolve("a.png").toRealPath().toString)
+  }
+
   test("img2img folder MCP does not process protected pixels without a password session") {
     val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-protected-test"))
     val input = folder.resolve("protected.png")
@@ -856,6 +900,17 @@ class McpToolsSuite extends munit.FunSuite:
     finally
       s2.shutdown()
       deleteTree(home2.root)
+  }
+
+  test("synchronous script failure returns saved partial images and remains an error") {
+    val r = call("run_script", ujson.Obj("script_id" -> "xyz_grid",
+      "values" -> ujson.Obj("x_type" -> "Size", "x_values" -> "64x64,8192x8192"),
+      "params" -> ujson.Obj("prompt" -> "partial sync", "steps" -> 1, "width" -> 64, "height" -> 64),
+      "return_images" -> false))
+    assert(r("isError").bool, r.toString)
+    assert(textOf(r).contains("job limit exceeded"), textOf(r))
+    assertEquals(r("structuredContent")("images").arr.size, 1, r.toString)
+    assert(Files.isRegularFile(Paths.get(r("structuredContent")("images")(0)("path").str)))
   }
 
   test("run_script obeys the strict job limits (X/Y/Z Size axis, cell count)") {

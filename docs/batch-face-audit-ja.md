@@ -14,6 +14,10 @@
 
 別 run では分離した第2入力を事前に破損させ、1枚目の生成後に画像 decode が失敗することを確認した。実 GUI は `a.png 1/2 · Failed` を表示し、ギャラリーには生成済み1枚が残った（`outputs/face-package-candidate/face-folder-failed.png`）。保存された先行画像の SHA-256 は `96bd9f0af9798ee4a6b671bf1f18afbf818ea70fc0c3f08e3e385fd0f2531053`。最初に生成中の第2入力を変更しようとした試みは読込に間に合わず2枚とも成功したため、上記は事前破損による別試験。入力を元 hash に復元し、exe と worker の終了と GPU lock 解放を確認した。途中での入力変更拒否と MCP の failure 応答は上記の source-built JAR 試験で確認している。
 
+その後 MCP を修正し、非同期ジョブが途中失敗した場合、同じ job の保存通知から集めた画像を `status: failed`、`isError: true`、原因とともに `get_job.images` で返すようにした。同期生成と同期 script も画像を保存後に失敗した場合は同様に部分結果をエラーとともに返す。結果がない失敗の応答は従来どおり。複数 job の画像を混ぜず、成功・キャンセルは既存の結果を使う。再試行が処理済み入力も再生成することは変わらない。
+
+失敗時 `images: []` を確認した既存実機試験は修正前の JAR による。修正後は MCP 50件と assembly が成功し、JAR `9c2b5e2db4f047c1709666c7125f935e1515e3a36a84cff55e2c33d44b82325e` 内の MCP class 17件を compiled class と照合した。公式 SDK の stdio・HTTP の dry-run で folder 失敗、同期 script 失敗、部分画像、エラーと後続生成を確認。SD1.5・SDXL の実 MCP folder でも1枚目の face pass の後に2枚目を変更して拒否し、failed と保存済み画像1件を取得、入力復元後の2枚生成と base への復帰を確認した。結果は `outputs/partial-real-sd15/receipt.json`、`outputs/partial-real-sdxl/receipt.json`。各系統の先行画像を目視した。修正後の配布版、他種類のすべての失敗、同時出力・grid の全組合せは未検証。MCP の他の画像入力経路で調査中のファイル差替え競合は別件であり、この結果はその安全性を保証しない。
+
 ライセンスについては `scripts/third_party.py` と同梱の notices に記録。MediaPipe Tasks と BlazeFace は Apache-2.0、YOLO 実行用の ultralytics は AGPL-3.0 で任意導入。モデルは初回に別途取得し、再配布しない。ユーザーが用意する生成モデル・LoRA の利用条件は各配布元による。
 
 2026-11-03 に新規 Python 3.10 venv で `requirements-torch.txt` の PyTorch 2.7.1+cu128、`requirements.txt` の固定依存、MediaPipe 1.2.0 を通常インストールし、`pip check` と SDXL 画像の CPU 顔検出が成功。pip 23.0.1 のまま PyTorch 専用 index を使うと `flit_core` の取得に失敗し、PyPI を追加 index にするとインストールできた。アプリの bootstrap は先に pip を更新する。別の新規 venv を pip 26.3 に更新し PyTorch 専用 index だけで dry-run したところ、依存解決は成功したが実インストールはしていない。インストール後は OpenCV headless 4.11.0 と opencv-contrib 5.0.0.93 の両 distribution が入っているため、同じ `cv2` 名前空間のパッケージ共存には注意が必要（実行時の cv2 は 4.11.0）。この環境で SDXL 元モデル・SD1.5 顔モデルを公式 MCP SDK から実生成し、PNG 復元、hash 不一致の拒否と元モデルへの復帰まで確認した。テストした組み合わせ以外の依存環境やモデルでの動作を保証するものではない。

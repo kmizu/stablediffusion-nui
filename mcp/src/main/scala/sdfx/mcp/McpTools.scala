@@ -292,16 +292,32 @@ final class McpTools(
       case _ => ()
     }
 
+  private final class SavedOutputs:
+    private val images = scala.collection.mutable.ArrayBuffer.empty[OutputImage]
+    private val grids = scala.collection.mutable.ArrayBuffer.empty[OutputImage]
+    def record(image: OutputImage, grid: Boolean): Unit = synchronized {
+      if grid then grids += image else images += image
+    }
+    def result: JobOutput = synchronized { JobOutput(images.toVector, grids.toVector) }
+
   private enum Outcome:
     case Done(out: JobOutput)
     case Cancelled(partial: JobOutput)
+    case Failed(partial: JobOutput, error: String)
 
   private def runBlocking(job: Job, ctx: ToolContext, temps: Seq[Path]): Outcome =
     try
       if ctx.isCancelled then Outcome.Cancelled(JobOutput(Nil))
       else
         ready(ctx)
-        val remove = services.queue.addListener(progressListener(job.id, job.params, job.script.isDefined, ctx))
+        val saved = new SavedOutputs
+        val progress = progressListener(job.id, job.params, job.script.isDefined, ctx)
+        val remove = services.queue.addListener { event =>
+          event match
+            case JobEvent.ImageSaved(id, image, grid) if id == job.id => saved.record(image, grid)
+            case _ => ()
+          progress(event)
+        }
         try
           val f = submitCapped(job)
           ctx.onCancel { () =>
@@ -325,9 +341,9 @@ final class McpTools(
               services.queue.cancel(job.id)
               throw e
             case NonFatal(e) =>
-              limitError(e) match
-                case Some(l) => throw ToolError(s"job limit exceeded: ${l.message}")
-                case None    => throw ToolError(s"generation failed: ${msg(e)}")
+              val error = limitError(e).map(l => s"job limit exceeded: ${l.message}").getOrElse(s"generation failed: ${msg(e)}")
+              val partial = saved.result
+              if partial.all.nonEmpty then Outcome.Failed(partial, error) else throw ToolError(error)
         finally remove()
     finally temps.foreach(Images.deleteQuietly)
 
@@ -371,10 +387,11 @@ final class McpTools(
         warn += s"$omitted preview(s) omitted (inline limit ${MaxInlineBytes / 1024 / 1024} MB per response); use get_image or a smaller max_image_side"
       (imgs, warn.result())
 
-  private def outputResult(jobId: String, out: JobOutput, returnImages: Boolean, maxSide: Int, header: Option[String] = None, isError: Boolean = false): ToolResult =
+  private def outputResult(jobId: String, out: JobOutput, returnImages: Boolean, maxSide: Int, header: Option[String] = None, isError: Boolean = false, failure: Option[String] = None): ToolResult =
     val (imgs, warnings) = previews(out, returnImages, maxSide)
     val text = (header.toSeq ++ out.all.map(o => s"${o.path.toAbsolutePath}\n${o.infotext}") ++ warnings).mkString("\n\n")
     val structured = ujson.Obj("job_id" -> jobId, "images" -> imagesJson(out))
+    failure.foreach { e => structured("status") = ujson.Str("failed"); structured("error") = ujson.Str(e) }
     ToolResult(imgs :+ Content.text(if text.isEmpty then "no images were produced" else text) :+ Content.text(ujson.write(structured)), Some(structured), isError)
 
   private def generationTool(img2img: Boolean, args: ujson.Obj, ctx: ToolContext): ToolResult =
@@ -385,6 +402,8 @@ final class McpTools(
       case Outcome.Done(out) => outputResult(job.id, out, req.returnImages, req.maxSide)
       case Outcome.Cancelled(partial) =>
         outputResult(job.id, partial, req.returnImages, req.maxSide, Some(s"job ${job.id} was interrupted; ${partial.all.size} image(s) saved"), isError = true)
+      case Outcome.Failed(partial, error) =>
+        outputResult(job.id, partial, req.returnImages, req.maxSide, Some(error), isError = true, failure = Some(error))
 
   // ---- async jobs -------------------------------------------------------------------------------------------
 
@@ -396,6 +415,9 @@ final class McpTools(
     @volatile var error: Option[String] = None
     @volatile var cancelRequested = false
     val result: Promise[JobOutput] = Promise()
+    private val saved = new SavedOutputs
+    def recordSaved(image: OutputImage, grid: Boolean): Unit = saved.record(image, grid)
+    def savedOutput: JobOutput = saved.result
     def future: Future[JobOutput] = result.future
     def active: Boolean = status == "queued" || status == "running" || status == "waiting_for_engine"
     val tracker: ToolContext = new ToolContext:
@@ -443,6 +465,8 @@ final class McpTools(
           aj.output = Some(e.partial)
           aj.status = "cancelled"
         case Failure(e) =>
+          val saved = aj.savedOutput
+          if saved.all.nonEmpty then aj.output = Some(saved)
           aj.error = Some(limitError(e).map(l => s"job limit exceeded: ${l.message}").getOrElse(msg(e)))
           aj.status = "failed"
     }
@@ -455,7 +479,13 @@ final class McpTools(
         )
         if aj.cancelRequested then throw JobCancelledException(job.id, JobOutput(Nil))
         ensureCatalog()
-        val remove = services.queue.addListener(progressListener(job.id, job.params, job.script.isDefined, aj.tracker))
+        val progress = progressListener(job.id, job.params, job.script.isDefined, aj.tracker)
+        val remove = services.queue.addListener { event =>
+          event match
+            case JobEvent.ImageSaved(id, image, grid) if id == job.id => aj.recordSaved(image, grid)
+            case _ => ()
+          progress(event)
+        }
         try
           // a waiting job already holds a pending slot; an immediate one takes it now
           val f = aj.synchronized {
@@ -523,9 +553,9 @@ final class McpTools(
       case Some(out) =>
         base("images") = imagesJson(out)
         val (imgs, warnings) = previews(out, returnImages, maxSide)
-        val head = s"job $id: ${aj.status}"
+        val head = s"job $id: ${aj.status}" + aj.error.fold("")(e => s" ($e)")
         val text = (Seq(head) ++ out.all.map(o => s"${o.path.toAbsolutePath}\n${o.infotext}") ++ warnings).mkString("\n\n")
-        ToolResult(imgs :+ Content.text(text) :+ Content.text(ujson.write(base)), Some(base), isError = aj.status == "cancelled")
+        ToolResult(imgs :+ Content.text(text) :+ Content.text(ujson.write(base)), Some(base), isError = aj.status == "cancelled" || aj.status == "failed")
       case None =>
         base("images") = ujson.Arr()
         val text = aj.status match
@@ -642,6 +672,8 @@ final class McpTools(
         case Outcome.Done(out) => outputResult(job.id, out, req.returnImages, req.maxSide, Some(s"${plugin.name}: ${out.all.size} image(s)"))
         case Outcome.Cancelled(partial) =>
           outputResult(job.id, partial, req.returnImages, req.maxSide, Some(s"job ${job.id} was interrupted; ${partial.all.size} image(s) saved"), isError = true)
+        case Outcome.Failed(partial, error) =>
+          outputResult(job.id, partial, req.returnImages, req.maxSide, Some(error), isError = true, failure = Some(error))
 
   // ---- tool definitions ------------------------------------------------------------------------------------
 
