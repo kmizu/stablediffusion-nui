@@ -10,6 +10,12 @@ import javafx.stage.DirectoryChooser
 import scala.util.control.NonFatal
 import sdfx.ui.vm.{GenerationVM, Mode, PluginsVM}
 
+private[ui] object GenerationBatchPresentation:
+  def summary(size: Int,count: Int): String =
+    val total=size * count
+    s"$size ${if size==1 then "image" else "images"} per run × $count ${if count==1 then "run" else "runs"} = $total ${if total==1 then "image" else "images"}"
+  val sizeTip = "Batch size: images per run; the engine may process them sequentially or in parallel"
+
 /** The scrollable parameter form of one generation tab. */
 final class GenerationPanel(
     ctx: UiContext,
@@ -269,7 +275,7 @@ final class GenerationPanel(
     val batchSummary = W.label("", "hint")
     batchSummary.setId("batch-summary")
     def refreshBatchSummary(): Unit =
-      batchSummary.setText(s"${vm.batchSize.get} at once × ${vm.batchCount.get} runs = ${vm.batchSize.get * vm.batchCount.get} images")
+      batchSummary.setText(GenerationBatchPresentation.summary(vm.batchSize.get,vm.batchCount.get))
     vm.batchSize.addListener((_, _, _) => refreshBatchSummary())
     vm.batchCount.addListener((_, _, _) => refreshBatchSummary())
     refreshBatchSummary()
@@ -283,7 +289,7 @@ final class GenerationPanel(
           W.label("count", "hint"),
           W.tip(W.intSpinner(vm.batchCount, 1, 100), "Batch count: how many batches to run one after another"),
           W.label("size", "hint"),
-          W.tip(W.intSpinner(vm.batchSize, 1, 16), "Batch size: images generated in parallel (uses more VRAM)")
+          W.tip(W.intSpinner(vm.batchSize, 1, 16), GenerationBatchPresentation.sizeTip)
         )
       )
       .add("Total", batchSummary)

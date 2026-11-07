@@ -6,7 +6,7 @@ import javafx.embed.swing.SwingFXUtils
 import javafx.stage.Stage
 import javafx.util.Duration
 import sdfx.core.config.{AppHome, SettingsLoadResult}
-import sdfx.engine.{AppServices, PythonEnv}
+import sdfx.engine.{AppServices, EngineSelection, EngineSetup}
 import sdfx.plugins.StandardPlugins
 import sdfx.ui.view.{BootstrapDialog, PreviewImageLoader, Theme}
 import sdfx.ui.vm.{FinalAppCleanup, UiState, VramModes}
@@ -40,11 +40,12 @@ final class SdfxApp extends Application:
     val home = opts.home.map(h => AppHome(Paths.get(h).toAbsolutePath.normalize())).getOrElse(AppHome.detect())
     // legacy VRAM modes (medvram / lowvram / cpu) are mapped to the engine's values
     val loaded = sdfx.core.config.Settings.loadResult(home.settingsFile)
-    val normalized = loaded.copy(settings = VramModes.normalizeSettings(loaded.settings))
+    val nativeSelected=EngineSelection.usesNativeBackend(loaded.settings)
+    val normalized = loaded.copy(settings = VramModes.normalizeSettings(loaded.settings, nativeEngine = nativeSelected))
     val settings = normalized.settings
     Platform.setImplicitExit(true)
-    val needsSetup = !opts.dryRun && settings.pythonExe.forall(_.trim.isEmpty) &&
-      (try PythonEnv.needsBootstrap(home) catch case NonFatal(_) => true)
+    val needsSetup = !nativeSelected && !opts.dryRun && settings.pythonExe.forall(_.trim.isEmpty) &&
+      (try EngineSetup.needsSetup(home, settings) catch case NonFatal(_) => true)
     if needsSetup then
       val dlg = new BootstrapDialog(home, settings, Theme.stylesheets(settings.theme), Theme.themeClass(settings.theme))
       dlg.show {

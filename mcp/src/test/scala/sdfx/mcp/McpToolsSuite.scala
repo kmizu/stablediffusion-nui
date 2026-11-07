@@ -1057,6 +1057,70 @@ class McpToolsSuite extends munit.FunSuite:
     assertEquals(status("engine")("device").str, "cpu")
   }
 
+  test("set_model reuses the current model unless reload is requested") {
+    ok("set_model",ujson.Obj("name"->"foo"))
+    val loaded=services.supervisor.loadedModel.get
+    ok("set_model",ujson.Obj("name"->loaded.path))
+    assert(services.supervisor.loadedModel.get eq loaded,"same-model selection reloaded the engine")
+    ok("set_model",ujson.Obj("name"->"foo","reload"->true))
+    assert(!(services.supervisor.loadedModel.get eq loaded),"explicit reload did not reach the engine")
+    assert(call("set_model",ujson.Obj("name"->"Bar_XL","reload"->"invalid"))("isError").bool)
+    assertEquals(services.supervisor.loadedModel.get.name,"foo")
+  }
+
+  test("set_model does not report success for a stopped engine with a remembered model") {
+    val isolatedHome=tempHome()
+    val isolated=TestEnv.services(isolatedHome)
+    try
+      isolated.start()
+      assert(isolated.supervisor.loadedModel.nonEmpty)
+      isolated.supervisor.stop()
+      assert(!isolated.supervisor.isRunning)
+      val isolatedServer=new McpServer(new McpTools(isolated).all)
+      val response=isolatedServer.handle(callReq("set_model",ujson.Obj("name"->"foo")),_=>()).get("result")
+      assert(response("isError").bool || isolated.supervisor.isRunning,response.render())
+    finally
+      isolated.shutdown()
+      deleteTree(isolatedHome.root)
+  }
+
+  test("same-model selection keeps the VAE unless another VAE is requested") {
+    ok("set_model",ujson.Obj("name"->"foo","vae"->"vae-ft-mse"))
+    val withVae=services.supervisor.loadedModel.get
+    assert(withVae.vaeName.exists(_.contains("vae-ft-mse")))
+    ok("set_model",ujson.Obj("name"->"foo"))
+    assert(services.supervisor.loadedModel.get eq withVae)
+    assert(services.supervisor.loadedModel.get.vaeName.nonEmpty)
+    ok("set_model",ujson.Obj("name"->"foo","vae"->"Automatic"))
+    assertEquals(services.supervisor.loadedModel.get.vaeName,None)
+    assert(call("set_model",ujson.Obj("name"->"Bar_XL","vae"->123))("isError").bool)
+    assertEquals(services.supervisor.loadedModel.get.name,"foo")
+    assert(call("set_model",ujson.Obj("name"->"Bar_XL","vae"->"missing-vae"))("isError").bool)
+    assertEquals(services.supervisor.loadedModel.get.name,"foo")
+  }
+
+  test("concurrent set_model replies identify the checkpoint each call selected") {
+    val isolatedHome=tempHome()
+    val isolated=TestEnv.services(isolatedHome)
+    try
+      isolated.start()
+      val isolatedServer=new McpServer(new McpTools(isolated).all)
+      for _ <- 1 to 100 do
+        val start=new java.util.concurrent.CountDownLatch(1)
+        def select(name: String)=Future {
+          start.await()
+          val response=isolatedServer.handle(callReq("set_model",ujson.Obj("name"->name)),_=>()).get("result")
+          assert(!response("isError").bool,response.render())
+          assertEquals(response("structuredContent")("loaded")("name").str,name)
+        }
+        val a=select("foo");val b=select("Bar_XL")
+        start.countDown()
+        Await.result(Future.sequence(Seq(a,b)),30.seconds)
+    finally
+      isolated.shutdown()
+      deleteTree(isolatedHome.root)
+  }
+
   test("worker VAE path stays out of MCP status and model responses") {
     ok("set_model", ujson.Obj("name" -> "foo"))
     val model = services.setVae(Some("vae-ft-mse"), remember = false)

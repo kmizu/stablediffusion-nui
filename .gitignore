@@ -27,3 +27,4 @@ python/.cache/
 !*.sh
 site/_site/
 .playwright-mcp/
+.superpowers/

@@ -10,7 +10,7 @@ import java.nio.file.Paths
 class ColorCorrectionPlugin extends ExtrasPlugin:
   def id = "color_correction"
   def name = "Color correction"
-  override def description = "Match reference colors. An empty reference uses the original input. A1111 needs scikit-image and blendmodes. Outputs are RGB."
+  override def description = "Match reference colors. An empty reference uses the original input. Outputs are RGB."
   override def controls: Seq[Control] = Seq(
     ImageFile("reference", "Reference image (optional)"),
     Choice("method", "Method", Seq("A1111", "Wavelet", "AdaIN"), "A1111"),

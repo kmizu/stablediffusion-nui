@@ -27,7 +27,7 @@ final class VaeToolsTab(ctx: UiContext):
   private val input = new TextArea()
   input.setId("vae-tools-input")
   input.setAccessibleText("Input file paths, one per line")
-  input.setPromptText("Input files, one path per line. Decode accepts unchanged L/RGBA PNG, CMYK TIFF/JPEG, or tensor.safetensors.")
+  input.setPromptText("Input files, one path per line. Decode accepts L/RGBA PNG, CMYK TIFF, or tensor.safetensors; CMYK JPEG needs the Python backend.")
   input.setPrefRowCount(3)
   private val output = new TextField(ctx.services.home.outputs(ctx.services.settings).toAbsolutePath.toString)
   output.setId("vae-tools-output")
@@ -113,7 +113,8 @@ final class VaeToolsTab(ctx: UiContext):
   interrupt.setId("vae-tools-interrupt")
   private val help = W.label("Explore VAE compression, latent editing and cross-VAE decoding. L is an exact tensor container in a grayscale PNG. " +
     "RGBA/CMYK quantize 4 latent channels to 8-bit over [-10,10]; out-of-range values clip. Sixteen channels use a 2×2 grid. " +
-    "CMYK TIFF retains all channels; JPEG 100 still adds loss. Do not resize, flatten alpha or use lossy formats for L/RGBA. " +
+    "CMYK TIFF retains all channels. JPEG 100 is available with the Python backend; scala-torch currently supports CMYK TIFF only. " +
+    "Do not resize, flatten alpha or use lossy formats for L/RGBA. " +
     "Encoding/decoding itself is lossy. The separate CMYK preview is converted to RGB for display only. " +
     "With image scrambling enabled, previews, decoded images and RGBA latent PNGs are scrambled. L/CMYK latent files, safetensors and reports remain readable; encode requires explicit consent below.", "muted")
   help.setWrapText(true)

@@ -78,6 +78,7 @@ case class Settings(
     mcpHttpEnabled: Boolean = false,
     mcpHttpPort: Int = 7861,
     mcpToken: Option[String] = None,
+    engineBackend: String = "auto",
     disabledPlugins: Seq[String] = Nil,
     pluginValues: Map[String, Map[String, String]] = Map.empty,
     hfOffline: Boolean = false,
@@ -100,7 +101,15 @@ case class Settings(
     tagComplete: TagCompleteSettings = TagCompleteSettings(),
     hiresFixTweaks: HiresFixTweaksPreferences = HiresFixTweaksPreferences(),
     localization: LocalizationPreferences = LocalizationPreferences(),
-    panoramaFfmpegExe: Option[String] = None
+    panoramaFfmpegExe: Option[String] = None,
+    scalaTorchClasspath: Option[String] = None,
+    scalaTorchModel: Option[String] = None,
+    scalaTorchScheduler: Option[String] = None,
+    scalaTorchJava: Option[String] = None,
+    scalaTorchUnetDevice: String = "cpu",
+    scalaTorchVaeDevice: String = "cpu",
+    scalaTorchUnetOffloadWeights: Boolean = false,
+    scalaTorchVaeOffloadWeights: Boolean = false
 ) derives RW
 
 case class SettingsRecovery(reason: String, originalSha256: Option[String])
@@ -125,6 +134,9 @@ object Settings:
   /** Admission before producing a second JSON representation of the preview maps. */
   def validatePreviewConfiguration(s: Settings): Either[String, Unit] =
     try
+      require(Set("auto","python","scala-torch").contains(s.engineBackend),"unsupported engine backend setting")
+      require(s.scalaTorchUnetDevice.matches("cpu|cuda(:[0-9]+)?"),"invalid scala-torch U-Net device")
+      require(s.scalaTorchVaeDevice.matches("cpu|cuda(:[0-9]+)?"),"invalid scala-torch VAE device")
       val budget = new PreviewBudget
       require(s.modelPreviewOverrides != null && s.modelPreviewFolders != null, "preview map is null")
       require(s.modelPreviewOverrides.size <= 10000 && s.modelPreviewFolders.size <= 64, "preview map entry limit exceeded")
@@ -176,7 +188,8 @@ object Settings:
       finally in.close()
       hash = Some(digest.digest().map(b => f"${b & 0xff}%02x").mkString)
       val decoder = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
-      val preflight = SettingsPreviewPreflight(decoder.decode(ByteBuffer.wrap(out.toByteArray)).toString)
+      val decodedText = decoder.decode(ByteBuffer.wrap(out.toByteArray)).toString
+      val preflight = SettingsPreviewPreflight(decodedText.stripPrefix("\ufeff"))
       val json = ujson.read(preflight.json)
       if !json.isInstanceOf[ujson.Obj] then throw new IllegalArgumentException("settings document must be an object")
       val obj = json.obj

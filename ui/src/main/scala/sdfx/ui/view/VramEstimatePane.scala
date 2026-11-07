@@ -46,7 +46,8 @@ final class VramEstimatePane(ctx: UiContext, params: () => GenerationParams):
             val total = result("estimated_total_mb").num
             val capacity = result("total_mb").num
             val extrapolation = if result("extrapolated").bool then " · extrapolated" else ""
-            node.setText(f"Vanilla VRAM estimate: $total%.0f / $capacity%.0f MiB$extrapolation · ${generation.width}×${generation.height}, batch ${generation.batchSize} · extensions excluded; cache may affect baseline")
+            val batch = if result.obj.get("batch_execution").contains(ujson.Str("sequential")) then s"${generation.batchSize} images sequentially" else s"batch ${generation.batchSize}"
+            node.setText(f"Vanilla VRAM estimate: $total%.0f / $capacity%.0f MiB$extrapolation · ${generation.width}×${generation.height}, $batch · extensions excluded; cache may affect baseline")
           else node.setText(s"VRAM estimate unavailable: ${result("reason").str.replace('_', ' ')}")
       } { error =>
         busy = false

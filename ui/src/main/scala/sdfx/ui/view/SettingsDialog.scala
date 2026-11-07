@@ -7,6 +7,7 @@ import javafx.scene.control.*
 import javafx.scene.layout.{HBox, Priority, VBox}
 import javafx.stage.{DirectoryChooser, FileChooser, Stage}
 import sdfx.core.config.{ModelDirs, Settings}
+import sdfx.engine.EngineSelection
 import sdfx.ui.vm.{VramModes, WdSettingsState}
 
 import scala.jdk.CollectionConverters.*
@@ -31,7 +32,19 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
   private val hiresSaveTemplate = new SimpleBooleanProperty(initial.hiresFixTweaks.saveTemplate)
   private val hiresRestoreTemplate = new SimpleBooleanProperty(initial.hiresFixTweaks.restoreTemplate)
   private val hiresCheckpointLabels = new SimpleStringProperty(initial.hiresFixTweaks.checkpointLabels)
+  private val availableBackends = EngineSelection.availableBackends
+  private val backendChoices = (if availableBackends.size > 1 then Seq("auto") else Seq.empty) ++ availableBackends
   private val pythonExe = new SimpleStringProperty(initial.pythonExe.getOrElse(""))
+  private val engineBackend = new SimpleStringProperty(
+    if backendChoices.contains(initial.engineBackend) then initial.engineBackend else backendChoices.headOption.getOrElse("auto"))
+  private val scalaTorchClasspath = new SimpleStringProperty(initial.scalaTorchClasspath.getOrElse(""))
+  private val scalaTorchModel = new SimpleStringProperty(initial.scalaTorchModel.getOrElse(""))
+  private val scalaTorchScheduler = new SimpleStringProperty(initial.scalaTorchScheduler.getOrElse(""))
+  private val scalaTorchJava = new SimpleStringProperty(initial.scalaTorchJava.getOrElse(""))
+  private val scalaTorchUnetDevice = new SimpleStringProperty(initial.scalaTorchUnetDevice)
+  private val scalaTorchVaeDevice = new SimpleStringProperty(initial.scalaTorchVaeDevice)
+  private val scalaTorchUnetOffloadWeights = new SimpleBooleanProperty(initial.scalaTorchUnetOffloadWeights)
+  private val scalaTorchVaeOffloadWeights = new SimpleBooleanProperty(initial.scalaTorchVaeOffloadWeights)
   private val dtype = new SimpleStringProperty(initial.dtype)
   private val vramIndex = new SimpleIntegerProperty(VramModes.index(initial.vramMode).max(0))
   private val vaeTiling = new SimpleBooleanProperty(initial.vaeTiling)
@@ -108,6 +121,19 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
     }
     W.hbox(6, W.hgrow(f), b)
 
+  private def scalaTorchModelRow() =
+    val field=W.textField(scalaTorchModel)
+    val folder=W.button("Folder", "Choose a Diffusers model folder") {
+      chooseDir("Choose Diffusers model folder").foreach(scalaTorchModel.set)
+    }
+    val file=W.button("File", "Choose an SD1 safetensors checkpoint") {
+      val chooser=new FileChooser()
+      chooser.setTitle("Choose SD1 safetensors checkpoint")
+      chooser.getExtensionFilters.add(new FileChooser.ExtensionFilter("Safetensors", "*.safetensors"))
+      Option(chooser.showOpenDialog(owner)).foreach(x => scalaTorchModel.set(x.getAbsolutePath))
+    }
+    W.hbox(6,W.hgrow(field),folder,file)
+
   private def page(f: W.Form): VBox =
     val v = new VBox(f.grid)
     v.setPadding(new Insets(14))
@@ -127,23 +153,38 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
     )
   )
 
-  private val engineTab = new Tab(
-    "Engine",
-    page(
-      W.form()
-        .add("Python", browseRow(pythonExe, false, "Choose python executable"), "Python interpreter for the engine (empty = app venv, then system Python)")
-        .add("Precision", W.combo(FXCollections.observableArrayList("fp16", "bf16", "fp32"), dtype), "Model weight precision (fp16 for most GPUs)")
-        .add("VRAM mode", W.indexCombo(VramModes.Modes.map(_._2), vramIndex), "GPU: everything stays on the GPU · Model offload: whole models move to the GPU when used · Sequential offload: layer by layer, slowest but lowest VRAM · Auto: choose from the free VRAM at model load")
-        .full(W.check("VAE tiling (decode large images in tiles to save VRAM)", vaeTiling))
-        .full(W.check("VAE slicing (decode a batch one image at a time to save VRAM)", vaeSlicing))
-        .full(W.check("Automatic VAE slicing / tiling when the decode would not fit the free VRAM", vaeAuto))
-        .full(W.check("fp16 VAE decode for SDXL (saves ~2.5 GB at 832x1216; falls back to fp32 on bad output)", vaeFp16))
-        .full(W.check("fp8 U-Net weights (half the U-Net VRAM, upcast per layer; GPU VRAM mode only)", fp8Storage))
-        .full(W.check("Offline mode (never download from Hugging Face)", hfOffline))
-        .full(W.check("Allow custom code (the Custom code script runs Python in the engine; like A1111 --allow-code)", allowCode))
-        .full(W.label("Python, precision and VRAM changes apply after an engine restart.", "hint"))
-    )
-  )
+  private val engineForm =
+    val form = W.form()
+    if backendChoices.nonEmpty then form.add("Inference backend", W.combo(FXCollections.observableArrayList(backendChoices*), engineBackend),
+      "Available inference modules in this application; scala-torch uses the worker paths below or corresponding SDFX_SCALATORCH_* environment variables")
+    form
+      .add("scala-torch classpath", browseRow(scalaTorchClasspath, false, "Choose worker classpath file"), "Uses the packaged runtime when available; otherwise choose a manifest whose entries may be absolute or relative to this file")
+      .add("scala-torch model", scalaTorchModelRow(), "Diffusers model folder or SD1 safetensors checkpoint")
+      .add("scala-torch scheduler", browseRow(scalaTorchScheduler, false, "Choose scheduler JSON"), "Uses the selected model's scheduler/scheduler_config.json when empty")
+      .add("scala-torch Java", browseRow(scalaTorchJava, false, "Choose Java 25 executable (optional)"), "Uses the packaged Java 25 runtime when available, then NUI's current Java runtime")
+      .add("scala-torch U-Net device", W.combo(FXCollections.observableArrayList("cpu", "cuda", "cuda:0", "cuda:1"), scalaTorchUnetDevice), "U-Net compute device; cuda selects GPU 0")
+      .add("scala-torch VAE device", W.combo(FXCollections.observableArrayList("cpu", "cuda", "cuda:0", "cuda:1"), scalaTorchVaeDevice), "VAE encode/decode compute device; cuda selects GPU 0")
+      .full(W.check("Offload U-Net weights between CPU and CUDA", scalaTorchUnetOffloadWeights))
+      .full(W.check("Offload VAE weights between CPU and CUDA", scalaTorchVaeOffloadWeights))
+    if availableBackends.contains("python") then
+      form.add("Python", browseRow(pythonExe, false, "Choose python executable"), "Python interpreter for the engine (empty = app venv, then system Python)")
+    form
+      .add("Precision", W.combo(FXCollections.observableArrayList("fp16", "bf16", "fp32"), dtype), "Model weight precision (fp16 for most GPUs)")
+      .add("VRAM mode", W.indexCombo(VramModes.Modes.map(_._2), vramIndex), "GPU: everything stays on the GPU · Model offload: whole models move to the GPU when used · Sequential offload: layer by layer, slowest but lowest VRAM · Auto: choose from the free VRAM at model load")
+      .full(W.check("VAE tiling (decode large images in tiles to save VRAM)", vaeTiling))
+      .full(W.check("VAE slicing (decode a batch one image at a time to save VRAM)", vaeSlicing))
+      .full(W.check("Automatic VAE slicing / tiling when the decode would not fit the free VRAM", vaeAuto))
+      .full(W.check("fp16 VAE decode for SDXL (saves ~2.5 GB at 832x1216; falls back to fp32 on bad output)", vaeFp16))
+      .full(W.check("fp8 U-Net weights (half the U-Net VRAM, upcast per layer; GPU VRAM mode only)", fp8Storage))
+      .full(W.check("Offline mode (never download from Hugging Face)", hfOffline))
+    if availableBackends.contains("python") then
+      form.full(W.check("Allow custom code (the Custom code script runs Python in the engine; like A1111 --allow-code)", allowCode))
+    val backendHint = if availableBackends.contains("python") then "Python, precision and VRAM changes apply after an engine restart."
+      else "Precision and VRAM changes apply after an engine restart."
+    form.full(W.label(backendHint, "hint"))
+    form
+
+  private val engineTab = new Tab("Engine", page(engineForm))
 
   private val mcpTab = new Tab(
     "MCP",
@@ -220,9 +261,18 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
             showPromptModes = hiresShowPromptModes.get, showRemoveNetworks = hiresShowRemove.get,
             showStyles = hiresShowStyles.get, promptModeRadio = hiresRadio.get, checkpointLabels = hiresCheckpointLabels.get,
             saveTemplate = hiresSaveTemplate.get, restoreTemplate = hiresRestoreTemplate.get),
-          pythonExe = Option(pythonExe.get).map(_.trim).filter(_.nonEmpty),
-          dtype = dtype.get,
-          vramMode = VramModes.Modes(vramIndex.get.max(0).min(VramModes.Modes.size - 1))._1,
+          pythonExe = if availableBackends.contains("python") then Option(pythonExe.get).map(_.trim).filter(_.nonEmpty) else initial.pythonExe,
+          engineBackend = engineBackend.get,
+          scalaTorchClasspath = Option(scalaTorchClasspath.get).map(_.trim).filter(_.nonEmpty),
+          scalaTorchModel = Option(scalaTorchModel.get).map(_.trim).filter(_.nonEmpty),
+          scalaTorchScheduler = Option(scalaTorchScheduler.get).map(_.trim).filter(_.nonEmpty),
+          scalaTorchJava = Option(scalaTorchJava.get).map(_.trim).filter(_.nonEmpty),
+          scalaTorchUnetDevice = scalaTorchUnetDevice.get,
+          scalaTorchVaeDevice = scalaTorchVaeDevice.get,
+          scalaTorchUnetOffloadWeights = scalaTorchUnetOffloadWeights.get,
+          scalaTorchVaeOffloadWeights = scalaTorchVaeOffloadWeights.get,
+          dtype = if engineBackend.get=="scala-torch" then "fp32" else dtype.get,
+          vramMode = if engineBackend.get=="scala-torch" then "cpu" else VramModes.Modes(vramIndex.get.max(0).min(VramModes.Modes.size - 1))._1,
           vaeTiling = vaeTiling.get,
           vaeSlicing = vaeSlicing.get,
           fp8Storage = fp8Storage.get,
@@ -236,7 +286,7 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
           mcpToken = Option(mcpToken.get).map(_.trim).filter(_.nonEmpty),
           theme = theme.get,
           nsfwCardBlurDefault = cardDefault.get,
-          allowCustomCode = allowCode.get,
+          allowCustomCode = if availableBackends.contains("python") then allowCode.get else initial.allowCustomCode,
           wdV3Model = Option(wdModel.get).map(_.trim).filter(_.nonEmpty),
           wdV3Tags = Option(wdTags.get).map(_.trim).filter(_.nonEmpty)
         )

@@ -17,3 +17,9 @@ class SystemInfoViewSuite extends munit.FunSuite:
   test("failed benchmark batch remains visible with its error"):
     val record = ujson.Obj("results" -> ujson.Arr(ujson.Obj("batch" -> 4, "status" -> "oom", "error" -> "out of memory")))
     assertEquals(SystemInfoTab.benchmarkRows(record).head, "Batch 4" -> "oom: out of memory")
+
+  test("sequential generation is distinguished from simultaneous batches"):
+    val record=ujson.Obj("config"->ujson.Obj("batch_execution"->"sequential"),"results"->ujson.Arr(
+      ujson.Obj("batch"->2,"batch_execution"->"sequential","status"->"complete",
+        "iterations_per_second"->5,"seconds"->4,"megapixels_per_second"->0.5)))
+    assertEquals(SystemInfoTab.benchmarkRows(record).head._1,"2 images (sequential)")

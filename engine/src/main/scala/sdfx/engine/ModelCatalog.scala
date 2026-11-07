@@ -171,7 +171,15 @@ final class ModelCatalog(client: EngineClient, home: AppHome, settings: () => Se
       case _             => None
     )
   def findEmbedding(q: String): Option[FileEntry] = find(embeddings, q, _.name, _.path)
-  def findUpscaler(q: String): Option[FileEntry] = find(upscalerFiles, q, _.name, _.path)
+  def findUpscaler(q: String): Option[FileEntry] =
+    find(upscalerFiles, q, _.name, _.path).orElse {
+      Option.when(q.trim.equalsIgnoreCase("R-ESRGAN 4x+")) {
+        upscalerFiles.find { entry =>
+          val file=entry.path.replace('\\','/').split('/').last
+          file.equalsIgnoreCase("RealESRGAN_x4plus.pth") || file.equalsIgnoreCase("RealESRGAN_x4plus.safetensors")
+        }
+      }.flatten
+    }
 
   /** LoRA name -> path for every name that resolves. */
   def loraPaths(names: Seq[String]): Map[String, String] = names.flatMap(n => findLora(n).map(n -> _.path)).toMap

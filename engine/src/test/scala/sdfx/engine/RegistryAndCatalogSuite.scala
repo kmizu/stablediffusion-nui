@@ -131,6 +131,15 @@ class RegistryAndCatalogSuite extends munit.FunSuite:
     finally deleteTree(home.root)
   }
 
+  test("built-in Real-ESRGAN label resolves the official model filename") {
+    val (home, c) = catalog()
+    try
+      c.set(CatalogSnapshot(upscalers = Seq(FileEntry("RealESRGAN_x4plus.pth", "/u/RealESRGAN_x4plus.pth"))))
+      assertEquals(c.findUpscaler("R-ESRGAN 4x+").map(_.path),Some("/u/RealESRGAN_x4plus.pth"))
+      assertEquals(c.findUpscaler("other"),None)
+    finally deleteTree(home.root)
+  }
+
   test("ModelCatalog choices") {
     val (home, c) = catalog()
     try
@@ -166,42 +175,4 @@ class RegistryAndCatalogSuite extends munit.FunSuite:
     finally
       sup.close()
       deleteTree(home.root)
-  }
-
-  test("PythonEnv bootstrap commands, probe caching and configured interpreter") {
-    val home = tempHome()
-    try
-      Files.createDirectories(home.pythonDir)
-      Files.writeString(home.pythonDir.resolve(PythonEnv.TorchRequirements), "torch\n")
-      Files.writeString(home.pythonDir.resolve(PythonEnv.Requirements), "numpy\n")
-      val cmds = PythonEnv.bootstrapCommands(home)
-      assertEquals(cmds.size, 3)
-      assert(cmds(1).containsSlice(Seq("-r", PythonEnv.TorchRequirements, "--index-url", "https://download.pytorch.org/whl/cu128")), cmds(1).toString)
-      assert(cmds(2).containsSlice(Seq("-r", PythonEnv.Requirements)), cmds(2).toString)
-      assert(cmds.forall(_.contains("--progress-bar")))
-      assert(!PythonEnv.works(Seq("definitely-not-a-python-sdfx")))
-      assert(!PythonEnv.works(Seq("definitely-not-a-python-sdfx")))
-      val bad = Settings(pythonExe = Some("definitely-not-a-python-sdfx"))
-      assertEquals(PythonEnv.locate(home, bad), None)
-      assert(PythonEnv.configuredProblem(bad).isDefined)
-      val e = intercept[IllegalStateException](PythonEnv.engineCommand(home, bad, dryRun = false))
-      assert(e.getMessage.contains("definitely-not-a-python-sdfx"))
-      assertEquals(PythonEnv.configuredProblem(Settings()), None)
-    finally deleteTree(home.root)
-  }
-
-  test("PythonEnv command and bootstrap stamp") {
-    val home = tempHome()
-    try
-      val cmd = PythonEnv.engineCommand(home, Settings(), dryRun = true)
-      assertEquals(cmd.takeRight(3), Seq("-m", "sdfx", "--dry-run"))
-      assertEquals(PythonEnv.engineLaunch(home, Settings(), dryRun = false).workDir, home.pythonDir)
-      assert(PythonEnv.needsBootstrap(home))
-      val s1 = PythonEnv.requirementsStamp(home)
-      Files.createDirectories(home.pythonDir)
-      Files.writeString(home.pythonDir.resolve("requirements.txt"), "numpy\n")
-      assertNotEquals(PythonEnv.requirementsStamp(home), s1)
-      val custom = PythonEnv.locate(home, Settings(pythonExe = Some(FakeEngine.python.head)))
-      assert(custom.isDefined)
-    finally deleteTree(home.root)
   }

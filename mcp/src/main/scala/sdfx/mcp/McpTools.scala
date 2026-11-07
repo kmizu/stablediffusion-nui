@@ -30,6 +30,7 @@ final class McpTools(
   import McpTools.*
 
   private given scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.global
+  private val modelSelectionLock = new Object
 
   def this(services: AppServices) = this(services, McpTools.waitForEngine(services))
 
@@ -818,13 +819,12 @@ final class McpTools(
     case EngineState.Busy       => "busy"
     case EngineState.Crashed(m) => s"crashed: $m"
 
-  private def loadedJson: ujson.Value =
-    services.supervisor.loadedModel match
-      case Some(m) =>
-        val o = ujson.Obj("name" -> m.name, "path" -> m.path, "kind" -> m.kind, "hash" -> m.hash.take(10))
-        m.vaeName.foreach(v => o("vae") = v)
-        o
-      case None => ujson.Null
+  private def modelJson(m: LoadedModel): ujson.Obj =
+    val o = ujson.Obj("name" -> m.name, "path" -> m.path, "kind" -> m.kind, "hash" -> m.hash.take(10))
+    m.vaeName.foreach(v => o("vae") = v)
+    o
+
+  private def loadedJson: ujson.Value = services.supervisor.loadedModel.fold[ujson.Value](ujson.Null)(modelJson)
 
   private def samePath(a: String, b: String): Boolean =
     try java.nio.file.Paths.get(a).toAbsolutePath.normalize() == java.nio.file.Paths.get(b).toAbsolutePath.normalize()
@@ -1027,20 +1027,33 @@ final class McpTools(
       }),
     tool("set_model", "Load checkpoint",
       "Load a checkpoint (and optionally a VAE) and make it the default for later generations.",
-      Schema.obj(Seq("name" -> Schema.str("Checkpoint name, title, path or hash prefix (see list_models)."), "vae" -> Schema.str("VAE name, 'Automatic' or 'None'.")), Seq("name")),
+      Schema.obj(Seq("name" -> Schema.str("Checkpoint name, title, path or hash prefix (see list_models)."), "vae" -> Schema.str("VAE name, 'Automatic' or 'None'."),
+        "reload" -> Schema.bool("Reload even if this checkpoint is already loaded.", Some(false))), Seq("name")),
       destructiveHint = true, idempotentHint = true)((a, ctx) => {
-        val args = Args(a, Seq("name", "vae"))
+        val args = Args(a, Seq("name", "vae", "reload"))
         val name = args.reqStr("name")
+        val reload = args.bool("reload").getOrElse(false)
+        val vae = args.str("vae")
         ready(ctx)
         ensureCatalog()
         // only catalog entries (inside the configured checkpoint folders) can be loaded through MCP
-        if catalog.findCheckpoint(name).isEmpty then
-          throw ToolError(s"checkpoint not found: $name. Available: ${catalog.checkpoints.map(_.name).mkString(", ")}")
-        try
-          services.loadCheckpoint(name)
-          args.str("vae").foreach(v => services.setVae(Some(v)))
-        catch case e: EngineError => throw ToolError(e.message)
-        ToolResult.json(ujson.Obj("loaded" -> loadedJson), Some(s"loaded ${services.supervisor.loadedModel.map(m => s"${m.name} [${m.kind}]").getOrElse(name)}"))
+        modelSelectionLock.synchronized {
+          val selected=catalog.findCheckpoint(name).getOrElse(
+            throw ToolError(s"checkpoint not found: $name. Available: ${catalog.checkpoints.map(_.name).mkString(", ")}"))
+          vae.filter(v => v.nonEmpty && v != "Automatic" && v != "None").foreach { v =>
+            if catalog.findVae(v).isEmpty then throw ToolError(s"VAE not found: $v")
+          }
+          val loaded=try
+            val reusable=Option.when(services.supervisor.isRunning && services.supervisor.state.isInstanceOf[EngineState.Ready])(
+              services.supervisor.loadedModel).flatten.filter(m => samePath(m.path,selected.path))
+            val selectedModel=if reload || reusable.isEmpty then services.loadCheckpoint(name)
+              else
+                services.updateSettings(_.copy(lastModel=Some(selected.name)))
+                reusable.get
+            vae.fold(selectedModel)(v => services.setVae(Some(v)))
+          catch case e: EngineError => throw ToolError(e.message)
+          ToolResult.json(ujson.Obj("loaded" -> modelJson(loaded)), Some(s"loaded ${loaded.name} [${loaded.kind}]"))
+        }
       }),
     tool("list_loras", "List LoRAs", "LoRA networks available for loras=[{name, weight}] or <lora:name:weight> prompt tags.",
       Schema.obj(Seq("query" -> Schema.str("Case-insensitive substring filter."))), ro = true)((a, ctx) => {

@@ -13,7 +13,7 @@ import sdfx.plugins.StandardPlugins
 import sdfx.ui.view.{ExtrasTab, UiContext}
 import sdfx.ui.vm.CatalogVM
 
-/** Actual native button -> plugin -> Python engine -> persisted results. No diffusion. */
+/** Actual native button -> plugin -> configured engine -> persisted results. No diffusion. */
 object RealColorCorrectionCheck:
   private def fx[A](body: => A): A =
     val task = new FutureTask[A](new Callable[A]:
@@ -26,10 +26,18 @@ object RealColorCorrectionCheck:
     case _ => Seq(node)
 
   def main(args: Array[String]): Unit =
-    require(args.length == 3 || args.length == 4, "home python-executable input-image [reference-image]")
+    require(args.length == 3 || args.length == 4, "home python-executable-or-worker-classpath input-image [reference-image]")
     val home = AppHome(Paths.get(args(0)).toAbsolutePath)
-    Files.createDirectories(home.pythonDir)
-    val settings = Settings(pythonExe = Some(Paths.get(args(1)).toAbsolutePath.toString))
+    val nativeModel=sys.env.get("SCALATORCH_TINY_MODEL")
+    val settings = nativeModel match
+      case Some(model) =>
+        val root=Paths.get(model).toAbsolutePath
+        Settings(engineBackend="scala-torch",scalaTorchClasspath=Some(Paths.get(args(1)).toAbsolutePath.toString),
+          scalaTorchModel=Some(root.toString),scalaTorchScheduler=Some(root.resolve("euler-demo.json").toString),
+          scalaTorchUnetDevice="cpu",scalaTorchVaeDevice="cpu")
+      case None =>
+        Files.createDirectories(home.pythonDir)
+        Settings(pythonExe = Some(Paths.get(args(1)).toAbsolutePath.toString))
     val services = new AppServices(home, settings, dryRun = false,
       builtins = StandardPlugins.withOwnAxes, persistSettings = false, installShutdownHook = false)
     val ready = new CountDownLatch(1)
@@ -38,7 +46,8 @@ object RealColorCorrectionCheck:
     var stage: Stage = null
     var context: UiContext = null
     try
-      services.supervisor.start()
+      val hello=services.supervisor.start()
+      if nativeModel.nonEmpty then require(hello.python.isEmpty,"native worker must not launch Python")
       val (tab, button) = fx {
         stage = new Stage()
         context = new UiContext(services, new CatalogVM, stage)
@@ -107,6 +116,7 @@ object RealColorCorrectionCheck:
       waitForButton()
       fx { require(tab.comparisonPair.isEmpty, "old completion must not publish after input changes away and back") }
       println("PASS native color correction: persisted result, three methods, reset")
+      if nativeModel.nonEmpty then require(!Files.exists(home.pythonDir),"native UI must not bootstrap Python")
     finally
       fx { if stage != null then stage.close() }
       services.shutdown()

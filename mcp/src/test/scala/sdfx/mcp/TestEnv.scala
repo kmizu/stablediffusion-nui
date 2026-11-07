@@ -1,7 +1,7 @@
 package sdfx.mcp
 
 import sdfx.core.config.{AppHome, Settings}
-import sdfx.engine.{AppServices, EngineLaunch, PythonEnv}
+import sdfx.engine.{AppServices, EngineLaunch}
 import sdfx.plugins.StandardPlugins
 
 import java.nio.file.{Files, Path, Paths}
@@ -14,8 +14,8 @@ object TestEnv:
   lazy val script: Path = Paths.get(getClass.getResource("/fake_engine.py").toURI)
 
   lazy val python: Seq[String] =
-    val probe = AppHome(Files.createTempDirectory("sdfx-pyprobe-"))
-    PythonEnv.locate(probe, Settings()).getOrElse(sys.error("no python found for tests"))
+    val local = Paths.get("python/.venv-test/Scripts/python.exe")
+    if Files.isRegularFile(local) then Seq(local.toAbsolutePath.toString) else Seq("python")
 
   def launch(): EngineLaunch = EngineLaunch(python :+ script.toString, script.getParent, Map.empty, 30.seconds)
 

@@ -77,7 +77,7 @@ Development: `sbt "mcp/runMain sdfx.mcp.McpMain --dry-run"` (no GPU needed).
 | `txt2img_async` / `img2img_async` | Queue and return `{job_id}` immediately, for clients with short tool timeouts. |
 | `get_job` | Status / progress / images of an async job (`wait_seconds` to block). |
 | `cancel_job` | Cancel or interrupt an MCP job. |
-| `list_models` / `set_model` | Checkpoints (kind, loaded) and VAEs; load a checkpoint. |
+| `list_models` / `set_model` | Checkpoints (kind, loaded) and VAEs; select a checkpoint. Re-selecting the loaded checkpoint reuses it; pass `reload: true` to load its files again. |
 | `list_loras` | LoRAs with ready-made `<lora:..>` tags. |
 | `list_samplers` | Samplers, schedule types, hires upscalers, upscalers, styles. |
 | `list_recent` / `get_image` | Browse the outputs folder (only files inside it can be read). |

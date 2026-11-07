@@ -36,12 +36,26 @@ lazy val core = project.settings(commonSettings, name := "sdfx-core", Test / jav
 
 lazy val engine = project.dependsOn(core).settings(commonSettings, name := "sdfx-engine")
 
+lazy val pythonEngine = project.dependsOn(engine).settings(commonSettings, name := "sdfx-python-engine")
+
+lazy val scalaTorchEngine = project.dependsOn(engine).settings(
+  commonSettings,
+  name := "sdfx-scala-torch-engine",
+  libraryDependencies += "com.github.kmizu" %% "scala-torch-models" % "0.1.0"
+)
+
+val nativeOnlyBuild = sys.env.get("SDFX_NATIVE_ONLY").exists(_.trim.equalsIgnoreCase("true"))
+
 lazy val plugins = project.dependsOn(core, engine).settings(commonSettings, name := "sdfx-plugins")
 
-lazy val mcp = project.dependsOn(core, engine, plugins).settings(commonSettings, name := "sdfx-mcp")
+lazy val mcp = project
+  .dependsOn((Seq[ClasspathDep[ProjectReference]](core, engine, plugins, scalaTorchEngine % Runtime) ++
+    (if (nativeOnlyBuild) Seq.empty else Seq[ClasspathDep[ProjectReference]](pythonEngine % "runtime->compile")) )*)
+  .settings(commonSettings, name := "sdfx-mcp")
 
 lazy val ui = project
-  .dependsOn(core, engine, plugins, mcp)
+  .dependsOn((Seq[ClasspathDep[ProjectReference]](core, engine, plugins, mcp, scalaTorchEngine % Runtime) ++
+    (if (nativeOnlyBuild) Seq.empty else Seq[ClasspathDep[ProjectReference]](pythonEngine % Runtime)) )*)
   .settings(
     commonSettings,
     name := "sdfx-ui",
@@ -61,5 +75,6 @@ lazy val ui = project
   )
 
 lazy val root = (project in file("."))
-  .aggregate(core, engine, plugins, mcp, ui)
+  .aggregate((Seq[ProjectReference](core, engine, scalaTorchEngine, plugins, mcp, ui) ++
+    (if (nativeOnlyBuild) Seq.empty else Seq[ProjectReference](pythonEngine)) )*)
   .settings(name := "stablediffusion-nui", publish / skip := true)

@@ -9,9 +9,56 @@ for the assets actually published; the checks below do not assert publication.
 
 ## Use
 
-Extract `SDNUI-v0.1-windows-x64.zip` to a writable folder (for example, under your user profile), then run `SDNUI\SDNUI.exe`. The bundled Java runtime needs no separately installed Java. Keep the extracted directory together: `app`, `runtime`, `python`, and `models` sit next to the executable. The launcher defaults the app home to this extracted SDNUI directory, even if the current directory or `SDFX_HOME` points to another checkout. An explicit `--home DIR` overrides that default. Do not run directly inside the ZIP. A writable location is needed for settings, outputs and the Python environment.
+Extract `SDNUI-v0.1-windows-x64.zip` to a writable folder (for example, under your user profile), then run `SDNUI\SDNUI.exe`. The bundled Java runtime needs no separately installed Java. Keep the extracted directory together: `app`, `runtime`, `python`, and `models` sit next to the executable in the regular package. The native-only variant below omits `python` and includes `scala-torch` instead. The launcher defaults the app home to this extracted SDNUI directory, even if the current directory or `SDFX_HOME` points to another checkout. An explicit `--home DIR` overrides that default. Do not run directly inside the ZIP. A writable location is needed for settings and outputs.
 
 Python 3.10–3.12 is needed for the engine; Python and torch are not included. On the first normal launch, the setup dialog can create a virtual environment and download dependencies, or use a Python environment you choose. The torch download is large and uses the CUDA 12.8 wheel index. `SDNUI.exe --dry-run` exercises the UI with placeholder generation but still needs a working Python interpreter. NVIDIA GPU and appropriate drivers are recommended for real generation.
+
+### Optional scala-torch package (Python is not required at runtime)
+
+The Windows packager can include a relocatable scala-torch worker and a separate Java 25 runtime. Build the scala-torch distribution first with `sbt 'models/workerDistribution'`, then pass that directory and a Java 25 x64 JDK to `scripts/package_windows.ps1`:
+
+```powershell
+pwsh scripts/package_windows.ps1 `
+  -JdkHome 'C:/path/to/jdk-21' `
+  -Jar target/stablediffusion-nui.jar `
+  -Version 0.1 `
+  -ScalaTorchWorkerDistribution 'C:/path/to/scala-torch/target/out/jvm/scala-3.3.8/scala-torch-models/worker-distribution' `
+  -ScalaTorchJdkHome 'C:/path/to/jdk-25' `
+  -PreferScalaTorch
+```
+
+`-PreferScalaTorch` selects scala-torch and skips Python bootstrap for that app image, while retaining the Python provider and sources. On first use, open Settings → Engine and choose a local Diffusers model directory. NUI uses that model's `scheduler/scheduler_config.json` by default. The native feature gaps and model-quality limitations documented in `docs/scala-torch-native-engine.md` still apply.
+
+### Native-only package (Python provider and source omitted)
+
+To produce a package that does not contain the Python provider or Python source,
+build the matching native-only jar first. The ordinary sbt build includes both
+backends; `SDFX_NATIVE_ONLY=true` removes `pythonEngine` from the runtime graph.
+The package script rejects jars with a Python provider, then omits the Python
+source and requirements payload:
+
+```powershell
+sbt shutdown
+$env:SDFX_NATIVE_ONLY = 'true'
+try {
+  sbt -batch 'ui/assembly'
+  if ($LASTEXITCODE -ne 0) { throw 'Native-only assembly failed.' }
+} finally {
+  Remove-Item Env:SDFX_NATIVE_ONLY -ErrorAction SilentlyContinue
+  sbt shutdown
+}
+pwsh scripts/package_windows.ps1 `
+  -JdkHome 'C:/path/to/jdk-21' `
+  -Jar target/stablediffusion-nui.jar `
+  -Version 0.1 `
+  -ScalaTorchWorkerDistribution 'C:/path/to/scala-torch/target/out/jvm/scala-3.3.8/scala-torch-models/worker-distribution' `
+  -ScalaTorchJdkHome 'C:/path/to/jdk-25' `
+  -NativeOnly
+```
+
+The native-only package selects scala-torch at startup, hides Python backend
+controls, and bundles its worker manifest and Java 25 runtime. It still requires
+a local Diffusers model and has the same native feature and quality limitations.
 
 To use existing Civitai downloads, place the model files in the corresponding `models` subdirectories. To use an existing reForge installation, open Settings → Model folders → **Add A1111/reForge install...** and select the installation; see the main project README for the supported model folders. Image-generation checkpoints are not included. The NudeNet NSFW Censor detector is included at `models/nudenet/best.onnx`; its pinned hash is verified during packaging. Preserve the model creators' respective licences.
 
@@ -22,7 +69,7 @@ The full user manual (Japanese and English) is at <https://kmizu.github.io/stabl
 
 ## Use from AI agents (MCP)
 
-`SDNUI.exe --mcp` starts a headless MCP server over stdio with the bundled Java runtime, without opening the window. Set up Python and model folders first (in the GUI or in `<home>/config/settings.json`), then register it with your MCP client, for example:
+`SDNUI.exe --mcp` starts a headless MCP server over stdio with the bundled Java runtime, without opening the window. For the regular package, set up Python and model folders first (in the GUI or in `<home>/config/settings.json`). The native-only package needs only its scala-torch model settings. Then register it with your MCP client, for example:
 
 ```powershell
 claude mcp add stablediffusion-nui -- C:/apps/SDNUI/SDNUI.exe --mcp --home C:/apps/SDNUI
@@ -54,7 +101,7 @@ The configured status confirms the files and dependencies passed startup checks;
 
 ## Build the distribution
 
-Build on Windows x64 with Git, PowerShell and a Windows x64 JDK 21. First assemble the final, verified Windows JavaFX fat JAR from the intended source revision (`sbt -batch ui/assembly`); packaging does not build or download anything. Then, from any working directory:
+Build on Windows x64 with Git, PowerShell and a Windows x64 JDK 21 or 25. First assemble the final, verified Windows JavaFX fat JAR from the intended source revision (`sbt -batch ui/assembly`); packaging does not build or download anything. Then, from any working directory:
 
 ```powershell
 & 'path\to\stablediffusion-nui\scripts\package_windows.ps1' -Version '0.1' -JdkHome 'C:\Program Files\Java\jdk-21' -Jar 'path\to\stablediffusion-nui\target\stablediffusion-nui.jar' -OutputRoot 'path\to\release-output'

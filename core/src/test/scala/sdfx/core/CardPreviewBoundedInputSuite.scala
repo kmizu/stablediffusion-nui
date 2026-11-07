@@ -57,6 +57,17 @@ class CardPreviewBoundedInputSuite extends munit.FunSuite:
     assert(stream.closed)
   }
 
+  test("UTF-8 settings with a Windows byte order mark retain backend configuration") {
+    val bytes = "\ufeff{\"theme\":\"light\",\"scala_torch_model\":\"C:/models/sd15\"}".getBytes(StandardCharsets.UTF_8)
+    val stream = new CountingStream(bytes)
+    val result = Settings.loadResultFromStream(() => stream)
+    assertEquals(result.recovery, None)
+    assertEquals(result.settings.theme, "light")
+    assertEquals(result.settings.scalaTorchModel, Some("C:/models/sd15"))
+    assertEquals(stream.consumed, bytes.length.toLong)
+    assert(stream.closed)
+  }
+
   test("exactly 16 MiB remains admissible and its stream closes") {
     val prefix = "{\"padding\":\"".getBytes(StandardCharsets.UTF_8)
     val suffix = "\",\"theme\":\"light\"}".getBytes(StandardCharsets.UTF_8)

@@ -4,6 +4,26 @@ from sdfx.prompt import (apply_pad, chunk_tokens, parse_prompt_attention, sd_lay
                          strip_extra_networks, unsupported_syntax_warnings)
 
 
+def test_emphasis_skips_mean_correction_when_layernorm_mean_is_numerically_zero():
+    import torch
+    from sdfx.prompt import _emphasize
+
+    z = torch.tensor([[[1.0, -0.999999], [-1.0, 0.999998]]], dtype=torch.float32)
+    weights = [2.0, 0.5]
+    actual = _emphasize(z, weights)
+    expected = z * torch.tensor(weights).reshape(1, -1, 1)
+    assert torch.equal(actual, expected)
+
+
+def test_emphasis_still_preserves_a_well_conditioned_mean():
+    import torch
+    from sdfx.prompt import _emphasize
+
+    z = torch.tensor([[[1.0, 2.0], [3.0, 4.0]]], dtype=torch.float32)
+    actual = _emphasize(z, [2.0, 0.5])
+    assert torch.allclose(actual.mean(), z.mean(), atol=1e-6)
+
+
 @pytest.mark.parametrize("cs,expected", [(1, 2), (2, 2), (3, 3), (4, 4)])
 def test_sdxl_clip_skip_matches_reforge(cs, expected):
     # modules_forge/forge_clip.py CLIP_SD_XL_L/G: minimal_clip_skip = 2 -> penultimate for 1..2

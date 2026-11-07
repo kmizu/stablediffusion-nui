@@ -20,6 +20,24 @@ final case class EngineLaunch(
     helloTimeout: FiniteDuration = 180.seconds
 )
 
+/** Optional engine implementation discovered through Java's service loader. */
+trait EngineBackendProvider:
+  def name: String
+  def requested(environment: Map[String,String]): Boolean
+  def usesNativeBackend(settings: sdfx.core.config.Settings,environment: Map[String,String]): Boolean
+  def launch(home: sdfx.core.config.AppHome,settings: sdfx.core.config.Settings,dryRun: Boolean,
+    environment: Map[String,String]): EngineLaunch
+  def needsSetup(home: sdfx.core.config.AppHome, settings: sdfx.core.config.Settings): Boolean = false
+  def setup(home: sdfx.core.config.AppHome, settings: sdfx.core.config.Settings,
+      log: String => Unit): EngineSetupTask =
+    throw new UnsupportedOperationException(s"engine backend $name has no setup step")
+
+/** Backend setup work exposed without leaking a backend module's implementation types. */
+final class EngineSetupTask private[engine](
+    val result: Future[Unit], cancelAction: () => Unit, cancelled: () => Boolean):
+  def cancel(): Unit = cancelAction()
+  def isCancelled: Boolean = cancelled()
+
 object EngineProcess:
   val EngineCrashed = "engine_crashed"
   val EngineTimeout = "engine_timeout"
@@ -34,9 +52,6 @@ object EngineProcess:
     val pb = new ProcessBuilder(launch.command.asJava)
     pb.directory(launch.workDir.toFile)
     val env = pb.environment()
-    env.put("PYTHONUNBUFFERED", "1")
-    env.put("PYTHONIOENCODING", "utf-8")
-    env.put("PYTHONUTF8", "1")
     launch.env.foreach((k, v) => env.put(k, v))
     val proc =
       try pb.start()

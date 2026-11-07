@@ -1,6 +1,6 @@
 package sdfx.engine
 
-import sdfx.core.config.{AppHome, Settings}
+import sdfx.core.config.AppHome
 
 import java.nio.file.{Files, Path, Paths}
 import scala.concurrent.duration.*
@@ -9,10 +9,10 @@ import scala.concurrent.{Await, Future}
 object FakeEngine:
   lazy val script: Path = Paths.get(getClass.getResource("/fake_engine.py").toURI)
 
-  /** Python discovered the same way the app does (a temp home has no venv, so system Python). */
+  /** Test-only interpreter lookup; engine module does not depend on the Python backend. */
   lazy val python: Seq[String] =
-    val tmpHome = AppHome(Files.createTempDirectory("sdfx-pyprobe-"))
-    PythonEnv.locate(tmpHome, Settings()).getOrElse(sys.error("no python found for tests"))
+    val local = Paths.get("python/.venv-test/Scripts/python.exe")
+    if Files.isRegularFile(local) then Seq(local.toAbsolutePath.toString) else Seq("python")
 
   def launch(extra: String*): EngineLaunch =
     EngineLaunch(python ++ Seq(script.toString) ++ extra, script.getParent, Map.empty, 30.seconds)

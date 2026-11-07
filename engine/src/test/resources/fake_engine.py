@@ -276,6 +276,15 @@ def handle_work(rid, typ, params):
                 f.write(png_bytes(16, 16, (5, 5, 5)))
             state["last_extra"] = {"type": typ, "params": params}
             result(rid, {"path": out})
+        elif typ in ("merge_models", "convert_model"):
+            out = params["output"]
+            preview = os.path.join(params["output_dir"], "preview-%s.png" % rid)
+            os.makedirs(params["output_dir"], exist_ok=True)
+            with open(out, "wb") as f:
+                f.write(b"checkpoint")
+            with open(preview, "wb") as f:
+                f.write(png_bytes(1, 1, (1, 2, 3)))
+            result(rid, {"path": out, "preview": preview})
         elif typ == "image_tool":
             out = os.path.join(params["output_dir"], "tool-%s.png" % rid)
             os.makedirs(params["output_dir"], exist_ok=True)

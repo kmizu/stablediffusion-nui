@@ -37,4 +37,5 @@ class Round2Suite extends munit.FunSuite:
     assertEquals(VramModes.normalize("bogus"), "gpu")
     assertEquals(VramModes.index("lowvram"), 2)
     assertEquals(VramModes.normalizeSettings(Settings(vramMode = "medvram")).vramMode, "model_offload")
+    assertEquals(VramModes.normalizeSettings(Settings(vramMode = "cpu"), nativeEngine = true).vramMode, "cpu")
   }

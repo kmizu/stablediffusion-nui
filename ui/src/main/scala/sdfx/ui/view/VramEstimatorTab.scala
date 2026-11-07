@@ -38,7 +38,9 @@ final class VramEstimatorTab(ctx: UiContext):
       record("rows").arr.filter(r => r("mode").str == mode && r("status").str == "complete")
         .groupBy(_("batch_size").num.toInt).toSeq.sortBy(_._1).foreach { (batch, rows) =>
           val series = new XYChart.Series[Number, Number]()
-          series.setName(s"Batch $batch")
+          val sequential=record.obj.get("identity").flatMap(_.objOpt).flatMap(_.get("runtime"))
+            .flatMap(_.objOpt).flatMap(_.get("batch_execution")).contains(ujson.Str("sequential"))
+          series.setName(if sequential then s"$batch images (sequential)" else s"Batch $batch")
           rows.sortBy(_("pixels").num).foreach(r => series.getData.add(new XYChart.Data[Number, Number](r("pixels").num, r("reserved_delta_mb").num)))
           chart.getData.add(series)
         }

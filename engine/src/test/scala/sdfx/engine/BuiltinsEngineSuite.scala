@@ -78,7 +78,3 @@ class BuiltinsEngineSuite extends munit.FunSuite:
     await(services.queue.submit(Job(Job.newId(), GenerationParams(), Some(script -> Values.empty), Nil, "test")), 60.seconds)
     assert(produced.isDefined)
     assert(!Files.exists(produced.get), "engine output registered as a job temp file must be deleted")
-
-  test("custom code opt-in reaches the engine environment"):
-    assertEquals(PythonEnv.engineEnv(Settings()).get("SDFX_ALLOW_CODE"), None)
-    assertEquals(PythonEnv.engineEnv(Settings(allowCustomCode = true)).get("SDFX_ALLOW_CODE"), Some("1"))

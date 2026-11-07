@@ -771,6 +771,21 @@ class GeneratorSuite extends munit.FunSuite:
     finally Seq(src, mask).foreach(Files.deleteIfExists)
   }
 
+  test("model tool destinations are durable while previews remain temporary") {
+    val tracked=scala.collection.mutable.ArrayBuffer.empty[java.nio.file.Path]
+    val listener=new GenerationListener:
+      override def onTempFile(path: java.nio.file.Path): Unit=tracked+=path.toAbsolutePath.normalize()
+    for kind<-Vector("merge_models","convert_model") do
+      val destination=home.root.resolve(s"$kind.safetensors")
+      val response=services.generator.engineCallWith(kind,ujson.Obj("output"->destination.toString),listener)
+      val preview=java.nio.file.Paths.get(response("preview").str).toAbsolutePath.normalize()
+      assert(Files.isRegularFile(destination))
+      assert(!tracked.contains(destination.toAbsolutePath.normalize()))
+      assert(tracked.contains(preview))
+      Files.deleteIfExists(preview)
+      Files.deleteIfExists(destination)
+  }
+
   test("upscale, memory, choices") {
     val img = services.generator.generate(GenerationParams(prompt = "u", seed = 9, steps = 1, width = 64, height = 64)).head.path
     val up = services.generator.upscale(img, "4x-Ultra", 2)

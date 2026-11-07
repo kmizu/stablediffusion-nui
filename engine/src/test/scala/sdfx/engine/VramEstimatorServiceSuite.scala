@@ -1,6 +1,14 @@
 package sdfx.engine
 
 class VramEstimatorServiceSuite extends munit.FunSuite:
+  test("latest OOM-only profile takes precedence over older successful measurements"):
+    val old = profile("old")
+    old("rows") = ujson.Arr(ujson.Obj("mode" -> "txt2img", "status" -> "complete", "pixels" -> 262144,
+      "batch_size" -> 1, "reserved_delta_mb" -> 100))
+    val failed = profile("failed", "stopped_after_error")
+    failed("rows") = ujson.Arr(ujson.Obj("mode" -> "txt2img", "status" -> "oom", "pixels" -> 262144, "batch_size" -> 1))
+    val empty = profile("interrupted", "interrupted")
+    assertEquals(VramEstimatorHistory.newestMeasured(Seq(old, failed, empty), "a" * 24).map(_("profile_path").str), Some("failed"))
   def profile(path: String, state: String = "complete"): ujson.Value = ujson.Obj(
     "version" -> 1, "status" -> state, "fingerprint" -> ("a" * 24), "identity" -> ujson.Obj("model" -> "fixture"),
     "profile_path" -> path, "rows" -> ujson.Arr())

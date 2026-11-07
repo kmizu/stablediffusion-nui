@@ -137,6 +137,15 @@ object SettingsMerge:
       hiresFixTweaks = edited.hiresFixTweaks,
       localization = edited.localization,
       pythonExe = edited.pythonExe,
+      engineBackend = edited.engineBackend,
+      scalaTorchClasspath = edited.scalaTorchClasspath,
+      scalaTorchModel = edited.scalaTorchModel,
+      scalaTorchScheduler = edited.scalaTorchScheduler,
+      scalaTorchJava = edited.scalaTorchJava,
+      scalaTorchUnetDevice = edited.scalaTorchUnetDevice,
+      scalaTorchVaeDevice = edited.scalaTorchVaeDevice,
+      scalaTorchUnetOffloadWeights = edited.scalaTorchUnetOffloadWeights,
+      scalaTorchVaeOffloadWeights = edited.scalaTorchVaeOffloadWeights,
       dtype = edited.dtype,
       vramMode = edited.vramMode,
       vaeTiling = edited.vaeTiling,
@@ -210,7 +219,8 @@ object VramModes:
     case x if Modes.exists(_._1 == x) => x
     case _                            => "gpu"
   def index(v: String): Int = Modes.indexWhere(_._1 == normalize(v))
-  def normalizeSettings(s: Settings): Settings = s.copy(vramMode = normalize(s.vramMode))
+  def normalizeSettings(s: Settings, nativeEngine: Boolean = false): Settings =
+    if nativeEngine then s.copy(dtype="fp32",vramMode="cpu") else s.copy(vramMode=normalize(s.vramMode))
 
 /** Idempotent cleanup which attempts every owned resource even when one release fails. */
 private[ui] final class UiCleanup:

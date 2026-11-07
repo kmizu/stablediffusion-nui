@@ -1087,7 +1087,11 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
             services.resetGallery()
             reloadGallery()
             imageBrowser.build()
-          val engineChanged = s.pythonExe != before.pythonExe || s.dtype != before.dtype || s.vramMode != before.vramMode ||
+          val engineChanged = s.engineBackend != before.engineBackend || s.scalaTorchClasspath != before.scalaTorchClasspath ||
+            s.scalaTorchModel != before.scalaTorchModel || s.scalaTorchScheduler != before.scalaTorchScheduler ||
+            s.scalaTorchJava != before.scalaTorchJava || s.scalaTorchUnetDevice != before.scalaTorchUnetDevice ||
+            s.scalaTorchVaeDevice != before.scalaTorchVaeDevice || s.scalaTorchUnetOffloadWeights != before.scalaTorchUnetOffloadWeights ||
+            s.scalaTorchVaeOffloadWeights != before.scalaTorchVaeOffloadWeights || s.pythonExe != before.pythonExe || s.dtype != before.dtype || s.vramMode != before.vramMode ||
             s.vaeTiling != before.vaeTiling || s.vaeSlicing != before.vaeSlicing || s.fp8Storage != before.fp8Storage ||
             s.vaeAuto != before.vaeAuto || s.vaeFp16 != before.vaeFp16 || s.hfOffline != before.hfOffline ||
             WdSettingsState.restartRequired(before, s)
