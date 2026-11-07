@@ -147,12 +147,14 @@ final class Generator(
 
   /** A context bound to one job: events go to `listener`; every `generate` applies the active AlwaysOn plugins. */
   def forJob(listener: GenerationListener, alwaysOn: Seq[(Plugin, Values)] = Nil, limits: JobLimits = JobLimits(),
-      provenanceProvider: () => Option[(String, String)] = () => None): PluginContext =
+      provenanceProvider: () => Option[(String, String)] = () => None,
+      snapshotProvenanceProvider: () => Option[(String, String)] = () => None): PluginContext =
     val self = this
     val generations = new java.util.concurrent.atomic.AtomicInteger(0)
     val fastloadPlan = alwaysOn.find((plugin, values) => plugin.id == "controlnet_fastload" && plugin.isActive(values))
       .flatMap((_, values) => FastloadJobPlan.fromValues(values))
     val activeFastloadPayload = new ThreadLocal[Option[(String, Array[Byte])]]()
+    val activeInputSnapshot = new ThreadLocal[Option[(String, String)]]()
     def limited(p: GenerationParams): GenerationParams =
       val q = applyAlwaysOn(p, alwaysOn)
       limits.check(q, generations.incrementAndGet())
@@ -175,7 +177,8 @@ final class Generator(
       override private[engine] def payloadJobId: Option[String] = listener.payloadJobId
       override private[engine] def submittedPayloadContext: Option[SubmittedPayloadContext] = listener.submittedPayloadContext
       override private[engine] def payloadCaptureOptions: Option[CaptureOptions] = listener.payloadCaptureOptions
-      override private[engine] def inputProvenance: Option[(String, String)] = provenanceProvider()
+      override private[engine] def inputProvenance: Option[(String, String)] =
+        Option(activeInputSnapshot.get()).flatten.orElse(provenanceProvider())
       override private[engine] def nextPayloadKey(): PayloadKey = listener.nextPayloadKey()
       override def onPreparedRequest(snapshot: PayloadSnapshot): Unit = listener.onPreparedRequest(snapshot)
       override def onPayloadLifecycle(key: PayloadKey, state: PayloadState, completionJson: Option[String]): Unit =
@@ -225,6 +228,16 @@ final class Generator(
               if previousPayload.isDefined then activeFastloadPayload.set(previousPayload) else activeFastloadPayload.remove()
               staged.foreach(path => try Files.deleteIfExists(path) catch case NonFatal(_) => ())
       def generate(p: GenerationParams): Seq[OutputImage] = guard(withFastload(p, true)(self.generateWith(_, scopedListener)))
+      override def generateWithInputSnapshot(p: GenerationParams, original: String): Seq[OutputImage] =
+        val staged = p.img2img.map(_.initImage).filter(_.nonEmpty).getOrElse(
+          throw new IllegalArgumentException("Snapshotted generation requires an init image"))
+        require(original.nonEmpty, "Snapshotted input requires original provenance")
+        val realOriginal = snapshotProvenanceProvider().collect { case (stagedSource, source) if stagedSource == original => source }
+          .orElse(provenanceProvider().collect { case (folderStage, source) if folderStage == original => source }).getOrElse(original)
+        val previous = Option(activeInputSnapshot.get()).flatten
+        activeInputSnapshot.set(Some((staged, realOriginal)))
+        try generate(p)
+        finally activeInputSnapshot.set(previous)
       override def generateTransient(p: GenerationParams): Seq[OutputImage] =
         guard(withFastload(p, false)(self.generateTransientWith(_, scopedListener)))
       def upscale(image: Path, upscaler: String, scale: Double): Path = guard {
@@ -239,6 +252,12 @@ final class Generator(
         val decoded = sdfx.core.png.ScrambledPng.read(path, listener.imageSecret.map(_.use(identity)))
         if decoded.scrambled && decoded.passwordVerified.isEmpty then listener.onLog(ScrambledInput.LegacyWarning)
         decoded.image
+      override def readImageBytes(bytes: Array[Byte]): BufferedImage =
+        val decoded = sdfx.core.png.ScrambledPng.read(bytes, listener.imageSecret.map(_.use(identity)))
+        if decoded.scrambled && decoded.passwordVerified.isEmpty then listener.onLog(ScrambledInput.LegacyWarning)
+        decoded.image
+      override def writeTempImage(image: BufferedImage, path: Path): Unit =
+        sdfx.core.png.ScrambledPng.write(image, path, Nil, listener.imageSecret.map(_.use(identity)))
       def tempFile(suffix: String): Path =
         val t = self.tempFile(suffix)
         listener.onTempFile(t)
@@ -812,7 +831,11 @@ final class Generator(
       saveAuxiliaries(prep, result, Some(index), listener, loaded, kind, outputs)
       val (params, text) = describe(prep, result, img, loaded)
       val src = Paths.get(img.path)
-      val texts = Generator.pngTexts(text, img.pngChunks)
+      val source = listener.inputProvenance.collect {
+        case (_, original) if original.nonEmpty && prep.recorded.img2img.exists(_.initImage == original) => original
+      }
+      val chunks = if source.nonEmpty then img.pngChunks.filterNot(_._1 == "NUI img2img source") else img.pngChunks
+      val texts = Generator.pngTexts(text, chunks) ++ source.toSeq.map("NUI img2img source" -> _)
       val dst = listener.fastloadPayload match
         case None =>
           val target = OutputNaming.nextFile(outputs, kind, img.seed)
@@ -950,8 +973,8 @@ final class Generator(
     val k = if kind == "grid" then "grids" else kind
     val recorded = Img2ImgFolderRunner.recordedParams(params, listener.inputProvenance)
     val source = listener.inputProvenance.collect {
-      case (staged, original) if params.img2img.exists(i => i.initImage == staged || i.initImage == original) => original
-    }
+      case (staged, original) if original.nonEmpty && params.img2img.exists(i => i.initImage == staged || i.initImage == original) => original
+    }.orElse(params.extra.get("NUI img2img source").filter(_.nonEmpty))
     val text = source.fold(infotext) { path =>
       val parsed = Infotext.parse(infotext)
       if parsed.fields.nonEmpty then Infotext.render(parsed.prompt, parsed.negativePrompt, parsed.fields.updated("NUI img2img source", path))

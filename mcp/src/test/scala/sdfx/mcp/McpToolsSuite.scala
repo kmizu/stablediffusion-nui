@@ -1271,3 +1271,58 @@ class McpToolsSuite extends munit.FunSuite:
     assert(call("run_script", ujson.Obj("script_id" -> "nope"))("isError").bool)
     assert(call("run_script", ujson.Obj("script_id" -> "xyz_grid", "values" -> ujson.Obj("bogus" -> 1)))("isError").bool)
   }
+
+
+  test("Quick Mask MCP file input records the durable source on generated and mask outputs") {
+    val source = home.outputs(services.settings).resolve("quickmask-source.png")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Base64.getDecoder.decode(pngBase64(64, 64)))
+    val result = ok("run_script", ujson.Obj("script_id" -> "img2img_workflow",
+      "values" -> ujson.Obj("quick_mask" -> "White", "return_mask" -> true),
+      "params" -> ujson.Obj("init_image" -> source.toString, "steps" -> 1, "width" -> 64, "height" -> 64),
+      "return_images" -> false))("structuredContent")("images").arr
+    assertEquals(result.size, 2)
+    result.foreach { image =>
+      val path = Paths.get(image("path").str)
+      val parameters = PngMetadata.readParameters(path).get
+      val fields = sdfx.core.infotext.Infotext.parse(parameters).fields
+      assertEquals(fields("NUI img2img source"), source.toRealPath().toString)
+      assertEquals(PngMetadata.readTexts(path)("NUI img2img source"), source.toRealPath().toString)
+      assert(!parameters.contains(".tmp/sdfx-"), parameters)
+    }
+  }
+
+  test("Quick Mask MCP base64 input omits filesystem provenance instead of a deleted temporary") {
+    val result = ok("run_script", ujson.Obj("script_id" -> "img2img_workflow",
+      "values" -> ujson.Obj("quick_mask" -> "White", "return_mask" -> true),
+      "params" -> ujson.Obj("init_image" -> pngBase64(64, 64), "steps" -> 1, "width" -> 64, "height" -> 64),
+      "return_images" -> false))("structuredContent")("images").arr
+    assertEquals(result.size, 2)
+    result.foreach { image =>
+      val path = Paths.get(image("path").str)
+      val parameters = PngMetadata.readParameters(path).get
+      val fields = sdfx.core.infotext.Infotext.parse(parameters).fields
+      assert(!fields.contains("NUI img2img source"), parameters)
+      assert(!PngMetadata.readTexts(path).contains("NUI img2img source"))
+      assert(!parameters.contains(".tmp/sdfx-"), parameters)
+    }
+  }
+
+
+  test("Quick Mask Default and ordinary MCP img2img do not gain new source metadata") {
+    val source = home.outputs(services.settings).resolve("quickmask-default-source.png")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Base64.getDecoder.decode(pngBase64(64, 64)))
+    val params = ujson.Obj("init_image" -> source.toString, "prompt" -> "default metadata", "steps" -> 1,
+      "width" -> 64, "height" -> 64)
+    val ordinary = ok("img2img", ujson.Obj.from(params.value.toSeq ++ Seq("return_images" -> ujson.Bool(false))))("structuredContent")("images").arr
+    val workflow = ok("run_script", ujson.Obj("script_id" -> "img2img_workflow",
+      "values" -> ujson.Obj("quick_mask" -> "Default"), "params" -> params,
+      "return_images" -> false))("structuredContent")("images").arr
+    (ordinary ++ workflow).foreach { image =>
+      val path = Paths.get(image("path").str)
+      val parameters = PngMetadata.readParameters(path).get
+      assert(!sdfx.core.infotext.Infotext.parse(parameters).fields.contains("NUI img2img source"), parameters)
+      assert(!PngMetadata.readTexts(path).contains("NUI img2img source"))
+    }
+  }

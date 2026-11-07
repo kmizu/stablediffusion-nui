@@ -16,7 +16,7 @@ private[engine] object Img2ImgFolderRunner:
 
   def recordedParams(params: GenerationParams, provenance: Option[(String, String)]): GenerationParams =
     provenance match
-      case Some((staged, original)) if params.img2img.exists(_.initImage == staged) =>
+      case Some((staged, original)) if original.nonEmpty && params.img2img.exists(_.initImage == staged) =>
         params.copy(img2img = params.img2img.map(_.copy(initImage = original)),
           extra = params.extra.updated("NUI img2img source", original))
       case _ => params

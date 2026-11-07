@@ -102,12 +102,19 @@ object Images:
     */
   def materialize(spec: String, field: String, policy: PathPolicy, base: Path, tempFile: String => Path,
       platform: String = System.getProperty("os.name")): (Path, Option[Path]) =
+    val (staged, temporary, _) = materializeWithSource(spec, field, policy, base, tempFile, platform)
+    (staged, temporary)
+
+  /** One resolution produces both the verified byte snapshot and its durable source identity. */
+  def materializeWithSource(spec: String, field: String, policy: PathPolicy, base: Path, tempFile: String => Path,
+      platform: String = System.getProperty("os.name")): (Path, Option[Path], Option[String]) =
     val s = spec.trim
     if s.isEmpty then throw ToolError(s"$field is empty")
     s match
       case DataUri(_, meta, data) =>
         if !Option(meta).exists(_.contains("base64")) then throw ToolError(s"$field: only base64 data URIs are supported")
-        writeDecoded(decodeB64(data, field), field, tempFile)
+        val (staged, temporary) = writeDecoded(decodeB64(data, field), field, tempFile)
+        (staged, temporary, None)
       case _ if PathPolicy.isNetworkPath(s) || looksLikePath(s) =>
         val p = policy.resolve(s, field, base)
         val data = readVerifiedBytes(p, policy, field, platform = platform, base64Alternative = true)
@@ -121,13 +128,15 @@ object Images:
         val staged = tempFile(suffix)
         try
           Files.write(staged, data)
-          (staged.toAbsolutePath, Some(staged))
+          (staged.toAbsolutePath, Some(staged), Some(p.toString))
         catch
           case error: Throwable =>
             try Files.deleteIfExists(staged)
             catch case cleanup: Throwable => error.addSuppressed(cleanup)
             throw error
-      case _ => writeDecoded(decodeB64(s, field), field, tempFile)
+      case _ =>
+        val (staged, temporary) = writeDecoded(decodeB64(s, field), field, tempFile)
+        (staged, temporary, None)
 
   private[mcp] def readVerifiedBytes(p: Path, policy: PathPolicy, field: String,
       afterOpen: () => Unit = () => (), platform: String = System.getProperty("os.name"),

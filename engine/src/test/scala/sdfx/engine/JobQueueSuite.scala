@@ -194,6 +194,86 @@ class JobQueueSuite extends munit.FunSuite:
       b.getRGB(0, 0, b.getWidth, b.getHeight, null, 0, b.getWidth)))
   }
 
+  test("script input snapshots retain original path in generation provenance") {
+    val source = java.nio.file.Files.createTempFile("workflow-source-", ".png")
+    val image = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.PngMetadata.write(image, source, Nil)
+    val plugin = new Plugin:
+      def id = "test_snapshot_source"
+      def name = "test snapshot source"
+      def kind = PluginKind.Script
+      override def run(p: GenerationParams, values: Values, ctx: PluginContext): JobOutput =
+        val staged = ctx.tempFile(".png")
+        try
+          ctx.writeTempImage(ctx.readImage(source), staged)
+          val request = p.copy(img2img = Some(sdfx.core.model.Img2ImgParams(staged.toString)))
+          val first = ctx.generateWithInputSnapshot(request, source.toString)
+          try
+            ctx.generateWithInputSnapshot(request.copy(width = 0), source.toString)
+            throw new AssertionError("invalid request unexpectedly succeeded")
+          catch case _: sdfx.core.protocol.EngineError => ()
+          JobOutput(first ++ ctx.generate(p))
+        finally java.nio.file.Files.deleteIfExists(staged)
+    try
+      val result = await(queue.submit(Job(base).copy(script = Some(plugin -> Values.empty))))
+      val output = result.images.head
+      assertEquals(output.params.img2img.get.initImage, source.toString)
+      assertEquals(sdfx.core.png.PngMetadata.readTexts(output.path).get("NUI img2img source"), Some(source.toString))
+      val ordinary = result.images.last
+      assertEquals(ordinary.params.img2img, None)
+      assertEquals(sdfx.core.png.PngMetadata.readTexts(ordinary.path).get("NUI img2img source"), None)
+    finally java.nio.file.Files.deleteIfExists(source)
+  }
+
+  test("script snapshots in a folder retain each original path") {
+    val folder = java.nio.file.Files.createTempDirectory(home.root, "snapshot-folder-")
+    val sourceA = folder.resolve("a.png"); val sourceB = folder.resolve("b.png")
+    val image = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.PngMetadata.write(image, sourceA, Nil)
+    sdfx.core.png.PngMetadata.write(image, sourceB, Nil)
+    val plugin = new Plugin:
+      def id = "test_folder_snapshot"
+      def name = "test folder snapshot"
+      def kind = PluginKind.Script
+      override def run(p: GenerationParams, values: Values, ctx: PluginContext): JobOutput =
+        val staged = ctx.tempFile(".png")
+        try
+          ctx.writeTempImage(ctx.readImage(java.nio.file.Path.of(p.img2img.get.initImage)), staged)
+          val request = p.copy(img2img = p.img2img.map(_.copy(initImage = staged.toString)))
+          JobOutput(ctx.generateWithInputSnapshot(request, p.img2img.get.initImage))
+        finally java.nio.file.Files.deleteIfExists(staged)
+    val params = base.copy(img2img = Some(sdfx.core.model.Img2ImgParams("")))
+    val result = await(queue.submit(Job(params).copy(script = Some(plugin -> Values.empty),
+      img2imgFolder = Some(Img2ImgFolderSpec(folder.toString)))))
+    assertEquals(result.images.map(_.params.img2img.get.initImage), Seq(sourceA.toRealPath().toString, sourceB.toRealPath().toString))
+    result.images.zip(Seq(sourceA, sourceB)).foreach { (output, source) =>
+      assertEquals(sdfx.core.png.PngMetadata.readTexts(output.path).get("NUI img2img source"), Some(source.toRealPath().toString))
+    }
+  }
+
+  test("script context writes protected temporary images that round trip and clean up") {
+    val session = new sdfx.core.png.ImageScrambleSession
+    session.unlock("mask secret")
+    var path: java.nio.file.Path = null
+    val plugin = new Plugin:
+      def id = "test_temp_mask"
+      def name = "test temp mask"
+      def kind = PluginKind.Script
+      override def run(p: GenerationParams, values: Values, ctx: PluginContext): JobOutput =
+        val mask = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        mask.setRGB(2, 3, 0xffffff)
+        path = ctx.tempFile(".png")
+        try
+          ctx.writeTempImage(mask, path)
+          assertEquals(sdfx.core.png.PngMetadata.readTexts(path).get("Encrypt"), Some("pixel_shuffle_3"))
+          assertEquals(ctx.readImage(path).getRGB(2, 3) & 0xffffff, 0xffffff)
+          assertEquals(ctx.readImage(path).getRGB(0, 0) & 0xffffff, 0)
+          JobOutput(Nil)
+        finally java.nio.file.Files.deleteIfExists(path)
+    await(queue.submit(Job(base).copy(script = Some(plugin -> Values.empty), imageSecret = session.snapshot)))
+    assert(path != null && !java.nio.file.Files.exists(path))
+  }
+
   test("script worker tools receive decoded images and remove temporary inputs") {
     val src = java.nio.file.Files.createTempFile("scrambled-tool-test", ".png")
     val image = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)

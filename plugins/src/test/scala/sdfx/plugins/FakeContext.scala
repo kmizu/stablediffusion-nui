@@ -66,6 +66,8 @@ class FakeContext(val interruptAfter: Int = Int.MaxValue, val echoInit: Boolean 
   /** Generations of any kind (regular + transient); the interrupt counter uses this. */
   def attempted: Int = gen.size + trans.size
 
+  override def generateWithInputSnapshot(p: GenerationParams, original: String): Seq[OutputImage] = generate(p)
+
   def generate(p: GenerationParams): Seq[OutputImage] =
     if interrupted || attempted >= interruptAfter then interruptNow()
     gen += p
