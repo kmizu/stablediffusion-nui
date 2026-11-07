@@ -40,7 +40,10 @@ private[engine] object EngineBackend:
         case "python" => false
         case _ => sys.props.get("sdfx.engine.backend") match
           case Some(value) => value.trim.equalsIgnoreCase("scala-torch")
-          case None => providers.exists(_.usesNativeBackend(settings,environment)) || defaultProvider=="scala-torch"
+          // A classpath with no backend module installed (for example the engine module's own tests) has no
+          // native backend to start; only ask for the default when at least one backend is installed.
+          case None => providers.exists(_.usesNativeBackend(settings,environment)) ||
+            (providers.nonEmpty && defaultProvider=="scala-torch")
 
   def launch(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]=sys.env): EngineLaunch =
     val configured0=if environment.contains("SDFX_ENGINE_BACKEND") || settings.engineBackend=="auto" then environment
