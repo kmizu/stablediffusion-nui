@@ -229,6 +229,13 @@ class ProtocolSuite extends munit.FunSuite:
       LoadedModel("n", "p", "sd15", "h"))
   }
 
+  test("memory telemetry accepts device-wide usage and legacy responses") {
+    val native=Json.fromJs[MemoryInfo](ujson.read("""{"allocated_mb":0,"reserved_mb":0,"total_mb":4096,"ram_used_mb":0,"device_used_mb":1234}"""))
+    assertEquals(native.deviceUsedMb,Some(1234.0))
+    val legacy=Json.fromJs[MemoryInfo](ujson.read("""{"allocated_mb":100,"reserved_mb":150,"total_mb":4096,"ram_used_mb":300}"""))
+    assertEquals(legacy.deviceUsedMb,None)
+  }
+
   test("EngineError") {
     val e = EngineError(Protocol.ErrorCodes.Interrupted, "stopped")
     assert(e.isInterrupted)

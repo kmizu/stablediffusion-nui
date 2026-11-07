@@ -1,4 +1,4 @@
-package sdfx.engine
+package sdfx.pythonengine
 
 import munit.FunSuite
 import sdfx.core.config.{AppHome, Settings}

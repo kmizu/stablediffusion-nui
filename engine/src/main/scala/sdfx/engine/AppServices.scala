@@ -13,7 +13,7 @@ import scala.util.control.NonFatal
 
 /** Wires the engine side of the app together. Shared by the JavaFX UI and the MCP server.
   *
-  * @param launchOverride replaces the Python discovery (tests, custom engines)
+  * @param launchOverride replaces backend selection (tests and custom engines)
   */
 final class AppServices(
     val home: AppHome,
@@ -115,7 +115,7 @@ final class AppServices(
     Option(_settings.hiresFixTweaks.outputDir).filter(_.trim.nonEmpty).toSeq.map(p => home.resolve(p.trim)))
   @volatile private var galleryIndex = newGalleryIndex()
 
-  // Ensures the Python child does not outlive the JVM when shutdown() is never reached.
+  // Ensures the selected worker process does not outlive the JVM when shutdown() is never reached.
   private val shutdownHook: Option[Thread] =
     if !installShutdownHook then None
     else

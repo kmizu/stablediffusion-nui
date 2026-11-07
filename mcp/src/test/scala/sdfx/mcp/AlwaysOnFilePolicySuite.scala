@@ -59,3 +59,22 @@ class AlwaysOnFilePolicySuite extends munit.FunSuite:
     assertEquals(input.validate(fastload, ujson.Obj("priority" -> "current_first", "path" -> "missing.cni")).str("path"), "")
     intercept[ToolError] { input.validate(fastload, ujson.Obj("priority" -> "loaded_first", "path" -> "missing.cni")) }
   }
+
+  test("dynamic AlwaysOn choices can be submitted before the async engine catalog is ready") {
+    val hires = new Plugin:
+      def id = "img2img_hires_fix"
+      def name = "Hires Fix"
+      def kind = PluginKind.AlwaysOn
+      override def tabs = Set(Tab.Img2Img)
+      override def controls = Seq(Control.DynamicChoice("upscaler", "Pixel upscaler", ChoiceSource.Upscalers,
+        "R-ESRGAN 4x+", allowNone = false))
+    val emptyCatalog = new AlwaysOnInputs(() => Seq(hires), _ => Nil, (_, _) => "image", (_, _) => "file")
+    val supplied = ujson.Obj("img2img_hires_fix" -> ujson.Obj("upscaler" -> "Lanczos"))
+    assertEquals(emptyCatalog.parse(supplied, Tab.Img2Img).head._2.str("upscaler"), "Lanczos")
+
+    val populatedCatalog = new AlwaysOnInputs(() => Seq(hires), _ => Seq("Nearest", "Lanczos"), (_, _) => "image", (_, _) => "file")
+    assertEquals(populatedCatalog.parse(supplied, Tab.Img2Img).head._2.str("upscaler"), "Lanczos")
+    intercept[ToolError] {
+      populatedCatalog.parse(ujson.Obj("img2img_hires_fix" -> ujson.Obj("upscaler" -> "Missing")), Tab.Img2Img)
+    }
+  }

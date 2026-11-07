@@ -1,7 +1,7 @@
 package sdfx.engine
 
 import sdfx.core.protocol.*
-import sdfx.core.model.{GenerationParams,Img2ImgParams}
+import sdfx.core.model.{GenerationParams,HiresParams,Img2ImgParams}
 import java.nio.file.{Files,Path}
 import java.util.concurrent.ConcurrentLinkedQueue
 import scala.concurrent.Await
@@ -19,8 +19,7 @@ class NativeScalaEngineSuite extends munit.FunSuite:
     val temp=Files.createTempDirectory("nui-native-engine")
     val config=temp.resolve("euler.json")
     Files.writeString(config,"""{"num_train_timesteps":1000,"beta_start":0.00085,"beta_end":0.012,"beta_schedule":"scaled_linear"}""")
-    val launch=ScalaTorchLaunch.fromEnvironment(Map("SDFX_SCALATORCH_CLASSPATH_FILE"->cpFile.get,
-      "SDFX_SCALATORCH_MODEL"->root.toString,"SDFX_SCALATORCH_SCHEDULER"->config.toString)).get
+    val launch=NativeTestLaunch(cpFile.get,root,config)
     val supervisor=new EngineSupervisor(() => launch,maxRestarts=0)
     val client=new EngineClient(supervisor)
     var failure: Throwable=null
@@ -30,12 +29,12 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       val requestedUnetDevice=sys.env.getOrElse("SDFX_SCALATORCH_UNET_DEVICE","cpu")
       val expectedUnetDevice=if requestedUnetDevice=="cuda" then "cuda:0" else requestedUnetDevice
       assertEquals(hello.device,expectedUnetDevice)
-      val models=Await.result(client.listModels(Seq(root.getParent.toString)),10.seconds)
+      val models=Await.result(client.listModels(Seq(root.toString)),10.seconds)
       assertEquals(models.map(_.path),Seq(root.toRealPath().toString))
       assert(models.head.sizeMb>0)
       val samplers=Await.result(client.listSamplers(),10.seconds)
-      assertEquals(samplers.samplers.map(_.name),Seq("Euler","DPM++ 2M"))
-      assertEquals(samplers.samplers.last.defaultScheduler,"Karras")
+      assertEquals(samplers.samplers.map(_.name),Seq("Euler","Euler a","Heun","DPM++ 2M","DDIM"))
+      assertEquals(samplers.samplers(3).defaultScheduler,"Karras")
       val vaes=Await.result(client.listFiles("vae",Seq(root.resolve("vae").toString)),10.seconds)
       assertEquals(vaes.map(_.name),Seq("diffusion_pytorch_model"))
       assert(vaes.head.sizeMb>0)
@@ -65,7 +64,7 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       assertEquals(saved("source").str,"custom")
       assertEquals(mapping("check")("keywords").arr.map(_.str).toVector,Vector("a red"))
       val events=new ConcurrentLinkedQueue[EngineEvent]()
-      val request=GenerationRequest(GenerationParams(prompt="cat",width=64,height=64,steps=3,seed=42,
+      val request=GenerationRequest(GenerationParams(prompt="cat",width=64,height=64,steps=3,seed=42,samplerName="heun",
         hooks=Map("model_keyword"->ujson.Obj("_mapping_dir"->temp.toString))),temp.toString)
       val result=Await.result(client.generate(request,GenerationMode.Txt2Img,event => { events.add(event);() }).result,45.seconds)
       assertEquals(result.images.size,1)
@@ -85,6 +84,16 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       val editedImage=javax.imageio.ImageIO.read(Path.of(edited.images.head.path).toFile)
       assertEquals(editedImage.getWidth,64);assertEquals(editedImage.getHeight,64)
       assertEquals(events.asScala.collect {case p: EngineEvent.Progress => p.step}.toVector,Vector(1,2))
+      val mask=new java.awt.image.BufferedImage(64,64,java.awt.image.BufferedImage.TYPE_INT_RGB)
+      for y <- 0 until 64; x <- 0 until 64 do mask.setRGB(x,y,if x>=32 then 0xffffff else 0)
+      val maskPath=temp.resolve("mask.png");javax.imageio.ImageIO.write(mask,"png",maskPath.toFile)
+      val masked=request.copy(params=request.params.copy(steps=1,hooks=Map.empty,
+        img2img=Some(Img2ImgParams(result.images.head.path,mask=Some(maskPath.toString),maskBlur=0,denoisingStrength=1))))
+      val maskedBase=Await.result(client.generate(masked,GenerationMode.Img2Img,_=>()).result,45.seconds)
+      val maskedHires=Await.result(client.generate(masked.copy(params=masked.params.copy(hires=HiresParams(enabled=true))),
+        GenerationMode.Img2Img,_=>()).result,45.seconds)
+      def imagePixels(path: String)=javax.imageio.ImageIO.read(Path.of(path).toFile).getRGB(0,0,64,64,null,0,64).toVector
+      assertEquals(imagePixels(maskedHires.images.head.path),imagePixels(maskedBase.images.head.path))
       assert(mapping("delete")("deleted").bool)
       assertEquals(mapping("check")("source").str,"no match")
       Await.result(client.unload(),10.seconds)
@@ -111,8 +120,7 @@ class NativeScalaEngineSuite extends munit.FunSuite:
     val temp=Files.createTempDirectory("nui-native-sdxl")
     val config=temp.resolve("euler.json")
     Files.writeString(config,"""{"num_train_timesteps":1000,"beta_start":0.00085,"beta_end":0.012,"beta_schedule":"scaled_linear"}""")
-    val launch=ScalaTorchLaunch.fromEnvironment(Map("SDFX_SCALATORCH_CLASSPATH_FILE"->cpFile.get,
-      "SDFX_SCALATORCH_MODEL"->root.toString,"SDFX_SCALATORCH_SCHEDULER"->config.toString)).get
+    val launch=NativeTestLaunch(cpFile.get,root,config)
     val supervisor=new EngineSupervisor(() => launch,maxRestarts=0)
     val client=new EngineClient(supervisor)
     var failure: Throwable=null
@@ -122,6 +130,7 @@ class NativeScalaEngineSuite extends munit.FunSuite:
       assertEquals(loaded.path,root.toRealPath().toString)
       assert(loaded.hash.matches("[0-9a-f]{64}"))
       val params=GenerationParams(prompt="a red apple",negativePrompt="blurry",width=64,height=64,steps=3,seed=42,
+        samplerName="Heun",
         extra=Map("sdfx_sdxl_original_height"->"80","sdfx_sdxl_original_width"->"96",
           "sdfx_sdxl_crop_top"->"2","sdfx_sdxl_crop_left"->"4"))
       val request=GenerationRequest(params,temp.toString)

@@ -181,7 +181,8 @@ object Settings:
       finally in.close()
       hash = Some(digest.digest().map(b => f"${b & 0xff}%02x").mkString)
       val decoder = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
-      val preflight = SettingsPreviewPreflight(decoder.decode(ByteBuffer.wrap(out.toByteArray)).toString)
+      val decodedText = decoder.decode(ByteBuffer.wrap(out.toByteArray)).toString
+      val preflight = SettingsPreviewPreflight(decodedText.stripPrefix("\ufeff"))
       val json = ujson.read(preflight.json)
       if !json.isInstanceOf[ujson.Obj] then throw new IllegalArgumentException("settings document must be an object")
       val obj = json.obj

@@ -312,7 +312,8 @@ final class SystemInfoTab(ctx: UiContext):
 object SystemInfoTab:
   def benchmarkRows(record: ujson.Value): Seq[(String, String)] =
     val scores = record.obj.get("results").toSeq.flatMap(_.arr.toSeq).map { row =>
-      val key = "Batch " + row("batch").num.toInt
+      val batch=row("batch").num.toInt
+      val key=if row.obj.get("batch_execution").contains(ujson.Str("sequential")) then s"$batch images (sequential)" else s"Batch $batch"
       val value = if row("status").str == "complete" then
         f"${row("iterations_per_second").num}%.2f it/s · ${row("seconds").num}%.2f s · ${row("megapixels_per_second").num}%.2f MP/s"
       else row("status").str + ": " + row.obj.get("error").map(_.str).getOrElse("unavailable")

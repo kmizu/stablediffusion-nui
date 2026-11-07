@@ -57,7 +57,8 @@ private[mcp] final class AlwaysOnInputs(
           v
         case Control.DynamicChoice(_, _, src, d, allowNone) =>
           val v = args.str(key).getOrElse(d)
-          if args.has(key) && !(allowNone && (v.isEmpty || v == "None")) && !choices(src).contains(v) then
+          val available = choices(src)
+          if args.has(key) && available.nonEmpty && !(allowNone && (v.isEmpty || v == "None")) && !available.contains(v) then
             throw ToolError(s"$field: invalid model/choice; use list_always_on")
           v
         case Control.ImageFile(_, _, multiple) =>

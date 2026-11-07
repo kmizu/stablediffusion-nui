@@ -3,7 +3,7 @@ package sdfx.engine
 import java.nio.file.{Files, Path}
 import scala.concurrent.Future
 
-/** Files go directly to Python: image loaders must not flatten RGBA, CMYK or L data. */
+/** Files go directly to the selected worker: image loaders must preserve RGBA, CMYK and L data. */
 final class VaeToolsService(services: AppServices):
   def run(input: Seq[Path], operation: String, representation: String, approximation: String,
           output: Path, seed: Long = 0, tiled: Boolean = false, cmykFormat: String = "TIFF",

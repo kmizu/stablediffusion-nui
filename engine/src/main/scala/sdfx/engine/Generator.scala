@@ -374,8 +374,9 @@ final class Generator(
     val sonarUpscaler = recorded.hooks.get("sonar").collect {
       case o: ujson.Obj if o.value.get("upscale").contains(ujson.Bool(true)) && o.value.contains("upscaler") => o("upscaler").str
     }
+    def findUpscalerPath(name: String): Option[String] = catalog.findUpscaler(name).map(_.path)
     val upPaths = Seq(Option.when(recorded.hires.enabled)(recorded.hires.upscaler), refinement.map(_("upscaler").str), sonarUpscaler).flatten
-      .flatMap(u => catalog.findUpscaler(u).map(e => u -> e.path))
+      .flatMap(u => findUpscalerPath(u).map(u -> _))
       .toMap
     val s = settings()
     val resolvedHooks = resolveHookModels(recorded.hooks, msg => warnings += msg).map {
@@ -827,7 +828,11 @@ final class Generator(
     }), timeouts.upscale, kind)
     r match
       case o: ujson.Obj =>
-        Seq("path", "preview").flatMap(k => o.value.get(k)).collect { case ujson.Str(s) => s }.foreach(s => listener.onTempFile(Paths.get(s)))
+        // Model tools publish the user's requested checkpoint path. It is not
+        // a job temporary and must survive queue cleanup, even for scripts
+        // that return no generated images.
+        val temporaryKeys = if Set("merge_models", "convert_model")(kind) then Seq("preview") else Seq("path", "preview")
+        temporaryKeys.flatMap(k => o.value.get(k)).collect { case ujson.Str(s) => s }.foreach(s => listener.onTempFile(Paths.get(s)))
         o.value.get("images").collect { case a: ujson.Arr => a.value.collect { case ujson.Str(s) => s } }
           .getOrElse(Nil).foreach(s => listener.onTempFile(Paths.get(s)))
         o.value.get("outputs").collect { case m: ujson.Obj => m.value.values.collect { case ujson.Str(s) => s } }

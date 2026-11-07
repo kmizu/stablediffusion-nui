@@ -1,57 +1,73 @@
 package sdfx.engine
 
 import sdfx.core.config.{AppHome,Settings}
+import scala.jdk.CollectionConverters.*
 
 /** Engine implementation boundary. UI, Generator and MCP depend on EngineClient only. */
-private[engine] sealed trait EngineBackend:
+private[engine] trait EngineBackend:
   def name: String
   def launch(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]): EngineLaunch
 
 private[engine] object EngineBackend:
-  private object Python extends EngineBackend:
-    val name="python"
+  private lazy val providers=java.util.ServiceLoader.load(classOf[EngineBackendProvider]).iterator().asScala.toVector
+  def availableProviders: Vector[String] = providers.map(_.name).distinct.sorted
+  def defaultProvider: String =
+    if availableProviders.contains("python") then "python"
+    else if availableProviders.size==1 then availableProviders.head
+    else throw new IllegalArgumentException("no unambiguous default engine backend is installed")
+  private def backend(value: EngineBackendProvider): EngineBackend = new EngineBackend:
+    val name=value.name
     def launch(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]): EngineLaunch =
-      PythonEnv.engineLaunch(home,settings,dryRun)
-  private object ScalaTorch extends EngineBackend:
-    val name="scala-torch"
-    def launch(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]): EngineLaunch =
-      require(!dryRun,"Scala native engine does not implement dry-run mode")
-      ScalaTorchLaunch.fromEnvironment(environment).getOrElse(
-        throw new IllegalArgumentException("scala-torch backend requires its classpath, model and scheduler configuration"))
+      value.launch(home,settings,dryRun,environment)
+  private def provider(name: String)=backend(providers.find(_.name==name).getOrElse(
+    throw new IllegalArgumentException(s"engine backend module is not installed: $name")))
 
-  /** Python stays the default; explicit Scala selection is one replaceable module boundary.
-    * The preexisting Scala launch variables remain a backwards-compatible opt-in.
-    */
+  /** Backend modules are discovered through the generic provider SPI. */
   def select(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]=sys.env): EngineBackend =
-    environment.get("SDFX_ENGINE_BACKEND").map(_.trim.toLowerCase(java.util.Locale.ROOT)) match
-      case Some("python") => Python
-      case Some("scala-torch") => ScalaTorch
+    environment.get("SDFX_ENGINE_BACKEND").orElse(sys.props.get("sdfx.engine.backend"))
+      .map(_.trim.toLowerCase(java.util.Locale.ROOT)) match
+      case Some("python") => provider("python")
+      case Some("scala-torch") => provider("scala-torch")
       case Some(other) => throw new IllegalArgumentException(s"unsupported engine backend: $other")
-      case None => if ScalaTorchLaunch.requested(environment) then ScalaTorch else Python
+      case None => providers.find(_.requested(environment)).map(backend).getOrElse(provider(defaultProvider))
 
   /** Whether startup should skip Python setup for the selected non-Python backend. */
   def usesNativeBackend(settings: Settings,environment: Map[String,String]): Boolean =
-    settings.engineBackend=="scala-torch" || ScalaTorchLaunch.requested(environment) ||
-      environment.get("SDFX_ENGINE_BACKEND").exists(_.trim.equalsIgnoreCase("scala-torch"))
+    environment.get("SDFX_ENGINE_BACKEND") match
+      case Some(value) => value.trim.equalsIgnoreCase("scala-torch")
+      case None => settings.engineBackend match
+        case "scala-torch" => true
+        case "python" => false
+        case _ => sys.props.get("sdfx.engine.backend") match
+          case Some(value) => value.trim.equalsIgnoreCase("scala-torch")
+          case None => providers.exists(_.usesNativeBackend(settings,environment)) || defaultProvider=="scala-torch"
 
   def launch(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]=sys.env): EngineLaunch =
     val configured0=if environment.contains("SDFX_ENGINE_BACKEND") || settings.engineBackend=="auto" then environment
       else environment.updated("SDFX_ENGINE_BACKEND",settings.engineBackend)
-    val saved=Seq(
-      "SDFX_SCALATORCH_CLASSPATH_FILE"->settings.scalaTorchClasspath,
-      "SDFX_SCALATORCH_MODEL"->settings.scalaTorchModel,
-      "SDFX_SCALATORCH_SCHEDULER"->settings.scalaTorchScheduler,
-      "SDFX_SCALATORCH_JAVA"->settings.scalaTorchJava,
-      "SDFX_SCALATORCH_UNET_DEVICE"->Some(settings.scalaTorchUnetDevice),
-      "SDFX_SCALATORCH_VAE_DEVICE"->Some(settings.scalaTorchVaeDevice),
-      "SDFX_SCALATORCH_UNET_OFFLOAD_WEIGHTS"->Some(settings.scalaTorchUnetOffloadWeights.toString),
-      "SDFX_SCALATORCH_VAE_OFFLOAD_WEIGHTS"->Some(settings.scalaTorchVaeOffloadWeights.toString))
-    val configured=saved.foldLeft(configured0) { case (env,(key,value)) =>
-      if env.contains(key) then env else value.map(v => env.updated(key,v)).getOrElse(env)
-    }
-    select(home,settings,dryRun,configured).launch(home,settings,dryRun,configured)
+    select(home,settings,dryRun,configured0).launch(home,settings,dryRun,configured0)
 
 /** Startup capability exposed to the UI without exposing backend implementations. */
 object EngineSelection:
+  /** Backend implementations present in this application distribution. */
+  def availableBackends: Vector[String] = EngineBackend.availableProviders
+
   def usesNativeBackend(settings: Settings,environment: Map[String,String]=sys.env): Boolean =
     EngineBackend.usesNativeBackend(settings,environment)
+
+/** Setup operations supplied by the selected engine backend. */
+object EngineSetup:
+  private def selected(settings: Settings, environment: Map[String,String]): EngineBackendProvider =
+    val name = environment.get("SDFX_ENGINE_BACKEND").orElse(sys.props.get("sdfx.engine.backend"))
+      .map(_.trim.toLowerCase(java.util.Locale.ROOT)).filter(_.nonEmpty)
+      .orElse(Option.when(settings.engineBackend != "auto")(settings.engineBackend))
+      .getOrElse(EngineBackend.defaultProvider)
+    java.util.ServiceLoader.load(classOf[EngineBackendProvider]).iterator().asScala
+      .find(_.name == name).getOrElse(throw new IllegalArgumentException(s"engine backend module is not installed: $name"))
+
+  def needsSetup(home: AppHome, settings: Settings, environment: Map[String,String]=sys.env): Boolean =
+    selected(settings, environment).needsSetup(home, settings)
+
+  def start(home: AppHome, settings: Settings, log: String => Unit,
+      environment: Map[String,String]=sys.env): EngineSetupTask =
+    selected(settings, environment).setup(home, settings, log)

@@ -13,7 +13,7 @@ import scala.concurrent.duration.*
 
 /** Real Generator saving/replay using a Java worker and an isolated app home. */
 class NativeGeneratorSuite extends munit.FunSuite:
-  override val munitTimeout: Duration=180.seconds
+  override val munitTimeout: Duration=300.seconds
   private def widenTinyInpaintModel(source: Path,target: Path): Unit =
     import scala.jdk.CollectionConverters.*
     val paths=Files.walk(source)
@@ -82,6 +82,55 @@ class NativeGeneratorSuite extends munit.FunSuite:
     entries.foreach((_,_,values)=>values.foreach(data.putFloat))
     Files.write(path,ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(header.length.toLong).array()++header++data.array())
 
+  private def writeEmbedding(path: Path,width: Int): Unit =
+    val values=Array.fill(width)(0.75f)
+    val header=s"\"emb_params\":{\"dtype\":\"F32\",\"shape\":[${width}],\"data_offsets\":[0,${width*4}]}"
+      .prepended('{').appended('}').getBytes(java.nio.charset.StandardCharsets.UTF_8)
+    val data=ByteBuffer.allocate(width*4).order(ByteOrder.LITTLE_ENDIAN)
+    values.foreach(data.putFloat)
+    Files.write(path,ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(header.length.toLong).array()++header++data.array())
+
+  private def writePyTorchEmbedding(path: Path,width: Int): Unit =
+    val bytes=ByteArrayOutputStream()
+    val out=java.io.DataOutputStream(bytes)
+    def op(value: Int): Unit=out.writeByte(value)
+    def raw(value: String): Unit=out.write(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+    def global(module: String,name: String): Unit={ op('c');raw(module);op('\n');raw(name);op('\n') }
+    def unicode(value: String): Unit=
+      val data=value.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+      op('X');out.writeInt(Integer.reverseBytes(data.length));out.write(data)
+    def int(value: Int): Unit={ op('J');out.writeInt(Integer.reverseBytes(value)) }
+    def tuple(value: Int): Unit={ op('(');int(value);op('t') }
+    op(0x80);op(2);op('}');unicode("string_to_param");op('}');unicode("*")
+    global("torch._utils","_rebuild_tensor_v2");op('(');op('(')
+    unicode("storage");global("torch","FloatStorage");unicode("0");unicode("cpu");int(width)
+    op('t');op('Q');int(0);tuple(width);tuple(1);op(0x89)
+    global("collections","OrderedDict");op(')');op('R');op('t');op('R');op('s');op('s')
+    unicode("name");unicode(path.getFileName.toString.replaceFirst("\\.[^.]*$",""));op('s')
+    unicode("step");op('N');op('s');op('.')
+    out.flush()
+    val tensorBytes=ByteBuffer.allocate(width*4).order(ByteOrder.LITTLE_ENDIAN)
+    var i=0
+    while i<width do { tensorBytes.putFloat(0.75f);i+=1 }
+    val zip=java.util.zip.ZipOutputStream(Files.newOutputStream(path))
+    try
+      def entry(name: String,data: Array[Byte]): Unit={ zip.putNextEntry(new java.util.zip.ZipEntry(name));zip.write(data);zip.closeEntry() }
+      entry("archive/data.pkl",bytes.toByteArray)
+      entry("archive/data/0",tensorBytes.array())
+      entry("archive/version","3\n".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+    finally zip.close()
+
+  private def writeSdxlEmbedding(path: Path,leftWidth: Int,rightWidth: Int): Unit =
+    val entries=Vector("clip_l"->Array.fill(leftWidth)(0.75f),"clip_g"->Array.fill(rightWidth)(-0.5f))
+    var offset=0L
+    val header=entries.map { (name,values) =>
+      val begin=offset;offset+=values.length.toLong*4
+      s"\"$name\":{\"dtype\":\"F32\",\"shape\":[1,${values.length}],\"data_offsets\":[$begin,$offset]}"
+    }.mkString("{",",","}").getBytes(java.nio.charset.StandardCharsets.UTF_8)
+    val data=ByteBuffer.allocate(Math.toIntExact(offset)).order(ByteOrder.LITTLE_ENDIAN)
+    entries.foreach((_,values)=>values.foreach(data.putFloat))
+    Files.write(path,ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(header.length.toLong).array()++header++data.array())
+
   test("native Generator saves img2img metadata and replays pixels with the same source") {
     val cpFile=sys.env.get("SCALATORCH_WORKER_CLASSPATH_FILE")
     val model=sys.env.get("SCALATORCH_TINY_MODEL")
@@ -92,8 +141,7 @@ class NativeGeneratorSuite extends munit.FunSuite:
     widenTinyInpaintModel(sourceRoot,root)
     val config=home.root.resolve("scheduler.json")
     Files.writeString(config,"""{"num_train_timesteps":1000,"beta_start":0.00085,"beta_end":0.012,"beta_schedule":"scaled_linear"}""")
-    val launch=ScalaTorchLaunch.fromEnvironment(Map("SDFX_SCALATORCH_CLASSPATH_FILE"->cpFile.get,
-      "SDFX_SCALATORCH_MODEL"->root.toString,"SDFX_SCALATORCH_SCHEDULER"->config.toString)).get
+    val launch=NativeTestLaunch(cpFile.get,root,config)
     val settings=Settings(dtype="fp32",vramMode="cpu",lastModel=None,lastVae=None,
       modelDirs=ModelDirs(checkpoints=Seq(root.getParent.toString)))
     val services=new AppServices(home,settings,dryRun=false,builtins=Nil,
@@ -111,10 +159,36 @@ class NativeGeneratorSuite extends munit.FunSuite:
         sdfx.core.protocol.FileEntry("tiny-native",adapter.toString))))
       val loraParams=GenerationParams(prompt="a red cat",width=64,height=64,steps=1,seed=42)
       val baseline=services.generator.generate(loraParams).head
+      val textEncoderConfig=ujson.read(Files.readString(root.resolve("text_encoder/config.json")))
+      val embedding=home.root.resolve("sks.safetensors")
+      writeEmbedding(embedding,textEncoderConfig("hidden_size").num.toInt)
+      services.catalog.set(services.catalog.snapshot.copy(embeddings=Seq(
+        sdfx.core.protocol.FileEntry("sks",embedding.toString))))
+      val embeddingParams=loraParams.copy(prompt="a red cat sks")
+      assertEquals(services.generator.prepare(embeddingParams).request.embeddingPaths,Seq(embedding.toString))
+      val embedded=services.generator.generate(embeddingParams).head
+      val smallPixels=(path: Path) => PngMetadata.readImage(path).getRGB(0,0,64,64,null,0,64).toVector
+      val embeddedPixels=smallPixels(embedded.path)
+      assertNotEquals(embeddedPixels,smallPixels(baseline.path),"catalog textual inversion must affect native output")
+      services.catalog.set(services.catalog.snapshot.copy(embeddings=Nil))
+      assertEquals(smallPixels(services.generator.generate(embeddingParams).head.path),embeddedPixels,
+        "native worker must retain loaded embeddings without resending paths")
+      val legacyParams=loraParams.copy(prompt="a red cat legacy")
+      val legacyBaseline=smallPixels(services.generator.generate(legacyParams).head.path)
+      val legacyEmbedding=home.root.resolve("legacy.pt")
+      writePyTorchEmbedding(legacyEmbedding,textEncoderConfig("hidden_size").num.toInt)
+      services.catalog.set(services.catalog.snapshot.copy(embeddings=Seq(
+        sdfx.core.protocol.FileEntry("legacy",legacyEmbedding.toString))))
+      val nativeWarnings=scala.collection.mutable.ArrayBuffer.empty[String]
+      val listener=new GenerationListener:
+        override def onLog(message: String): Unit=nativeWarnings+=message
+      val legacyImage=services.generator.generateWith(legacyParams,listener).head
+      val legacyPixels=smallPixels(legacyImage.path)
+      assertNotEquals(legacyPixels,legacyBaseline,"NUI must apply a catalogued PyTorch .pt textual inversion")
+      assert(!nativeWarnings.exists(_.contains("Textual inversion")),"supported .pt embedding must not warn")
       val zeroLora=loraParams.copy(loras=Seq(LoraRef("tiny-native",weight=0.0,unet=Some(0.0))))
       assertEquals(services.generator.prepare(zeroLora).request.loraPaths("tiny-native"),adapter.toString)
       val zero=services.generator.generate(zeroLora).head
-      val smallPixels=(path: Path) => PngMetadata.readImage(path).getRGB(0,0,64,64,null,0,64).toVector
       assertEquals(smallPixels(zero.path),smallPixels(baseline.path),"zero-scale NUI LoRA must be a no-op")
       val active=services.generator.generate(loraParams.copy(loras=Seq(LoraRef("tiny-native",weight=1.0,unet=Some(1.0))))).head
       val activePixels=smallPixels(active.path)
@@ -216,6 +290,21 @@ class NativeGeneratorSuite extends munit.FunSuite:
       val text=services.generator.generate(params).head
       val textPixels=PngMetadata.readImage(text.path)
       assertEquals(textPixels.getWidth,64);assertEquals(textPixels.getHeight,64)
+      val clipLWidth=ujson.read(Files.readString(root.resolve("text_encoder/config.json")))("hidden_size").num.toInt
+      val clipGWidth=ujson.read(Files.readString(root.resolve("text_encoder_2/config.json")))("hidden_size").num.toInt
+      val embedding=home.root.resolve("sks-sdxl.safetensors")
+      writeSdxlEmbedding(embedding,clipLWidth,clipGWidth)
+      services.catalog.set(services.catalog.snapshot.copy(embeddings=Seq(
+        sdfx.core.protocol.FileEntry("sks",embedding.toString))))
+      val tiParams=params.copy(prompt="a red apple sks")
+      val tiImage=services.generator.generate(tiParams).head
+      val tiPixels=PngMetadata.readImage(tiImage.path).getRGB(0,0,64,64,null,0,64).toVector
+      assertNotEquals(tiPixels,textPixels.getRGB(0,0,64,64,null,0,64).toVector,
+        "SDXL catalog textual inversion must modify conditioning on the CUDA worker")
+      services.catalog.set(services.catalog.snapshot.copy(embeddings=Nil))
+      val tiReplay=services.generator.generate(tiParams).head
+      assertEquals(PngMetadata.readImage(tiReplay.path).getRGB(0,0,64,64,null,0,64).toVector,tiPixels,
+        "SDXL loaded tokens must persist after the catalog path is omitted")
       val maskPath=home.root.resolve("mask.png")
       val mask=new BufferedImage(64,64,BufferedImage.TYPE_BYTE_GRAY)
       for y <- 0 until 64; x <- 0 until 64 do mask.setRGB(x,y,if x<32 then 0xff000000 else 0xffffffff)
@@ -232,6 +321,14 @@ class NativeGeneratorSuite extends munit.FunSuite:
       assertEquals(editedPixels.getWidth,64)
       for y <- 0 until 64; x <- 0 until 32 do assertEquals(editedPixels.getRGB(x,y),textPixels.getRGB(x,y))
       assert((32 until 64).exists(x => (0 until 64).exists(y => editedPixels.getRGB(x,y)!=textPixels.getRGB(x,y))))
+      for mask <- Seq(None,Some(maskPath.toString)) do
+        val imageParams=params.copy(cfgScale=7.5,steps=3,img2img=Some(Img2ImgParams(text.path.toString,
+          mask=mask,denoisingStrength=1,maskBlur=0)))
+        val normal=services.generator.generate(imageParams).head
+        val rescaled=services.generator.generate(imageParams.copy(hooks=Map("rescale_cfg"->ujson.Obj("multiplier"->0.7)))).head
+        val a=PngMetadata.readImage(normal.path).getRGB(0,0,64,64,null,0,64)
+        val b=PngMetadata.readImage(rescaled.path).getRGB(0,0,64,64,null,0,64)
+        assert(!a.sameElements(b),s"SDXL rescale must affect img2img (masked=${mask.nonEmpty})")
       assertEquals(!Files.exists(home.pythonDir),true)
       assert(services.supervisor.isRunning)
     catch case error: Throwable =>

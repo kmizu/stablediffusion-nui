@@ -1,89 +1,73 @@
 package sdfx.engine
 
-import sdfx.core.config.{AppHome,ModelDirs,Settings}
-import sdfx.core.model.{GenerationParams,Img2ImgParams}
-import sdfx.core.png.PngMetadata
-
-import java.awt.image.BufferedImage
-import java.nio.file.{Files,Path,StandardCopyOption}
-import javax.imageio.ImageIO
+import sdfx.core.model.GenerationParams
+import sdfx.core.protocol.*
+import java.nio.file.{Files,Path}
+import scala.concurrent.Await
 import scala.concurrent.duration.*
 
-/** Opt-in real SD1.5 smoke run that leaves source and inpaint PNGs for visual review. */
+/** Opt-in full-checkpoint smoke test for low-VRAM Python-free generation. */
 class NativeRealCheckpointSuite extends munit.FunSuite:
-  override val munitTimeout: Duration=15.minutes
+  override val munitTimeout: Duration = 240.seconds
 
-  test("real SD1.5 txt2img and masked img2img run through Python-free Generator on CUDA") {
+  private def generate(modelVariable: String,family: String): Unit =
     val cpFile=sys.env.get("SCALATORCH_WORKER_CLASSPATH_FILE")
-    val model=sys.env.get("SCALATORCH_SD15_MODEL")
-    val outputDir=sys.env.get("SCALATORCH_SAMPLE_OUTPUT_DIR")
-    assume(cpFile.nonEmpty && model.nonEmpty && outputDir.nonEmpty,
-      "worker classpath, SD1.5 model and sample output directory required")
-
-    val root=Path.of(model.get).toAbsolutePath.normalize()
-    val outputs=Path.of(outputDir.get).toAbsolutePath.normalize()
-    Files.createDirectories(outputs)
-    val home=AppHome(Files.createTempDirectory("native-sd15-generator"))
-    val scheduler=root.resolve("euler-explicit.json")
-    require(Files.isRegularFile(scheduler),s"missing Euler scheduler config: $scheduler")
-    val settings=Settings(dtype="fp32",vramMode="cpu",engineBackend="scala-torch",
-      scalaTorchClasspath=Some(cpFile.get),scalaTorchModel=Some(root.toString),
-      scalaTorchScheduler=Some(scheduler.toString),scalaTorchUnetDevice="cuda",
-      scalaTorchVaeDevice="cuda",scalaTorchUnetOffloadWeights=true,scalaTorchVaeOffloadWeights=true,
-      lastModel=None,lastVae=None,modelDirs=ModelDirs(checkpoints=Seq(root.getParent.toString)))
-    val services=new AppServices(home,settings,dryRun=false,builtins=Nil,
-      persistSettings=false,installShutdownHook=false)
+    val model=sys.env.get(modelVariable)
+    assume(cpFile.nonEmpty && model.nonEmpty,s"native worker classpath and $family Diffusers model required")
+    val root=Path.of(model.get).toAbsolutePath
+    val temp=Files.createTempDirectory(s"nui-native-full-$family")
+    val config=temp.resolve("euler.json")
+    Files.writeString(config,"""{"num_train_timesteps":1000,"beta_start":0.00085,"beta_end":0.012,"beta_schedule":"scaled_linear"}""")
+    val launch=NativeTestLaunch(cpFile.get,root,config)
+    val supervisor=new EngineSupervisor(() => launch,maxRestarts=0)
+    val client=new EngineClient(supervisor)
     var failure: Throwable=null
     try
-      val hello=services.start()
+      val hello=supervisor.start()
       assertEquals(hello.python,"")
       assertEquals(hello.device,"cuda:0")
-      services.loadCheckpoint(root.toString,remember=false)
-
-      val sourceParams=GenerationParams(
-        prompt="a red fox sitting in a snowy forest, soft morning light, detailed natural photograph",
-        negativePrompt="blurry, low quality, text, watermark",width=256,height=256,
-        steps=12,seed=41021)
-      val source=services.generator.generate(sourceParams).head
-      val sourceImage=PngMetadata.readImage(source.path)
-      assertEquals(sourceImage.getWidth,256)
-      assertEquals(sourceImage.getHeight,256)
-      Files.copy(source.path,outputs.resolve("sd15-source.png"),StandardCopyOption.REPLACE_EXISTING)
-
-      val maskPath=home.root.resolve("mask.png")
-      val mask=new BufferedImage(256,256,BufferedImage.TYPE_BYTE_GRAY)
-      for y <- 0 until 256; x <- 0 until 256 do
-        mask.setRGB(x,y,if x<128 then 0xff000000 else 0xffffffff)
-      assert(ImageIO.write(mask,"png",maskPath.toFile))
-
-      val editParams=sourceParams.copy(
-        prompt="a red fox in a snowy forest beside a small wooden cabin, soft morning light, detailed natural photograph",
-        steps=12,seed=41022,
-        img2img=Some(Img2ImgParams(source.path.toString,mask=Some(maskPath.toString),
-          denoisingStrength=0.7,resizeMode=0,maskBlur=0)))
-      val edit=services.generator.generate(editParams).head
-      val editImage=PngMetadata.readImage(edit.path)
-      assertEquals(editImage.getWidth,256)
-      assertEquals(editImage.getHeight,256)
-      for y <- 0 until 256; x <- 0 until 128 do
-        assertEquals(editImage.getRGB(x,y),sourceImage.getRGB(x,y),s"preserved pixel ($x,$y)")
-      assert((128 until 256).exists(x => (0 until 256).exists(y =>
-        editImage.getRGB(x,y)!=sourceImage.getRGB(x,y))))
-      assert(!Files.exists(home.pythonDir))
-      assert(services.supervisor.isRunning)
-
-      Files.copy(edit.path,outputs.resolve("sd15-masked-inpaint.png"),StandardCopyOption.REPLACE_EXISTING)
+      val loaded=Await.result(client.loadModel(LoadModelRequest(root.toString,dtype="fp32",vramMode="cpu")),90.seconds)
+      assertEquals(loaded.path,root.toRealPath().toString)
+      assert(loaded.hash.matches("[0-9a-f]{64}"))
+      val placement=Await.result(client.systemStatus(),10.seconds)("runtime")
+      assertEquals(placement("unet_device").str,"cuda:0")
+      assertEquals(placement("vae_device").str,"cuda:0")
+      assert(placement("unet_offload_weights").bool)
+      assert(placement("vae_offload_weights").bool)
+      val width=sys.env.getOrElse("SCALATORCH_REAL_WIDTH","64").toInt
+      val height=sys.env.getOrElse("SCALATORCH_REAL_HEIGHT","64").toInt
+      val steps=sys.env.getOrElse("SCALATORCH_REAL_STEPS","2").toInt
+      require(width>=64 && width<=1024 && height>=64 && height<=1024 && steps>=1 && steps<=50,
+        "real-checkpoint test dimensions or steps are outside the safe test range")
+      val params=GenerationParams(prompt="a red cat",width=width,height=height,steps=steps,seed=4242,samplerName="Heun")
+      val result=Await.result(client.generate(GenerationRequest(params,temp.toString),GenerationMode.Txt2Img).result,180.seconds)
+      assertEquals(result.images.size,1)
+      assertEquals(result.images.head.seed,4242L)
+      val image=javax.imageio.ImageIO.read(Path.of(result.images.head.path).toFile)
+      assertEquals(image.getWidth,width)
+      assertEquals(image.getHeight,height)
+      if sys.env.get("SCALATORCH_CUDA_PROFILE").contains("1") then
+        supervisor.processSnapshot.toVector.flatMap(_.stderrLines)
+          .filter(_.startsWith("[scala-torch CUDA profile]")).foreach(System.err.println)
+      Await.result(client.unload(),20.seconds)
     catch case error: Throwable =>
       failure=error
       throw error
     finally
       try
-        services.shutdown()
-        val files=Files.walk(home.root)
+        supervisor.close()
+        val files=Files.walk(temp)
         try files.sorted(java.util.Comparator.reverseOrder[Path]()).forEach(p => {
-          require(p.toAbsolutePath.normalize().startsWith(home.root.toAbsolutePath.normalize()))
+          require(p.toAbsolutePath.normalize().startsWith(temp.toAbsolutePath.normalize()))
           Files.delete(p);()
         }) finally files.close()
       catch case cleanup: Throwable =>
         if failure!=null then failure.addSuppressed(cleanup) else throw cleanup
+
+  test("NUI EngineClient generates from a full checkpoint with CUDA weight offload") {
+    val configured=Vector("SCALATORCH_REAL_SD15_MODEL"->"SD1.5","SCALATORCH_REAL_SDXL_MODEL"->"SDXL")
+      .filter((name,_)=>sys.env.get(name).exists(_.trim.nonEmpty))
+    require(configured.size<=1,"set only one full-checkpoint model variable per test run")
+    assume(configured.nonEmpty,"set SCALATORCH_REAL_SD15_MODEL or SCALATORCH_REAL_SDXL_MODEL")
+    generate(configured.head._1,configured.head._2)
   }

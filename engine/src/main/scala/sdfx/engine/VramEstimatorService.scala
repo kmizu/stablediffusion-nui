@@ -20,10 +20,10 @@ private[engine] final class VramEstimatorSession:
   }
 
 object VramEstimatorHistory:
-  /** An interrupted run with no completed case cannot supersede usable measurements. */
+  /** Keep observed OOMs; an empty or error-only run does not supersede measured results. */
   def newestMeasured(records: Seq[ujson.Value], fingerprint: String): Option[ujson.Value] =
     records.reverseIterator.find(record => record("fingerprint").str == fingerprint &&
-      record("rows").arr.exists(_("status").str == "complete"))
+      record("rows").arr.exists(row => Set("complete", "oom").contains(row("status").str)))
   val MaxBytes = 16 * 1024 * 1024
   def validate(record: ujson.Value): Unit =
     val obj = record.obj

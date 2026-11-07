@@ -184,7 +184,8 @@ case class UpscaleRequest(imagePath: String, upscaler: String, scale: Double, ou
 case class PreprocessRequest(preprocessor: String, imagePath: String, outputDir: String, args: Map[String, Double] = Map.empty,
     standalone: Boolean = false, processorRes: Int = -1, pixelPerfect: Boolean = false) derives RW
 case class ImagePathResult(path: String, hardwareInfo: Option[HardwareInfo.Record] = None) derives RW
-case class MemoryInfo(allocatedMb: Double = 0, reservedMb: Double = 0, totalMb: Double = 0, ramUsedMb: Double = 0) derives RW
+case class MemoryInfo(allocatedMb: Double = 0, reservedMb: Double = 0, totalMb: Double = 0, ramUsedMb: Double = 0,
+    deviceUsedMb: Option[Double] = None) derives RW
 
 case class TokenPiece(index: Int, id: Int, piece: String, text: String, bytesHex: String, special: Boolean) derives RW
 case class TokenGroup(ids: Seq[Int], text: String) derives RW

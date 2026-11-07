@@ -1,6 +1,7 @@
-package sdfx.engine
+package sdfx.pythonengine
 
 import sdfx.core.config.{AppHome, Settings}
+import sdfx.engine.EngineLaunch
 
 import java.io.{InputStream, InputStreamReader}
 import java.nio.charset.StandardCharsets
@@ -14,7 +15,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.control.NonFatal
 
 /** A running [[PythonEnv.bootstrapAsync]]; `cancel()` kills the current pip/venv child process. */
-final class BootstrapTask private[engine] (val result: Future[Unit], cancelFlag: AtomicBoolean, procs: CopyOnWriteArrayList[Process]):
+final class BootstrapTask private[pythonengine] (val result: Future[Unit], cancelFlag: AtomicBoolean, procs: CopyOnWriteArrayList[Process]):
   def cancel(): Unit =
     cancelFlag.set(true)
     procs.forEach(p => PythonEnv.destroyTree(p))
@@ -84,7 +85,7 @@ object PythonEnv:
     t.start()
     t
 
-  private[engine] def destroyTree(p: Process): Unit =
+  private[pythonengine] def destroyTree(p: Process): Unit =
     try
       p.descendants().forEach(h => { h.destroyForcibly(); () })
       p.destroyForcibly()
@@ -119,7 +120,7 @@ object PythonEnv:
     )
     py ++ Seq("-m", "sdfx") ++ (if dryRun then Seq("--dry-run") else Nil) ++ wdArguments(home, settings, dryRun)
 
-  private[engine] def wdArguments(home: AppHome, settings: Settings, dryRun: Boolean): Seq[String] =
+  private[pythonengine] def wdArguments(home: AppHome, settings: Settings, dryRun: Boolean): Seq[String] =
     val model = settings.wdV3Model.map(_.trim).filter(_.nonEmpty)
     val tags = settings.wdV3Tags.map(_.trim).filter(_.nonEmpty)
     if dryRun then Nil
@@ -134,7 +135,7 @@ object PythonEnv:
       case _ => Nil
 
   def engineEnv(settings: Settings): Map[String, String] =
-    Map("PYTHONUNBUFFERED" -> "1", "PYTHONIOENCODING" -> "utf-8") ++
+    Map("PYTHONUNBUFFERED" -> "1", "PYTHONIOENCODING" -> "utf-8", "PYTHONUTF8" -> "1") ++
       (if settings.hfOffline then Map("HF_HUB_OFFLINE" -> "1", "TRANSFORMERS_OFFLINE" -> "1") else Map.empty) ++
       // custom_code (A1111 --allow-code): only when the user opted in; the engine refuses run_code otherwise
       (if settings.allowCustomCode then Map("SDFX_ALLOW_CODE" -> "1") else Map.empty)

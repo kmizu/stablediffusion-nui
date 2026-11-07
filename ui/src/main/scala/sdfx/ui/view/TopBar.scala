@@ -116,7 +116,11 @@ final class TopBar(
     restartBtn.setManaged(crashed)
 
   def setMemory(m: Option[MemoryInfo]): Unit =
-    vram.setText(m.filter(_.totalMb > 0).map(x => f"VRAM ${x.allocatedMb / 1024}%.1f / ${x.totalMb / 1024}%.1f GB").getOrElse(""))
+    vram.setText(m.filter(_.totalMb > 0).map { x =>
+      x.deviceUsedMb match
+        case Some(used) => f"GPU total ${used / 1024}%.1f / ${x.totalMb / 1024}%.1f GB"
+        case None => f"VRAM ${x.allocatedMb / 1024}%.1f / ${x.totalMb / 1024}%.1f GB"
+    }.getOrElse(""))
 
   private val mcpChip = W.label("", "chip", "chip-mcp")
   mcpChip.setVisible(false)

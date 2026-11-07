@@ -6,7 +6,7 @@ import javafx.scene.control.*
 import javafx.scene.layout.{HBox, Priority, VBox}
 import javafx.stage.{FileChooser, Stage}
 import sdfx.core.config.{AppHome, Settings}
-import sdfx.engine.PythonEnv
+import sdfx.engine.EngineSetup
 import sdfx.ui.Fx
 
 /** First-run setup of the Python environment. Calls `done` with the decision once the user picked a path. */
@@ -57,7 +57,7 @@ final class BootstrapDialog(home: AppHome, settings: Settings, stylesheets: Seq[
       Option(fc.showOpenDialog(stage)).foreach(f => finish(Result.UsePython(f.getAbsolutePath)))
     })
 
-    var task: Option[sdfx.engine.BootstrapTask] = None
+    var task: Option[sdfx.engine.EngineSetupTask] = None
     val cancelBtn = W.button("Cancel", "Stop the installation (kills pip)")(())
     cancelBtn.setVisible(false)
     cancelBtn.setManaged(false)
@@ -83,7 +83,7 @@ final class BootstrapDialog(home: AppHome, settings: Settings, stylesheets: Seq[
             log.appendText(chunk)
             if log.getLength > 400000 then log.deleteText(0, log.getLength - 300000)
           }
-      val t = PythonEnv.bootstrapAsync(home, append, settings)
+      val t = EngineSetup.start(home, settings, append)
       task = Some(t)
       cancelBtn.setVisible(true)
       cancelBtn.setManaged(true)
