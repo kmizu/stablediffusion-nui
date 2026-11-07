@@ -81,9 +81,9 @@ final class EngineClient(val supervisor: EngineSupervisor):
 
   def listSamplers(): Future[SamplerList] = call[SamplerList](Protocol.Types.ListSamplers)
 
-  def loadModel(req: LoadModelRequest): Future[LoadedModel] = call[LoadedModel](Protocol.Types.LoadModel, Json.toJs(req))
+  def loadModel(req: LoadModelRequest): Future[LoadedModel] = call[LoadedModel](Protocol.Types.LoadModel, LoadModelWire.json(req))
   private[engine] def loadModelOwned(req: LoadModelRequest, owner: Option[String]): Future[LoadedModel] =
-    call[LoadedModel](Protocol.Types.LoadModel, Json.toJs(req), owner = owner)
+    call[LoadedModel](Protocol.Types.LoadModel, LoadModelWire.json(req), owner = owner)
 
   /** `path = None` restores the checkpoint's own VAE. */
   def setVae(path: Option[String]): Future[LoadedModel] =
@@ -238,3 +238,15 @@ final class EngineClient(val supervisor: EngineSupervisor):
   def interrupt(): Unit = supervisor.interrupt()
 
   def unload(): Future[Unit] = raw(Protocol.Types.Unload).map(_ => ())
+
+/** Keys added after protocol v1 shipped are omitted while they hold their default, so workers that predate them
+  * (the scala-torch worker 0.1.0 rejects unknown load parameters) still load. Every engine defaults the same way. */
+private[engine] object LoadModelWire:
+  private val defaults = Seq("vae_slicing" -> ujson.Bool(false), "fp8_storage" -> ujson.Bool(false),
+    "vae_auto" -> ujson.Bool(true), "vae_fp16" -> ujson.Bool(false))
+  def json(req: LoadModelRequest): ujson.Value =
+    Json.toJs(req) match
+      case obj: ujson.Obj =>
+        defaults.foreach((key, value) => if obj.value.get(key).contains(value) then obj.value.remove(key))
+        obj
+      case other => other

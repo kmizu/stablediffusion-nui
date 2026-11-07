@@ -387,3 +387,25 @@ Kimi の受入マトリクス（SD1.5/SDXL × stdio/HTTP、公式 SDK、`--requi
 - 実 MCP チェックで Python engine の起動（`import` が重い）に 58 秒かかり、cold cache だと既定の 180 秒で hello が間に合わないことがある。落ちたら warm cache で再実行する。
 - 2026-11-03 の追記にある「次のリリースを公開したら停止、次のバッチは始めない」は、今回の依頼（Quick Mask の PR 化）を優先した。リリースは作っていない。
 - 11-02 に Claude が書いた `HANDOFF-CODEX.md` の未マージブランチ（#26 WIP `d420db4`、#27 `9024c7e`、#143 `7696734`）は、その後 Kimi/Codex が main に統合済みのものが多い（`HANDSOFF.md` の 11-03 追記を参照）。使う前に `git log` で main との重複を確認する。
+
+## 2026-11-08 scala-torch follow-up
+
+- `ScalaTorchLaunchSuite` ("launch preserves paths containing spaces...") was not a code bug. The scala-torch worker needs
+  **Java 25**; sbt on Java 17/21 starts it with the wrong JVM and it exits before the handshake. With
+  `JAVA_HOME=C:\dev\Java\jdk-25.0.5.0.2` the suite passes 5/5. Run Scala tests and `ui/assembly` with Java 25 on this machine.
+- Maven Central has `com.github.kmizu:scala-torch-models_3:0.1.0` (published 2026-11-07); `build.sbt` already uses it.
+- Bug fixed: since the optimization work, every `load_model` sent `vae_slicing`, `fp8_storage`, `vae_auto` and `vae_fp16`,
+  and the scala-torch worker 0.1.0 rejects unknown load parameters ("unsupported parameters ..."), so no model loaded on the
+  native backend. `LoadModelWire.json` now omits those keys while they hold their default (`LoadModelWireSuite`).
+- Real check on the RTX 3090 through the official MCP SDK (scala-torch backend, Java 25, jar rebuilt from this tree):
+  SD1.5 `animekawa_v10`, 512x512, 20 Euler a steps, seed 173 → coherent anime image (looked at). It needed
+  `SDFX_SCALATORCH_UNET_MAX_BYTES`/`SDFX_SCALATORCH_VAE_MAX_BYTES` = 8 GiB and a tokenizer folder
+  (`SDFX_SCALATORCH_TOKENIZER`); with the default 2 GiB session budget the VAE decode failed with
+  "CUDA session allocation budget exceeded".
+- **Still open:** SDXL `waiIllustriousSDXL_v170.safetensors` does not load on the native backend:
+  `[invalid_params] requirement failed: dtype F16 is unsupported by this typed read`. The limit is in the external
+  scala-torch worker (single-file FP16 SDXL), not in this repo. No native SDXL image exists yet. Native LoRA on a real
+  SDXL checkpoint is also unchecked (docs only cover synthetic standard LoRA).
+- Python backend, same MCP route: SDXL `catCarrier_v60` + LoRA `20_cat-hinomina` (0.9), "cute girl hinomina", seed 173,
+  1024x1024 → image differs completely from the same seed without the LoRA (short orange hair, white headband and ribbon).
+  Whether it resembles the intended character was not judged.
