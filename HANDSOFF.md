@@ -377,3 +377,13 @@ Kimi の受入マトリクス（SD1.5/SDXL × stdio/HTTP、公式 SDK、`--requi
 
 ## v0.06 バッチ（ユーザー指示 `issues.take(20).map(_.resolve)`、2026-11-02 開始）
 解釈: open issue を番号昇順で先頭 20 件（#2,3,5,6,8,10,12,13,14,18,19,20,21,22,23,24,25,26,27,28）を解決する。agent を worktree で並行実行（GPU は `outputs/.gpu.lock`）、私が 1 件ずつ merge --squash→テスト→push。実装不能（モデル/依存不足など）の issue は実装済みと数えず理由を記録する。進捗はこの節に追記。
+
+## 2026-11-07 引き継ぎ（Kimi の session `e6b3f0d9` のログを全行読んで Claude が継続）
+
+- Kimi は 11-07 に「remote main と比較して取り込める分は取り込み、追加機能を PR にまとめる」と依頼され、#62 Quick Mask を選んで rebase・MCP の元 path provenance 修正を実装したが、使用上限（429）で止まり、コミット・push・PR は未実施だった。
+- Claude が継続: Kimi の未コミット変更を `ff086b9` として commit、`origin/main` に rebase、`FrozenJobEvidenceSuite` に `inputProvenance` を追加（`33c0bb7`）。実 SD1.5／SDXL の `check_workflow_quickmask_real.py` が両方 `WORKFLOW_QUICKMASK_REAL_OK`（Workflow 画像と直接生成の画素一致、返却 mask の一致、画像を目視）。**PR #145 を `244fceb` で main に merge。#62 は open のまま**（既定の mask 出力・FX・overlay・配布 EXE の確認が未了）。旧記録の `codex/workflow62-quickmask` HEAD `4fea803` は rebase で書き換わった。
+- main の不具合を修正: PR #144（scala-torch backend）以降、`engine` モジュール単体のテストに backend module が無く、`EngineBackend.usesNativeBackend` が「no unambiguous default engine backend」で例外になっていた（`ModelKeywordCatalogSuite` が落ちていた）。`854d432` で、backend が 1 つも無いときは false を返すよう修正し、`EngineBackendSelectionSuite` を追加。`engine` 全体 251 テスト成功。
+- **未解決**: `scalaTorchEngine` の `ScalaTorchLaunchSuite`「launch preserves paths containing spaces and requires existing inputs」は `engine exited before handshake (code 1)` で main でも落ちる（この環境）。実際に managed の scala-torch worker を起動するテストで、原因は未調査。
+- 実 MCP チェックで Python engine の起動（`import` が重い）に 58 秒かかり、cold cache だと既定の 180 秒で hello が間に合わないことがある。落ちたら warm cache で再実行する。
+- 2026-11-03 の追記にある「次のリリースを公開したら停止、次のバッチは始めない」は、今回の依頼（Quick Mask の PR 化）を優先した。リリースは作っていない。
+- 11-02 に Claude が書いた `HANDOFF-CODEX.md` の未マージブランチ（#26 WIP `d420db4`、#27 `9024c7e`、#143 `7696734`）は、その後 Kimi/Codex が main に統合済みのものが多い（`HANDSOFF.md` の 11-03 追記を参照）。使う前に `git log` で main との重複を確認する。
