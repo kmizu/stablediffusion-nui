@@ -147,7 +147,8 @@ final class Generator(
 
   /** A context bound to one job: events go to `listener`; every `generate` applies the active AlwaysOn plugins. */
   def forJob(listener: GenerationListener, alwaysOn: Seq[(Plugin, Values)] = Nil, limits: JobLimits = JobLimits(),
-      provenanceProvider: () => Option[(String, String)] = () => None): PluginContext =
+      provenanceProvider: () => Option[(String, String)] = () => None,
+      snapshotProvenanceProvider: () => Option[(String, String)] = () => None): PluginContext =
     val self = this
     val generations = new java.util.concurrent.atomic.AtomicInteger(0)
     val fastloadPlan = alwaysOn.find((plugin, values) => plugin.id == "controlnet_fastload" && plugin.isActive(values))
@@ -231,7 +232,8 @@ final class Generator(
         val staged = p.img2img.map(_.initImage).filter(_.nonEmpty).getOrElse(
           throw new IllegalArgumentException("Snapshotted generation requires an init image"))
         require(original.nonEmpty, "Snapshotted input requires original provenance")
-        val realOriginal = provenanceProvider().collect { case (folderStage, source) if folderStage == original => source }.getOrElse(original)
+        val realOriginal = snapshotProvenanceProvider().collect { case (stagedSource, source) if stagedSource == original => source }
+          .orElse(provenanceProvider().collect { case (folderStage, source) if folderStage == original => source }).getOrElse(original)
         val previous = Option(activeInputSnapshot.get()).flatten
         activeInputSnapshot.set(Some((staged, realOriginal)))
         try generate(p)
@@ -830,7 +832,7 @@ final class Generator(
       val (params, text) = describe(prep, result, img, loaded)
       val src = Paths.get(img.path)
       val source = listener.inputProvenance.collect {
-        case (_, original) if prep.recorded.img2img.exists(_.initImage == original) => original
+        case (_, original) if original.nonEmpty && prep.recorded.img2img.exists(_.initImage == original) => original
       }
       val chunks = if source.nonEmpty then img.pngChunks.filterNot(_._1 == "NUI img2img source") else img.pngChunks
       val texts = Generator.pngTexts(text, chunks) ++ source.toSeq.map("NUI img2img source" -> _)
@@ -971,8 +973,8 @@ final class Generator(
     val k = if kind == "grid" then "grids" else kind
     val recorded = Img2ImgFolderRunner.recordedParams(params, listener.inputProvenance)
     val source = listener.inputProvenance.collect {
-      case (staged, original) if params.img2img.exists(i => i.initImage == staged || i.initImage == original) => original
-    }
+      case (staged, original) if original.nonEmpty && params.img2img.exists(i => i.initImage == staged || i.initImage == original) => original
+    }.orElse(params.extra.get("NUI img2img source").filter(_.nonEmpty))
     val text = source.fold(infotext) { path =>
       val parsed = Infotext.parse(infotext)
       if parsed.fields.nonEmpty then Infotext.render(parsed.prompt, parsed.negativePrompt, parsed.fields.updated("NUI img2img source", path))

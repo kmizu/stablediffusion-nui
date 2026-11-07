@@ -159,6 +159,7 @@ class Img2ImgWorkflowSuite extends munit.FunSuite:
     var source: java.nio.file.Path = null
     var replaced = false
     var observedPixel = 0
+    var observedMaskPixel = 0
     val ctx = new FakeContext:
       override def writeTempImage(image: java.awt.image.BufferedImage, path: java.nio.file.Path): Unit =
         super.writeTempImage(image, path)
@@ -168,6 +169,7 @@ class Img2ImgWorkflowSuite extends munit.FunSuite:
           javax.imageio.ImageIO.write(replacement, "png", source.toFile)
       override def generate(p: GenerationParams): Seq[sdfx.core.plugins.api.OutputImage] =
         observedPixel = javax.imageio.ImageIO.read(java.nio.file.Path.of(p.img2img.get.initImage).toFile).getRGB(0, 0) & 0xffffff
+        observedMaskPixel = javax.imageio.ImageIO.read(java.nio.file.Path.of(p.img2img.get.mask.get).toFile).getRGB(0, 0) & 0xffffff
         super.generate(p)
     source = java.nio.file.Path.of(ctx.initImage(64, 64))
     javax.imageio.ImageIO.write(ctx.solid(64, 64, 0xffffff), "png", source.toFile)
@@ -175,6 +177,7 @@ class Img2ImgWorkflowSuite extends munit.FunSuite:
     plugin.run(p, values("quick_mask" -> "White"), ctx)
     assert(replaced)
     assertEquals(observedPixel, 0xffffff)
+    assertEquals(observedMaskPixel, 0xffffff)
   }
 
   test("protected source conversion preserves grayscale pixels and rejects high bit depth") {
@@ -223,6 +226,25 @@ class Img2ImgWorkflowSuite extends munit.FunSuite:
     assertEquals(ctx.saved.head._2.getRGB(1, 0) & 0xffffff, 0xffffff)
     assertEquals(ctx.saved.head._3.extra.get("Img2Img Workflow output"), Some("mask"))
     assert(ctx.saved.head._4.contains("Img2Img Workflow output"))
+  }
+
+  test("post-generation interruption keeps partial output but suppresses the returned mask and cleans staging") {
+    var cancelled = false
+    var staged = Seq.empty[java.nio.file.Path]
+    val ctx = new FakeContext:
+      override def isInterrupted: Boolean = cancelled || super.isInterrupted
+      override def generateWithInputSnapshot(p: GenerationParams, original: String): Seq[sdfx.core.plugins.api.OutputImage] =
+        staged = Seq(p.img2img.get.initImage, p.img2img.get.mask.get).map(java.nio.file.Path.of(_))
+        val outputs = super.generateWithInputSnapshot(p, original)
+        cancelled = true
+        outputs
+    val source = java.nio.file.Path.of(ctx.initImage(64, 64))
+    val p = GenerationParams(img2img = Some(Img2ImgParams(source.toString)))
+    val result = plugin.run(p, values("quick_mask" -> "White", "return_mask" -> "true"), ctx)
+    assertEquals(result.images.size, 1)
+    assertEquals(ctx.saved.size, 0)
+    assertEquals(staged.size, 2)
+    staged.foreach(path => assert(!java.nio.file.Files.exists(path), path.toString))
   }
 
   test("returning an existing mask is rejected before generation until it is supported") {

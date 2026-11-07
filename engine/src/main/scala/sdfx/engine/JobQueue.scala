@@ -31,7 +31,8 @@ final case class Job(
     wdBatch: Option[WdBatchSpec] = None,
     imageSecret: Option[sdfx.core.png.ImageScrambleSecret] = None,
     editorPreview: Option[EditorPreviewPayload] = None,
-    img2imgFolder: Option[Img2ImgFolderSpec] = None
+    img2imgFolder: Option[Img2ImgFolderSpec] = None,
+    inputProvenance: Option[(String, String)] = None
 )
 
 /** Kept only in the in-memory queue and private worker request. */
@@ -88,7 +89,7 @@ object JobRunner:
         throw EngineError(Protocol.ErrorCodes.Unsupported, "WD batch does not support scripts or active extensions")
       return generator.runWdBatch(job.params, job.wdBatch.get, listener, job.limits)
     var provenance: Option[(String, String)] = None
-    val ctx = generator.forJob(listener, job.alwaysOn, job.limits, () => provenance)
+    val ctx = generator.forJob(listener, job.alwaysOn, job.limits, () => provenance, () => job.inputProvenance)
     def runOne(params: GenerationParams): JobOutput = job.script match
       case Some((plugin, values)) => plugin.run(params, values, ctx)
       case None =>

@@ -10,7 +10,7 @@ img2img のスクリプト「Img2Img Workflow」では、Phase 1〜3 ごとに�
 
 元画像、プロンプト、マスクなどの設定は引き継がれる。適用した段階と寸法、枚数、denoising は生成画像のメタデータにも記録する。
 
-「Quick Mask」では、画像の White（白）・Black（黒）・Custom（任意の `#RRGGBB`）に近い部分を生成用の inpaint マスクにできる。Threshold が 1 なら完全一致し、2 以上では RGB の各成分差が `threshold - 1` 以下の色を含める。Invert で選択範囲を反転する。カラー mask は現在、48 MiB 以下・各辺 4096 以下の不透明な 8-bit RGB PNG に限定し、EXIF、ICC、alpha 等を含む入力や JPEG は明示的に拒否する。これらの形式は、通常の画像入力処理と色・向きが同じになることを確認した後に対応する。Default は既存の inpaint マスクを使い、反転を選ぶと元の反転設定を切り替える。新しく作ったマスクは既存の生成マスクを置き換える。色の距離式は公開資料で確認できないため、上流と画素単位で一致する保証はない。「Return colour mask as image」を選ぶと、カラー mask を生成画像の後に同じ一覧へ追加する。マスク画像の PNG パラメータには `Img2Img Workflow output: mask` と記録する。既存 mask を使う Default ではこの出力をまだ利用できない。生成後のキャンセルと保存が重なると、マスク画像が保存される場合がある。マスク PNG の元画像 path はパラメータ欄に記録される場合があるが、独立した source chunk は保証しない。
+「Quick Mask」では、画像の White（白）・Black（黒）・Custom（任意の `#RRGGBB`）に近い部分を生成用の inpaint マスクにできる。Threshold が 1 なら完全一致し、2 以上では RGB の各成分差が `threshold - 1` 以下の色を含める。Invert で選択範囲を反転する。カラー mask は現在、48 MiB 以下・各辺 4096 以下の不透明な 8-bit RGB PNG に限定し、EXIF、ICC、alpha 等を含む入力や JPEG は明示的に拒否する。これらの形式は、通常の画像入力処理と色・向きが同じになることを確認した後に対応する。Default は既存の inpaint マスクを使い、反転を選ぶと元の反転設定を切り替える。新しく作ったマスクは既存の生成マスクを置き換える。色の距離式は公開資料で確認できないため、上流と画素単位で一致する保証はない。「Return colour mask as image」を選ぶと、カラー mask を生成画像の後に同じ一覧へ追加する。マスク画像の PNG パラメータには `Img2Img Workflow output: mask` と記録する。既存 mask を使う Default ではこの出力をまだ利用できない。生成後のキャンセルと保存が重なると、マスク画像が保存される場合がある。ファイル入力では、生成画像とマスク画像の両方に元画像 path を parameters と独立した source chunk に記録する。base64 入力にはファイル path がないため、source provenance は付けない。
 
 生成 PNG には色・閾値などを記録するが、Restore はこのマスクを自動で再作成しないため、再生成時は元画像と Quick Mask を指定し直す。保護セッションでは派生マスクも保護付きの一時画像として書き出す。
 

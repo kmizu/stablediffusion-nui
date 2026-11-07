@@ -89,7 +89,7 @@ final class McpTools(
 
   /** Parsed generation request plus output options. Temp files are deleted after the job. */
   private final case class GenRequest(params: GenerationParams, returnImages: Boolean, maxSide: Int, temps: Seq[Path],
-      alwaysOn: Seq[(Plugin, Values)])
+      alwaysOn: Seq[(Plugin, Values)], inputProvenance: Option[(String, String)] = None)
 
   private def parseGen(a: Args, img2img: Boolean, requirePrompt: Boolean = true, folderInput: Boolean = false): GenRequest =
     val temps = Seq.newBuilder[Path]
@@ -160,11 +160,13 @@ final class McpTools(
           .getOrElse(throw ToolError(s"unknown preprocessor: $n")),
         (spec, field) => { val (path, tmp) = Images.materialize(spec, field, pathPolicy, base, tempFile); tmp.foreach(temps += _); path },
         allowInitImageFallback = img2img)
+      val initInput = Option.when(img2img && !folderInput) {
+        val (path, temporary, original) = Images.materializeWithSource(a.reqStr("init_image"), "init_image", pathPolicy, base, tempFile)
+        temporary.foreach(temps += _)
+        (path.toString, original)
+      }
       val i2i = Option.when(img2img) {
-        val init = if folderInput then "folder-input" else
-          val (path, t1) = Images.materialize(a.reqStr("init_image"), "init_image", pathPolicy, base, tempFile)
-          t1.foreach(temps += _)
-          path.toString
+        val init = if folderInput then "folder-input" else initInput.get._1
         val mask = a.str("mask").filter(_.trim.nonEmpty).map { m =>
           val (mp, t2) = Images.materialize(m, "mask", pathPolicy, base, tempFile)
           t2.foreach(temps += _)
@@ -234,7 +236,8 @@ final class McpTools(
       val active = (keyword ++ configured).sortBy((pl, _) => services.registry.all.indexWhere(_.id == pl.id))
       try services.generator.applyAlwaysOn(p, active)
       catch case NonFatal(e) => throw ToolError(s"invalid always_on values: ${msg(e)}")
-      GenRequest(p, a.bool("return_images").getOrElse(true), a.int("max_image_side", 0, MaxSide).getOrElse(1024), temps.result(), active)
+      val inputProvenance = initInput.map { case (staged, original) => staged -> original.getOrElse("") }
+      GenRequest(p, a.bool("return_images").getOrElse(true), a.int("max_image_side", 0, MaxSide).getOrElse(1024), temps.result(), active, inputProvenance)
     catch
       case e: Throwable =>
         temps.result().foreach(Images.deleteQuietly)
@@ -402,7 +405,7 @@ final class McpTools(
   private def generationTool(img2img: Boolean, args: ujson.Obj, ctx: ToolContext): ToolResult =
     ready(ctx) // name checks need the catalog
     val req = parseGen(Args(args, genKeys(img2img)), img2img)
-    val job = Job(Job.newId(), req.params, alwaysOn = req.alwaysOn, origin = Origin, limits = limits)
+    val job = Job(Job.newId(), req.params, alwaysOn = req.alwaysOn, origin = Origin, limits = limits, inputProvenance = req.inputProvenance)
     runBlocking(job, ctx, req.temps) match
       case Outcome.Done(out) => outputResult(job.id, out, req.returnImages, req.maxSide)
       case Outcome.Cancelled(partial) =>
@@ -684,7 +687,8 @@ final class McpTools(
           throw e
     val req = original.copy(temps = original.temps ++ scriptTemps)
     val job =
-      try Job(Job.newId(), req.params, script = Some(plugin -> checkedValues), alwaysOn = req.alwaysOn, origin = Origin, limits = limits)
+      try Job(Job.newId(), req.params, script = Some(plugin -> checkedValues), alwaysOn = req.alwaysOn, origin = Origin, limits = limits,
+        inputProvenance = req.inputProvenance)
       catch
         case e: Throwable =>
           req.temps.foreach(Images.deleteQuietly)
@@ -926,14 +930,14 @@ final class McpTools(
       genSchema(false))((a, _) => {
         checkPendingCap()
         val req = parseGen(Args(a, genKeys(false)), img2img = false)
-        submitAsync(Job(Job.newId(), req.params, alwaysOn = req.alwaysOn, origin = Origin, limits = limits), "txt2img", req)
+        submitAsync(Job(Job.newId(), req.params, alwaysOn = req.alwaysOn, origin = Origin, limits = limits, inputProvenance = req.inputProvenance), "txt2img", req)
       }),
     tool("img2img_async", "Image to image (async)",
       "Queue an img2img/inpaint job and return its job_id immediately. Poll get_job for progress and results.",
       genSchema(true))((a, _) => {
         checkPendingCap()
         val req = parseGen(Args(a, genKeys(true)), img2img = true)
-        submitAsync(Job(Job.newId(), req.params, alwaysOn = req.alwaysOn, origin = Origin, limits = limits), "img2img", req)
+        submitAsync(Job(Job.newId(), req.params, alwaysOn = req.alwaysOn, origin = Origin, limits = limits, inputProvenance = req.inputProvenance), "img2img", req)
       }),
     tool("img2img_folder_async", "Image folder to image (async)",
       "Process each image in an allowed local folder with the same Img2Img settings and AlwaysOn extensions. Poll get_job for progress and results.",

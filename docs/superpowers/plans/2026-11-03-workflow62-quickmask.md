@@ -32,3 +32,8 @@ PNG parser の追補: 重複 IHDR の RED を確認し、chunk CRC、header の�
 Return colour mask 追補: 選択時は生成後に mask をもう 1 枚返し、PNG parameters の `Img2Img Workflow output: mask` で判別できる。既存 mask を使う Default では明示拒否。キャンセル時は判定直後に保存が競合し得るため、不出力を保証しない。mask PNG の source path は parameters に残る場合があるが独立 chunk は保証しない。plugin 16/16、実 MainWindow の非表示 dry-run で mask 選択・2 枚出力を確認、フォーム snapshot は `outputs/quickmask62-return-offscreen/workflow-quickmask-controls.png`。
 
 JAR SHA-256 `d6b8f1f80c2b700272bfed7aa7e2de78357848535dc44a890e5bbdf3dfee4a6e`、関連 24 class 一致。SD1.5／SDXL の公式 MCP SDK と保護 session で元の生成画像と返された mask を確認。標準 img2img 対照との生成結果・保護／非保護の生成結果は両モデルとも全 RGB 一致、mask の白／黒部分と保護を確認し、4 枚を目視。合成 PNG のみで、自然画像、可視 GUI、配布版、Default mask の画像出力、FX・overlay 等は未確認／未実装。`outputs/quickmask62-return-{sd15,sdxl}/receipt.json` と `outputs/quickmask62-return-protected-{sd15,sdxl}`。
+
+
+最新 main への統合時に MCP provenance を修正した。`Images.materializeWithSource` は一度の path 解決で verified bytes と元 path を返し、MCP の一時 path から元 path への対応は Quick Mask の `generateWithInputSnapshot` にだけ適用する。通常 img2img と Quick Mask Default の metadata は変更しない。ファイル入力では生成画像と返却 mask の parameters・独立 source chunk が元 path を保持し、base64 入力では削除済み一時 path を記録せず provenance を省略する。
+
+独立レビュー後の RED/GREEN: file・base64 の2件は修正前に削除済み一時 path で失敗し、Default 不変テストは通常 img2img に source metadata が増えることを確認して失敗した。最終修正後は `McpToolsSuite` 69件、`Img2ImgWorkflowSuite` 17件、`JobQueueSuite` 28件が成功。source replacement は元画像だけでなく mask も検証し、post-generation interrupt は部分出力の保持・返却 mask 抑制・staging cleanup を確認する。全 Scala 回帰、最終 JAR の実モデル・配布検証は別途記録する。
