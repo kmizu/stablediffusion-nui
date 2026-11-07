@@ -13,7 +13,7 @@ import sdfx.core.plugins.api.Control.*
   */
 object BatchFaceSwapPlugin:
   val InfotextKey = "Batch Face Swap"
-  val Detectors: Seq[String] = Seq("face_yolov8n.pt", "face_yolov8s.pt", "face_yolov8m.pt", "face_yolov9c.pt", "opencv_face")
+  val Detectors: Seq[String] = Seq("face_yolov8n.pt", "face_yolov8s.pt", "face_yolov8m.pt", "face_yolov9c.pt", "opencv_face", "mediapipe_face")
   val Shapes: Seq[String] = Seq("ellipse", "box")
 
   /** Engine default of each hook field, in hook order. */
@@ -22,7 +22,8 @@ object BatchFaceSwapPlugin:
     "mask_shape" -> ujson.Str("ellipse"), "mask_size" -> ujson.Num(1.2), "mask_blur" -> ujson.Num(8),
     "denoising_strength" -> ujson.Num(0.5), "padding" -> ujson.Num(32), "resolution" -> ujson.Num(0),
     "prompt" -> ujson.Str(""), "negative_prompt" -> ujson.Str(""), "steps" -> ujson.Num(0), "cfg_scale" -> ujson.Num(0),
-    "sampler" -> ujson.Str(""), "color_correction" -> ujson.Bool(true))
+    "sampler" -> ujson.Str(""), "color_correction" -> ujson.Bool(true), "checkpoint" -> ujson.Str(""),
+    "checkpoint_hash" -> ujson.Str(""))
   private val DefaultMap = Defaults.toMap
 
   /** (low, high, integer) of the numeric fields, as the engine validates them. */
@@ -33,7 +34,7 @@ object BatchFaceSwapPlugin:
 
   /** Infotext value: the detector and the settings that differ from the defaults. */
   def encode(o: ujson.Obj): String =
-    val keep = Defaults.flatMap((k, d) => o.value.get(k).filter(v => k == "detector" || v != d).map(k -> _))
+    val keep = Defaults.filterNot(_._1 == "checkpoint_hash").flatMap((k, d) => o.value.get(k).filter(v => k == "detector" || v != d).map(k -> _))
     ujson.Obj.from(keep).render()
 
   private def restoredValue(k: String, v: ujson.Value): Option[String] = (DefaultMap.get(k), v) match
@@ -42,7 +43,8 @@ object BatchFaceSwapPlugin:
         .map(_ => Values.fmt(n))
     case (Some(_: ujson.Bool), ujson.Bool(b)) => Some(b.toString)
     case (Some(_: ujson.Str), ujson.Str(s)) =>
-      if k == "mask_shape" then Option.when(Shapes.contains(s))(s)
+      if k == "checkpoint_hash" then Option.when(s.isEmpty || s.matches("(?i)[0-9a-f]{10}"))(s.toLowerCase(java.util.Locale.ROOT))
+      else if k == "mask_shape" then Option.when(Shapes.contains(s))(s)
       else if k == "detector" then Option.when(s.trim.nonEmpty && !s.trim.equalsIgnoreCase("none") && s.length <= 512)(s)
       else Option.when(s.length <= 8192)(s)
     case _ => None
@@ -53,8 +55,9 @@ object BatchFaceSwapPlugin:
     fields.get(InfotextKey) match
       case None => Some(Values(Map("enabled" -> "false")))
       case Some(raw) =>
-        scala.util.Try(ujson.read(raw)).toOption.collect { case o: ujson.Obj if raw.length <= 16384 => o }.flatMap { o =>
-          val restored = o.value.toSeq.map((k, v) => k -> restoredValue(k, v))
+        scala.util.Try(ujson.read(raw)).toOption.collect { case o: ujson.Obj if raw.length <= 16384 && !o.value.contains("checkpoint_hash") &&
+          fields.get("Face checkpoint hash").forall(_.matches("(?i)[0-9a-f]{10}")) => o }.flatMap { o =>
+          val restored = (o.value.toSeq ++ fields.get("Face checkpoint hash").map(s => "checkpoint_hash" -> ujson.Str(s))).map((k, v) => k -> restoredValue(k, v))
           if restored.exists(_._2.isEmpty) then None
           else
             val base = Values.defaults(new BatchFaceSwapPlugin().controls).map
@@ -63,7 +66,8 @@ object BatchFaceSwapPlugin:
             val detector = custom.get("detector")
             val detectorFields = detector.map(d => if Detectors.contains(d) then Map("detector" -> d, "custom_detector" -> "")
               else Map("custom_detector" -> d)).getOrElse(Map.empty)
-            Some(Values(base ++ (custom - "detector") ++ detectorFields + ("enabled" -> "true")))
+            Option.when(!custom.get("checkpoint_hash").exists(_.nonEmpty) || custom.get("checkpoint").exists(_.trim.nonEmpty))(
+              Values(base ++ (custom - "detector") ++ detectorFields + ("enabled" -> "true")))
         }
 
 /** Detects every face of each finished image and redraws it (Batch Face Swap, kex0/batch-face-swap). */
@@ -78,7 +82,8 @@ class BatchFaceSwapPlugin extends HookPlugin:
       "resolution (the magnification of the redrawn crop) and an elliptical or rectangular mask scaled around each " +
       "face. [PROMPT] in the face prompt inserts the main prompt and [SEP] gives each face (left to right) its own. " +
       "YOLO face models download from Bingsu/adetailer on first use; opencv_face needs no download but finds few " +
-      "anime faces. Not provided: a different checkpoint for the face pass, the img2img folder input."
+      "anime faces. mediapipe_face needs the optional MediaPipe package and downloads the short-range BlazeFace model " +
+      "on first use. The face pass can use a separate installed checkpoint."
 
   override def controls: Seq[Control] = Seq(
     Check("enabled", "Enabled"),
@@ -94,9 +99,11 @@ class BatchFaceSwapPlugin extends HookPlugin:
     Slider("mask_size", "Mask size (times the detected face box)", 0.3, 3, 0.05, 1.2),
     IntField("mask_blur", "Mask blur", 0, 64, 8),
     IntField("padding", "Crop padding around the mask (pixels)", 0, 512, 32),
-    IntField("resolution", "Face area resolution (0 = the generation size)", 0, 2048, 0),
+    IntField("resolution", "Face area resolution (0 = image size; try 1024 for SDXL)", 0, 2048, 0),
     Check("color_correction", "Match colour and contrast of the redrawn face to the original", true),
     Section("overrides", "Overrides for the face pass", expanded = false),
+    DynamicChoice("checkpoint", "Face checkpoint (none = current model)", ChoiceSource.Checkpoints, "", allowNone = true),
+    Text("checkpoint_hash", "Expected face checkpoint hash (clear when changing model)", ""),
     IntField("steps", "Steps (0 = main steps)", 0, 150, 0),
     Slider("cfg_scale", "CFG scale (0 = main CFG)", 0, 30, 0.5, 0),
     DynamicChoice("sampler", "Sampler (none = main sampler)", ChoiceSource.Samplers, "", allowNone = true))
@@ -105,6 +112,7 @@ class BatchFaceSwapPlugin extends HookPlugin:
     val custom = v.str("custom_detector").trim
     val detector = if custom.nonEmpty then custom else v.str("detector", "face_yolov8n.pt")
     val sampler = v.str("sampler").trim
+    val checkpoint = v.str("checkpoint").trim
     ujson.Obj(
       "detector" -> detector,
       "confidence" -> v.double("confidence", 0.3), "max_faces" -> v.int("max_faces", 0),
@@ -114,6 +122,8 @@ class BatchFaceSwapPlugin extends HookPlugin:
       "prompt" -> v.str("prompt"), "negative_prompt" -> v.str("negative_prompt"),
       "steps" -> v.int("steps", 0), "cfg_scale" -> v.double("cfg_scale", 0),
       "sampler" -> (if sampler.equalsIgnoreCase("none") then "" else sampler),
+      "checkpoint" -> (if checkpoint.equalsIgnoreCase("none") then "" else checkpoint),
+      "checkpoint_hash" -> v.str("checkpoint_hash").trim.toLowerCase(java.util.Locale.ROOT),
       "color_correction" -> v.bool("color_correction", true))
 
   def infotextKeys(o: ujson.Obj): Seq[(String, String)] = Seq(InfotextKey -> encode(o))

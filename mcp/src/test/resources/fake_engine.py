@@ -70,6 +70,8 @@ state = {
     "loaded": None,
     "vae": None,
     "last_generation": None,
+    "last_fastload": None,
+    "last_vae_inputs": None,
     "requests": [],
     "load_count": 0,
 }
@@ -95,6 +97,7 @@ def model_info():
         "loaded_ms": 5,
         "vae_name": os.path.basename(vae) if vae else None,
         "vae_hash": "feed0000" if vae else None,
+        "vae_path": vae,
     }
 
 
@@ -150,9 +153,43 @@ def handle_work(rid, typ, params):
     try:
         if typ in ("txt2img", "img2img"):
             generate(rid, typ, params)
+        elif typ == "aesthetic_embedding":
+            if params.get("op") == "list":
+                result(rid, {"embeddings": ["fixture"], "folders": []})
+            elif params.get("op") == "create" and params.get("images") and all(
+                    os.path.isfile(p) for p in params["images"]):
+                if params["name"] == "slow":
+                    time.sleep(1)
+                if params["name"] == "cancellable":
+                    with open(os.path.join(params["output_dir"], ".cancellable-started"), "wb") as stream:
+                        stream.write(b"started")
+                    if interrupted.wait(4):
+                        error(rid, "interrupted", "interrupted")
+                        return
+                output = os.path.join(params["output_dir"], params["name"] + ".pt")
+                with open(output, "wb") as stream:
+                    stream.write(b"fake embedding")
+                result(rid, {"name": params["name"], "count": len(params["images"]),
+                             "image_path": params["images"][0], "output_dir": params.get("output_dir", ""), "path": output})
+            else:
+                error(rid, "invalid_params", "invalid aesthetic embedding request")
         elif typ == "controlnet_fastload_data":
             if params.get('operation') == 'version':
                 result(rid, {'version': 1, 'upstream_version': 1.1})
+            elif params.get('operation') == 'inspect':
+                if os.path.basename(params['path']).startswith('fastload-timeout-'):
+                    time.sleep(1)
+                with open(params['path'], 'rb') as f:
+                    data = f.read()
+                result(rid, {'test_input_path': params['path'], 'test_input_base64': base64.b64encode(data).decode()})
+            elif params.get('operation') == 'prepare_generation':
+                with open(params['path'], 'rb') as f:
+                    data = f.read()
+                state['last_fastload'] = {'path': params['path'], 'bytes': base64.b64encode(data).decode()}
+                if data == b'fail-fastload':
+                    error(rid, 'invalid_params', 'fixture Fastload failure')
+                else:
+                    result(rid, {'load_skipped': True, 'save': False, 'units': {'type': 'list', 'items': []}})
             else:
                 error(rid, 'unsupported', 'fake Fastload supports version only')
         elif typ == "model_keyword":
@@ -163,6 +200,16 @@ def handle_work(rid, typ, params):
                              'hash': 'deadbeef', 'keywords': ['fixture'], 'source': 'default',
                              'default_catalog_available': params['kind'] == 'checkpoint'})
         elif typ == "vae_tools":
+            state['last_vae_inputs'] = []
+            labels = params.get('input_labels') or []
+            if labels and labels[0].endswith('vae-interrupt-test.safetensors'):
+                with open(labels[0] + '.started', 'w', encoding='utf-8') as signal:
+                    signal.write(params['input_paths'][0])
+                time.sleep(5)  # Intentionally ignore interruption while using the snapshot.
+            for path in params.get('input_paths', []):
+                with open(path, 'rb') as source:
+                    state['last_vae_inputs'].append({'path': path, 'bytes': base64.b64encode(source.read()).decode()})
+            state['last_vae_labels'] = params.get('input_labels')
             error(rid, "unsupported", "VAE Tools requires a real loaded VAE; fake engine cannot encode or decode latents")
         elif typ == "load_model":
             time.sleep(float(params.get("delay", 0)) if isinstance(params.get("delay"), (int, float)) else 0)
@@ -186,6 +233,15 @@ def handle_work(rid, typ, params):
                 f.write(png_bytes(16, 16, (1, 2, 3)))
             result(rid, {"path": out})
         elif typ == "preprocess":
+            gate = os.environ.get("SDFX_TEST_PREPROCESS_GATE")
+            if gate:
+                with open(gate + ".started", "w", encoding="utf-8") as f:
+                    f.write("started")
+                deadline = time.monotonic() + 30
+                while not os.path.exists(gate + ".continue") and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                if not os.path.exists(gate + ".continue"):
+                    raise RuntimeError("preprocess test gate timed out")
             out = os.path.join(params["output_dir"], "pre-%s.png" % rid)
             os.makedirs(params["output_dir"], exist_ok=True)
             with open(out, "wb") as f:
@@ -249,7 +305,7 @@ def main():
     if not opt("--no-hello"):
         send({"id": None, "type": "hello", "protocol": 1, "engine_version": "fake-" + str(opt("--tag", "0")),
               "python": sys.version.split()[0], "torch": None, "diffusers": None, "cuda": False, "device": "cpu",
-              "vram_mb": 0, "dry_run": True, "features": ["fake"]})
+              "vram_mb": 0, "dry_run": True, "features": ["fake", "controlnet_fastload_data"]})
     threading.Thread(target=worker, daemon=True).start()
     stdin = open(sys.stdin.fileno(), "r", encoding="utf-8", closefd=False)
     for line in stdin:
@@ -312,7 +368,8 @@ def main():
                 stdout.flush()
             result(rid, {})
         elif typ == "get_state":
-            result(rid, {"loaded": state["loaded"], "vae": state["vae"], "last_generation": state["last_generation"],
+            result(rid, {"loaded": state["loaded"], "vae": state["vae"], "last_generation": state["last_generation"], "last_fastload": state["last_fastload"],
+                         "last_vae_inputs": state.get("last_vae_inputs"), "last_vae_labels": state.get("last_vae_labels"),
                          "load_count": state["load_count"], "pid": os.getpid()})
         elif typ == "list_models":
             result(rid, {"models": [dict(f, kind="sd15") for f in list_dir(params.get("dirs", []), {".safetensors", ".ckpt"})]})

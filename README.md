@@ -180,8 +180,12 @@ PhotoMaker を使う場合だけ、追加で `python/.venv/Scripts/python -m pip
 | `output_dir` | `outputs` | 出力先(相対はアプリルート基準) |
 | `python_exe` | `null` | エンジン用 Python。空なら `python/.venv`、無ければシステム Python |
 | `dtype` | `fp16` | `fp16` / `bf16` / `fp32` |
-| `vram_mode` | `gpu` | VRAM モード(トラブルシュート参照) |
+| `vram_mode` | `gpu` | VRAM モード: `gpu` / `model_offload` / `sequential_offload` / `auto`(トラブルシュート参照) |
 | `vae_tiling` | `false` | 大きい画像の VAE デコードをタイル化 |
+| `vae_slicing` | `false` | バッチを 1 枚ずつ VAE デコード(batch > 1 のピーク VRAM を下げる。画素は同一) |
+| `vae_auto` | `true` | VAE デコードが空き VRAM に収まらない場合だけ自動でスライス/タイル化 |
+| `vae_fp16` | `false` | SDXL 系(force-upcast)の VAE を fp16 でデコード(非有限なら fp32 に戻す) |
+| `fp8_storage` | `false` | U-Net の重みを float8 で保持し層ごとに upcast(GPU VRAM モードのみ) |
 | `preview_every` / `preview_method` | `2` / `approx` | ライブプレビュー間隔(0 で無効)/ `approx` or `taesd` |
 | `last_model` / `last_vae` | `null` | 前回のモデル |
 | `mcp_http_enabled` / `mcp_http_port` / `mcp_token` | `false` / `7861` / `null` | GUI 内蔵の MCP HTTP サーバー |

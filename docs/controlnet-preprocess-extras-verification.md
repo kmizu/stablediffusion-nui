@@ -6,6 +6,9 @@ Issue: kmizu/stablediffusion-nui #18. Upstream: <https://github.com/light-and-ra
 Status: **partial**. The Extras card, the folder run and the MCP tool are implemented and verified on real SD1.5 and SDXL
 output; the items under "Not provided" are not.
 
+The later selected-file batch and its separate evidence are documented in
+`controlnet-selected-batch-verification.md`; statements below describe the earlier folder-only version.
+
 ## Licence check and what was used
 
 - `gh api repos/light-and-ray/sd-webui-cn-in-extras-tab --jq .license` returns nothing and the tree at the pinned commit

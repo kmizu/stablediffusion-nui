@@ -179,7 +179,12 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     sdfx.core.png.ScrambledPng.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path,
       Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"), Some("private"))
     val error = intercept[ToolError](InspectGenerationMetadata.inspect(path.toString, new PathPolicy(() => Seq(dir)), dir))
+    assert(error.getMessage.contains("protected image"))
     assert(!error.getMessage.contains("private"))
+    val encoded = Base64.getEncoder.encodeToString(Files.readAllBytes(path))
+    val base64Error = intercept[ToolError](InspectGenerationMetadata.inspect(encoded, new PathPolicy(() => Seq(dir)), dir))
+    assert(base64Error.getMessage.contains("protected image"))
+    assert(!base64Error.getMessage.contains("private"))
   }
 
   test("compressed PNG parameters are read with a bounded expansion") {
@@ -391,6 +396,26 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("incantations"))
   }
 
+  test("corridor replay is a typed candidate with missing inputs and no local paths") {
+    val p = new sdfx.plugins.CorridorCrawlerPlugin
+    val cfg = sdfx.core.plugins.api.Values(sdfx.core.plugins.api.Values.defaults(p.controls).map ++ Map(
+      "prefab" -> sdfx.plugins.CorridorCrawlerPlugin.CustomPrefab, "prefab_image" -> "C:/private/secret.png",
+      "steps" -> "4", "placement" -> sdfx.plugins.CorridorCrawlerPlugin.PreserveAspect))
+    val payload = sdfx.plugins.CorridorCrawlerPlugin.replayValue(sdfx.plugins.CorridorCrawlerPlugin.Settings.parse(cfg))
+    val text = "cat\nSteps: 20, Seed: 4, Size: 512x512, Corridor Crawler settings: " + sdfx.core.infotext.Infotext.quote(payload)
+    val dir = Files.createTempDirectory("mcp-corridor-replay-")
+    val path = dir.resolve("image.png")
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, new PathPolicy(() => Seq(dir)), dir)
+    val script = result("scripts")("corridor_crawler")
+    assertEquals(script("steps").num, 4.0)
+    assertEquals(script("placement").str, "Preserve aspect")
+    assertEquals(script("prefab_image").str, "")
+    assert(result("warnings").arr.exists(_.str.contains("initial image")))
+    assert(!result.render().contains("private"))
+    assert(!result("unapplied_fields").obj.contains("Corridor Crawler settings"))
+  }
+
   test("Old SD firstpasser infotext becomes a typed script candidate and its keys are consumed") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("firstpass.png")
@@ -432,6 +457,57 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("aesthetic_gradients"))
   }
 
+  test("reported A1111 aesthetic metadata with an empty text field is restored") {
+    // A user-reported 2022 AUTO1111 settings record, not an upstream-generated PNG fixture:
+    // https://www.reddit.com/r/StableDiffusion/comments/yzq43d/
+    val dir = Files.createTempDirectory("mcp-aesthetic-reported-")
+    val path = dir.resolve("reported.png")
+    val params = "test prompt\nSteps: 100, Sampler: DPM++ 2M Karras, CFG scale: 9, Seed: 1428485975, Size: 768x512, " +
+      "Model hash: 3675a327, Aesthetic LR: 0.0001, Aesthetic weight: 0.1, Aesthetic steps: 5, " +
+      "Aesthetic embedding: frknstein, Aesthetic slerp: False, Aesthetic text: , " +
+      "Aesthetic text negative: False, Aesthetic slerp angle: 0.1"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> params))
+    val result = InspectGenerationMetadata.inspect(path.toString, new PathPolicy(() => Seq(dir)), dir)
+    val candidate = result("always_on")("aesthetic_gradients")
+    assertEquals(candidate("embedding").str, "frknstein")
+    assertEquals(candidate("weight").num, 0.1)
+    assertEquals(candidate("steps").num, 5.0)
+    assertEquals(candidate("slerp").bool, false)
+    assertEquals(candidate("negative").bool, false)
+    assertEquals(candidate("text").str, "")
+    assertEquals(candidate("slerp_angle").num, 0.1)
+    assert(!result("unapplied_fields").obj.keySet.exists(k => sdfx.plugins.AestheticGradientsPlugin.InfotextKeys.contains(k)))
+  }
+
+  test("fingerprinted aesthetic metadata resolves only matching currently allowed registered files") {
+    val dir = Files.createTempDirectory("mcp-aesthetic-inspect-")
+    val custom = Files.createDirectory(dir.resolve("custom"))
+    val embedding = Files.writeString(custom.resolve("style.pt"), "original bytes")
+    val registry = dir.resolve("aesthetic-directories.json")
+    val policy = new PathPolicy(() => Seq(dir))
+    val allowed: java.nio.file.Path => Boolean = p => scala.util.Try(policy.resolveDirectory(p.toString, "dir", dir)).isSuccess
+    assert(sdfx.core.aesthetic.AestheticEmbeddingDirectories.register(registry, custom, allowed).isRight)
+    val hash = sdfx.core.aesthetic.AestheticEmbeddingLocator.fingerprint(embedding)
+    val png = dir.resolve("image.png")
+    val text = s"cat\nSteps: 20, Seed: 4, Size: 512x512, Aesthetic embedding: style, Aesthetic embedding SHA256: $hash"
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), png, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(png.toString, policy, dir, Some(registry))
+    val candidate = result("always_on")("aesthetic_gradients")
+    assertEquals(java.nio.file.Path.of(candidate("embedding").str), embedding.toRealPath())
+    assertEquals(candidate("embedding_sha256").str, hash)
+    assert(!result("unapplied_fields").obj.contains("Aesthetic embedding SHA256"))
+    Files.writeString(embedding, "changed bytes")
+    val changed = InspectGenerationMetadata.inspect(png.toString, policy, dir, Some(registry))
+    assert(!changed("always_on").obj.contains("aesthetic_gradients"))
+    assert(changed("unapplied_fields").obj.contains("Aesthetic embedding SHA256"))
+    assert(changed("warnings").arr.exists(_.str.contains("not restored")))
+    val mixed = text.replace(hash, "ambiguous")
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), png, Seq("parameters" -> mixed))
+    val refused = InspectGenerationMetadata.inspect(png.toString, policy, dir, Some(registry))
+    assert(!refused("always_on").obj.contains("aesthetic_gradients"))
+    assert(refused("warnings").arr.exists(_.str.contains("ambiguous")))
+  }
+
   test("Batch Face Swap infotext becomes a typed candidate and its key is consumed") {
     val dir = Files.createTempDirectory("mcp-inspect-")
     val path = dir.resolve("bfs.png")
@@ -448,6 +524,29 @@ class InspectGenerationMetadataSuite extends munit.FunSuite:
     assert(!result("unapplied_fields").obj.keySet.contains("Batch Face Swap"))
     PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> "cat\nSteps: 20, Seed: 4, Size: 512x512"))
     assert(!InspectGenerationMetadata.inspect(path.toString, policy, dir)("always_on").obj.contains("batch_face_swap"))
+  }
+
+  test("face checkpoint name and actual hash survive MCP metadata inspection") {
+    val dir = Files.createTempDirectory("mcp-inspect-face-checkpoint-")
+    val path = dir.resolve("face.png")
+    val policy = new PathPolicy(() => Seq(dir))
+    val plugin = new sdfx.plugins.BatchFaceSwapPlugin
+    val values = sdfx.core.plugins.api.Values(sdfx.core.plugins.api.Values.defaults(plugin.controls).map ++
+      Map("enabled" -> "true", "checkpoint" -> "face-model"))
+    val params = plugin.process(sdfx.core.model.GenerationParams(prompt = "girl"), values)
+    val facts = sdfx.core.infotext.ImageFacts(seed = 4,
+      extra = scala.collection.immutable.ListMap("Face checkpoint hash" -> "abcd123456"))
+    val text = sdfx.core.infotext.Infotext.write(params, facts)
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path, Seq("parameters" -> text))
+    val result = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    assertEquals(result("always_on")("batch_face_swap")("checkpoint").str, "face-model")
+    assertEquals(result("always_on")("batch_face_swap")("checkpoint_hash").str, "abcd123456")
+    assert(!result("unapplied_fields").obj.contains("Face checkpoint hash"))
+    PngMetadata.write(new BufferedImage(4, 4, BufferedImage.TYPE_INT_RGB), path,
+      Seq("parameters" -> text.replace("abcd123456", "invalid")))
+    val invalid = InspectGenerationMetadata.inspect(path.toString, policy, dir)
+    assert(!invalid("always_on").obj.contains("batch_face_swap"))
+    assert(invalid("warnings").arr.exists(_.str.contains("fingerprint")))
   }
 
   test("LLuL source infotext becomes a typed candidate and its keys are consumed") {

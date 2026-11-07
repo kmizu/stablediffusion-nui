@@ -1,5 +1,7 @@
 # Stable Diffusion NUI MCP server
 
+保存済み Prompt Tools は `prompt_library` の `{"action":"list"}` で名前と正・負を一覧し、`{"action":"get","name":"quality"}` で本文を取得できる。`list` の `limit` は最大 100、次のページは `next_offset` を `offset` に渡す。ホームの `config/prompt-tools/prompts.json` だけを読み、保存や削除は行わない。ファイル自体がシンボリックリンクの場合は拒否するが、親ディレクトリのリンク差替えは保護しない。ファイルは最大 20 MiB、取得する本文は最大 100,000 文字。
+
 Lets AI agents (Claude Code, other MCP clients) generate images with Stable Diffusion NUI.
 
 Two transports:
@@ -17,10 +19,18 @@ Two transports:
 - **Image paths.** `init_image`, `mask`, `get_image` and `run_script` `params.init_image` accept file paths only
   inside the outputs folder (including its `.tmp`), plus folders you allow explicitly with `--allow-dir <dir>`
   (repeatable, headless) or the env var `SDFX_MCP_ALLOWED_DIRS` (list separated by `;` on Windows, `:` elsewhere;
-  this also applies to the GUI's HTTP server). Paths are resolved to real paths (symlinks/junctions cannot escape)
+  this also applies to the GUI's HTTP server). Paths are resolved to real paths
   and relative paths resolve against the outputs folder. UNC / network paths (`\\host\share`, `//host`) are always
   refused, so no SMB connection is ever opened. The error is the same for "missing" and "not allowed". Base64 and
   `data:` URIs are always accepted.
+  For `init_image`, `mask`, image controls using `Images.materialize`, `get_image`, and `controlnet_fastload` inspection, Windows and Linux read a verified file handle.
+  Generation inputs are staged as byte-for-byte snapshots; `get_image` uses the verified bytes directly for image and metadata.
+  Linux requires `/usr/bin/python3` and the standard `openat`
+  flags used by the helper. Other platforms and unsupported environments reject these local path inputs; use base64 or
+  a data URI for generation input. Local image files are limited to 48 MiB. The staging directory must be trusted: a local process
+  allowed to alter the server's `.tmp` files can still replace a staged file before a later read. Other file and
+  directory tools have not yet been hardened against path replacement races. Generation-time Fastload input is
+  also snapshotted when used, with its original bytes and extension; unused input is not read.
 - **HTTP token.** The bearer token is optional. Without one, **any local process or other user on this machine** can
   generate images, switch the model, interrupt or clear the GUI's queue and read images from the allowed folders.
   Browsers are blocked (only absent or `http(s)://localhost|127.0.0.1|[::1]` Origins and loopback Host headers pass),

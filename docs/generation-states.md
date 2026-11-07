@@ -33,7 +33,10 @@ A state identical to the newest entry is not recorded twice.
 
 - **Record every generation automatically** turns recording on or off (stored as `autosave.off` in the history folder;
   existing entries stay).
-- **Delete selected** (multi-select), **Clear history** (this mode only) remove entries after confirmation.
+- **Toggle favourites** adds all selected entries, or removes them all when every selection is already a favourite.
+  The Favourites tab provides restore, remove-favourite and delete actions. Favourites survive history cap eviction.
+- **Delete selected** removes selected entries from both groups; **Clear history** removes only non-favourites in
+  this mode. Both deletion actions ask for confirmation.
 - **Keep as named state** copies the selected entry into the named states under the name typed above the tabs.
 - History lives in `<app home>/config/generation-history/` (`library-v1.json`, `thumbs/`), separate from named
   states. A recording failure is reported but never blocks generation.
@@ -46,6 +49,10 @@ All checked is a full restore. With fewer checked, only the fields of those cate
 are checked, so a missing checkpoint does not block restoring just the prompts. If a full restore is blocked because
 a saved choice is missing from the current catalog (for example the default Hires Fix upscaler not being installed),
 restore a category subset instead, or install the item.
+
+The field picker and **Restore selected setting** restore just one saved setting. Only resources needed by that
+setting are checked. When restoring the WD batch enabled or input setting, the resulting enabled state and input
+folder are checked together.
 
 ## What is saved
 
@@ -82,8 +89,8 @@ that a different image is suitable for the saved inpaint settings.
 
 This feature independently implements manual named generation settings from the
 [State Manager reference](https://github.com/SenshiSentou/sd-webui-state-manager/tree/2af62ecd5287438bbc309f7e840d34aa5c8e3cb6).
-It does not import upstream IndexedDB/text history or claim upstream storage-format compatibility, has no HTTP API,
-and applies by category rather than by single setting. Automatic history with thumbnails is provided as described above. The MIT
+It does not import upstream IndexedDB/text history or claim upstream storage-format compatibility, and has no HTTP API.
+Automatic history with thumbnails, category restore and single-setting restore are provided as described above. The MIT
 notice is archived; see [the source/license audit](v003-source-license-audit.md).
 
 The actual native Save, Restore, missing-checkpoint refusal, fresh-window reload

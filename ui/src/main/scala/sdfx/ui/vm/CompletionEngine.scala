@@ -11,25 +11,27 @@ enum SuggestionKind(val title: String):
   case Tag extends SuggestionKind("tag")
   case Extra extends SuggestionKind("extra")
   case Wildcard extends SuggestionKind("wildcard")
+  case WildcardValue extends SuggestionKind("wildcard value")
   case Lora extends SuggestionKind("LoRA")
   case Embedding extends SuggestionKind("embedding")
   case Chant extends SuggestionKind("chant")
 
 /** One popup row. `insert` produces the replacement text lazily (trigger words are read from disk only on accept). */
 final case class Suggestion(kind: SuggestionKind, label: String, detail: String, insert: () => String,
-                            preview: () => Option[Path] = () => None)
+                            preview: () => Option[Path] = () => None, category: Option[Int] = None,
+                            wikiTag: Option[String] = None)
 
 /** The popup rows for the text range [start, end). */
-final case class CompletionResult(start: Int, end: Int, items: Vector[Suggestion])
+final case class CompletionResult(start: Int, end: Int, items: Vector[Suggestion], wildcardPrefix: Option[String] = None)
 
 /** A model file offered by `<` completion (name is the file stem, path the real file). */
 final case class NetFile(name: String, path: Path)
 
 /** A chants JSON entry (`name`, `terms`, `content`, `color`). */
-final case class Chant(name: String, terms: String, content: String, color: Int)
+final case class Chant(name: String, terms: String, content: String, color: Int, colorSpecified: Boolean = true)
 
 /** A tag from the "extra file": same CSV layout as tags, but the third column is the grey meta text. */
-final case class ExtraTag(name: String, meta: String, aliases: Vector[String])
+final case class ExtraTag(name: String, meta: String, aliases: Vector[String], category: Option[Int] = None)
 
 /** Everything the engine can offer. */
 final case class CompletionData(tags: Vector[CompletionTag] = Vector.empty, extra: Vector[ExtraTag] = Vector.empty,
@@ -120,7 +122,13 @@ object CompletionEngine:
   def complete(data: CompletionData, cfg: TagCompleteSettings, text: String, caret: Int, selStart: Int, selEnd: Int): Option[CompletionResult] =
     trigger(text, caret, selStart, selEnd) match
       case Some(w: WildcardTrigger) =>
-        if !cfg.wildcards then None else nonEmpty(w.start, w.end, wildcardItems(data, cfg, text, w))
+        if !cfg.wildcards then None
+        else
+          val matches = ranked(data.wildcards, w.query)(identity)()
+          val prefix = if matches.size < 2 then None else Some(matches.tail.foldLeft(matches.head) { (a, b) =>
+            a.zip(b).takeWhile((x, y) => Character.toLowerCase(x) == Character.toLowerCase(y)).map(_._1).mkString
+          })
+          nonEmpty(w.start, w.end, wildcardItems(matches, cfg, text, w)).map(_.copy(wildcardPrefix = prefix))
       case Some(n: NetworkTrigger) =>
         if !cfg.extraNetworks && !(cfg.chants && n.kinds == Set(SuggestionKind.Chant)) then None
         else nonEmpty(n.start, n.end, networkItems(data, cfg, n))
@@ -148,7 +156,7 @@ object CompletionEngine:
     def translationOf(name: String, aliases: Vector[String]): Option[String] =
       data.translations.get(norm(name)).orElse(aliases.iterator.flatMap(a => data.translations.get(norm(a))).nextOption())
     // A match is by name, alias (when enabled) or translation of either; the label reflects what matched.
-    def matchTag(name: String, aliases: Vector[String], detail: Option[String], kind: SuggestionKind): Option[Suggestion] =
+    def matchTag(name: String, aliases: Vector[String], detail: Option[String], kind: SuggestionKind, category: Option[Int]): Option[Suggestion] =
       val byName = norm(name).startsWith(q)
       lazy val byAlias = if cfg.searchByAlias then aliases.find(a => norm(a).startsWith(q)) else None
       lazy val translation = translationOf(name, aliases)
@@ -161,10 +169,11 @@ object CompletionEngine:
           else byAlias match
             case Some(alias) => if cfg.onlyShowAlias then alias else s"$alias ➝ $name"
             case None => name
-        val extra = Seq(translation, detail).flatten.mkString("  ")
-        Some(Suggestion(kind, label, extra, () => formatTag(name, cfg) + tail))
-    val main = data.tags.iterator.flatMap(tag => matchTag(tag.name, tag.aliases, Some(tag.count.toString), SuggestionKind.Tag)).take(limit).toVector
-    val extra = data.extra.iterator.flatMap(e => matchTag(e.name, e.aliases, Some(if e.meta.isEmpty then "Custom tag" else e.meta), SuggestionKind.Extra)).take(limit).toVector
+        val categoryLabel = category.map(c => s"category $c")
+        val extra = Seq(translation, detail, categoryLabel).flatten.mkString("  ")
+        Some(Suggestion(kind, label, extra, () => formatTag(name, cfg) + tail, category = category, wikiTag = Some(name)))
+    val main = data.tags.iterator.flatMap(tag => matchTag(tag.name, tag.aliases, Some(tag.count.toString), SuggestionKind.Tag, tag.category)).take(limit).toVector
+    val extra = data.extra.iterator.flatMap(e => matchTag(e.name, e.aliases, Some(if e.meta.isEmpty then "Custom tag" else e.meta), SuggestionKind.Extra, e.category)).take(limit).toVector
     (if cfg.extraAfter then main ++ extra else extra ++ main).take(limit)
 
   private def ranked[A](items: Iterable[A], q: String)(name: A => String)(terms: A => String = (_: A) => ""): Vector[A] =
@@ -181,8 +190,8 @@ object CompletionEngine:
     }.toVector
     scored.sortBy(_._1).map(_._2)  // stable: keeps the listed order inside a rank
 
-  private def wildcardItems(data: CompletionData, cfg: TagCompleteSettings, text: String, w: WildcardTrigger): Vector[Suggestion] =
-    ranked(data.wildcards, w.query)(identity)().take(cfg.maxResults.max(1)).map { name =>
+  private def wildcardItems(matches: Vector[String], cfg: TagCompleteSettings, text: String, w: WildcardTrigger): Vector[Suggestion] =
+    matches.take(cfg.maxResults.max(1)).map { name =>
       Suggestion(SuggestionKind.Wildcard, name, "wildcard", () => s"__${name}__" + comma(cfg, text, w.end))
     }
 
@@ -228,7 +237,9 @@ object CompletionEngine:
       } else Vector.empty
     val chants =
       if has(SuggestionKind.Chant) && cfg.chants then ranked(data.chants, n.query)(_.name)(_.terms).map { c =>
-        Suggestion(SuggestionKind.Chant, c.name, "chant", () => c.content)
+        val category = Option.when(c.colorSpecified)(c.color)
+        val detail = category.fold("chant")(v => s"chant  category $v")
+        Suggestion(SuggestionKind.Chant, c.name, detail, () => c.content, category = category)
       } else Vector.empty
     (loras ++ embeddings ++ chants).take(limit)
 
@@ -257,7 +268,7 @@ object CompletionEngine:
       require(index < 300000, "Extra tag CSV exceeds 300,000 rows")
       val f = TagCompletion.csvRow(line.stripPrefix("﻿"))
       require(f.nonEmpty && f(0).trim.nonEmpty, s"Extra tag CSV row ${index + 1}: missing tag")
-      ExtraTag(f(0).trim, f.lift(2).map(_.trim).getOrElse(""), f.lift(3).toVector.flatMap(_.split(',')).map(_.trim).filter(_.nonEmpty))
+      ExtraTag(f(0).trim, f.lift(2).map(_.trim).getOrElse(""), f.lift(3).toVector.flatMap(_.split(',')).map(_.trim).filter(_.nonEmpty), f.lift(1).flatMap(_.trim.toIntOption))
     }.toVector
     require(tags.nonEmpty, "Extra tag CSV is empty")
     tags
@@ -268,7 +279,8 @@ object CompletionEngine:
     val chants = arr.toVector.zipWithIndex.map { (v, i) =>
       val o = v.obj
       def s(k: String) = o.get(k).map(_.str).getOrElse("")
-      val chant = Chant(s("name").trim, s("terms"), s("content"), o.get("color").flatMap(_.numOpt).map(_.toInt).getOrElse(0))
+      val color = o.get("color").flatMap(_.numOpt).map(_.toInt)
+      val chant = Chant(s("name").trim, s("terms"), s("content"), color.getOrElse(0), color.nonEmpty)
       require(chant.name.nonEmpty && chant.content.nonEmpty, s"Chant ${i + 1} needs name and content")
       chant
     }

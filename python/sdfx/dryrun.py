@@ -88,7 +88,7 @@ class FakeEngine(BaseEngine):
         return (["inpaint_difference"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + nsfw + ["clip_interrogator", "controlnet_preprocess_extras", "controlnet_fastload_data", "conditioning_highres_fix", "model_keyword", "embedding_merge", "metadata_utils", "img2img_hires_fix", "hires_fix_tweaks", "token_downsampling", "vram_estimator", "steps_animation", "pnginfo_injection", "gpu_temperature_guard", "freeu", "dynamic_thresholding", "hypertile", "pag", "controlnet", "apg", "mahiro", "rescale_cfg", "semantic_guidance", "agent_attention", "cd_tuner", "incantations", "sonar", "llul", "aesthetic_gradients", "characteristic_guidance",
                 "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier", "soft_inpainting", "sag", "neveroom",
                 "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint", "photomaker", "img2imgalt",
-                "face_restore", "caption", "img2vid", "novel_view", "ldsr", "marigold", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "clip_io", "compile", "system_info", "prevent_interrupt"] + list(SAMPLING_HOOKS) + (
+                "face_restore", "caption", "img2vid", "novel_view", "ldsr", "marigold", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "clip_io", "compile", "deepcache", "system_info", "prevent_interrupt"] + list(SAMPLING_HOOKS) + (
                     ["temporal_lab"] if HAVE_NUMPY and HAVE_PIL else []) + (
                     ["cn_animation"] if HAVE_NUMPY and HAVE_PIL and find_spec('cv2') else []) + (
                     ["custom_code"] if os.environ.get("SDFX_ALLOW_CODE") == "1" else [])
@@ -145,7 +145,7 @@ class FakeEngine(BaseEngine):
         self.load_opts = req
         self.vae = None
         if req.vae_path:
-            self.vae = {"vae_name": models.model_name(req.vae_path), "vae_hash": models.path_hash(req.vae_path)}
+            self.vae = {"vae_name": models.model_name(req.vae_path), "vae_hash": models.path_hash(req.vae_path), "path": req.vae_path}
         self.model = {"name": models.model_name(req.path), "path": req.path,
                       "kind": "sd15" if kind == "unknown" else kind, "hash": models.short_hash(req.path)}
         return self._loaded(int((time.monotonic() - t0) * 1000))
@@ -155,6 +155,7 @@ class FakeEngine(BaseEngine):
         m["loaded_ms"] = ms
         m["vae_name"] = self.vae["vae_name"] if self.vae else None
         m["vae_hash"] = self.vae["vae_hash"] if self.vae else None
+        m["vae_path"] = self.vae["path"] if self.vae else None
         return m
 
     def set_vae(self, params: dict, ctx: JobContext) -> dict:
@@ -164,7 +165,7 @@ class FakeEngine(BaseEngine):
         if p:
             if not os.path.exists(p):
                 raise EngineError(MODEL_LOAD_FAILED, f"VAE file not found: {p}")
-            self.vae = {"vae_name": models.model_name(p), "vae_hash": models.path_hash(p)}
+            self.vae = {"vae_name": models.model_name(p), "vae_hash": models.path_hash(p), "path": p}
         else:
             self.vae = None
         self.load_opts.vae_path = p or None

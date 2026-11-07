@@ -356,6 +356,9 @@ def test_vae_upcast_restores_dtype_even_when_decode_raises(fail):
             return (latent,)
     vae = Vae()
     engine = Engine.__new__(Engine)
+    from sdfx.params import LoadModelRequest
+    engine.load_opts = LoadModelRequest()
+    engine.cuda = False
     engine.pipe = SimpleNamespace(vae=vae, image_processor=SimpleNamespace(postprocess=lambda image, **kw: image))
     latent = torch.ones(1, 4, 2, 2, dtype=torch.float16)
     if fail:

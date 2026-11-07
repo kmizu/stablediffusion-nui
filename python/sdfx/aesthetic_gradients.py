@@ -17,8 +17,9 @@ Aesthetic Gradients" (Gallego, 2022, github.com/vicgalle/stable-diffusion-aesthe
 
 Differences to the method / to the extension, all deliberate:
 
-* The CLIP model with its text and visual projections is `openai/clip-vit-large-patch14` (MIT, the model SD 1.x and
-  SDXL's first text encoder derive from). It is not bundled: `config.json` and `model.safetensors` (1,710,540,580
+* The CLIP model with its text and visual projections is `openai/clip-vit-large-patch14` (the model SD 1.x and
+  SDXL's first text encoder derive from). The OpenAI CLIP code is MIT; the model card states no licence. It is not bundled:
+  `config.json` and `model.safetensors` (1,710,540,580
   bytes) are downloaded on first use from a pinned revision into `SDFX_AESTHETIC_GRADIENTS_CACHE` (default
   ~/.cache/stablediffusion-nui/aesthetic_gradients) and size/SHA-256 checked. The embedding creation needs the whole
   model; generation reads only the text projection (and, for SDXL, one layer and the final norm, see below) from it.
@@ -39,8 +40,10 @@ from __future__ import annotations
 
 import collections
 import hashlib
+import io
 import math
 import os
+import tempfile
 import threading
 import weakref
 from pathlib import Path
@@ -64,7 +67,7 @@ IMAGE_STD = (0.26862954, 0.26130258, 0.27577711)
 EMBEDDING_EXTS = (".pt", ".safetensors")
 
 DEFAULTS = {"embedding": "", "weight": 0.9, "steps": 20, "lr": 0.0001, "slerp": False, "slerp_angle": 0.1,
-            "text": "", "negative": False}
+            "text": "", "negative": False, "embedding_sha256": ""}
 MAX_STEPS = 200
 
 
@@ -76,6 +79,7 @@ def normalize(config: dict) -> dict:
     try:
         out = {
             "embedding": str(c["embedding"]).strip(),
+            "embedding_sha256": str(c["embedding_sha256"]).strip().lower(),
             "weight": float(c["weight"]),
             "steps": float(c["steps"]),
             "lr": float(c["lr"]),
@@ -100,6 +104,9 @@ def normalize(config: dict) -> dict:
         raise EngineError(INVALID_PARAMS, "Aesthetic Gradients: learning rate must not be negative")
     if not out["embedding"]:
         raise EngineError(INVALID_PARAMS, "Aesthetic Gradients needs an aesthetic embedding (file name or path)")
+    if out["embedding_sha256"] and (len(out["embedding_sha256"]) != 64 or
+                                     any(ch not in "0123456789abcdef" for ch in out["embedding_sha256"])):
+        raise EngineError(INVALID_PARAMS, "Aesthetic Gradients: invalid embedding fingerprint")
     return out
 
 
@@ -202,17 +209,30 @@ def list_embeddings() -> list[str]:
     return sorted(names)
 
 
-def load_embedding(path):
-    """The normalised (768,) float32 embedding stored in `.pt` (tensor, or a dict holding one) or `.safetensors`."""
-    import torch
+def embedding_snapshot(path):
+    """Read bounded bytes once; the digest describes exactly the bytes subsequently decoded."""
     path = Path(path)
     try:
+        with path.open("rb") as source:
+            data = source.read(64 * 1024 * 1024 + 1)
+        if len(data) > 64 * 1024 * 1024:
+            raise ValueError("embedding exceeds 64 MiB")
+        return data, hashlib.sha256(data).hexdigest()
+    except (OSError, ValueError) as e:
+        raise EngineError(INVALID_PARAMS, f"Aesthetic Gradients: cannot read {path.name} ({e})") from e
+
+
+def decode_embedding_snapshot(snapshot, name):
+    """Decode the same bytes whose digest was recorded, without reopening the file."""
+    import torch
+    path = Path(name)
+    try:
         if path.suffix.lower() == ".safetensors":
-            from safetensors.torch import load_file
-            data = load_file(str(path))
+            from safetensors.torch import load
+            data = load(snapshot)
             t = next(iter(data.values())) if len(data) == 1 else data.get("embedding", data.get("aesthetic_embedding"))
         else:
-            data = torch.load(str(path), map_location="cpu", weights_only=True)
+            data = torch.load(io.BytesIO(snapshot), map_location="cpu", weights_only=True)
             if isinstance(data, dict):
                 tensors = [v for v in data.values() if isinstance(v, torch.Tensor)]
                 t = tensors[0] if len(tensors) == 1 else data.get("embedding", data.get("aesthetic_embedding"))
@@ -232,6 +252,24 @@ def load_embedding(path):
     if norm <= 0.0:
         raise EngineError(INVALID_PARAMS, f"Aesthetic Gradients: {path.name} is a zero embedding")
     return t / norm
+
+
+def load_embedding(path):
+    """The normalised (768,) float32 embedding from a .pt or .safetensors file."""
+    data, _ = embedding_snapshot(path)
+    return decode_embedding_snapshot(data, Path(path).name)
+
+
+def add_provenance(result, digests, warn):
+    """Attach a digest only when all aesthetic conditioning used one exact byte snapshot."""
+    if len(digests) == 1:
+        digest = next(iter(digests))
+        for image in result.get("images", []) + result.get("auxiliary_images", []):
+            image.setdefault("infotext_fields", []).append(["Aesthetic embedding SHA256", digest])
+    elif len(digests) > 1:
+        for image in result.get("images", []) + result.get("auxiliary_images", []):
+            image.setdefault("infotext_fields", []).append(["Aesthetic embedding SHA256", "ambiguous"])
+        warn("Aesthetic embedding changed during generation; no embedding fingerprint was recorded")
 
 
 def image_paths(images) -> list:
@@ -280,7 +318,8 @@ def embed_images(paths, device=None, batch_size: int = 8, check_interrupt=None, 
     return torch.cat(rows)
 
 
-def create_embedding(images, output, device=None, batch_size: int = 8, check_interrupt=None, root=None) -> dict:
+def create_embedding(images, output, device=None, batch_size: int = 8, check_interrupt=None, root=None,
+                     overwrite=False, publish=None) -> dict:
     """Embeds the images with CLIP ViT-L/14 and stores the normalised mean as a (1, 768) `.pt` file at `output`.
     `images` are file paths or a folder. Returns {path, count, norm_of_mean}."""
     import torch
@@ -292,7 +331,26 @@ def create_embedding(images, output, device=None, batch_size: int = 8, check_int
     out = (mean / norm).float().reshape(1, EMBED_DIM)
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(out, str(output))
+    # Stage in the destination directory so a failed save or an interruption cannot damage the old file.
+    fd, name = tempfile.mkstemp(prefix=".aesthetic-", suffix=".tmp", dir=output.parent)
+    os.close(fd)
+    staged = Path(name)
+    try:
+        torch.save(out, str(staged))
+        if check_interrupt is not None:
+            check_interrupt()
+        def commit():
+            if overwrite:
+                os.replace(staged, output)
+            else:
+                # link is atomic and fails if another writer created the name during embedding.
+                os.link(staged, output)
+        if publish is None:
+            commit()
+        else:
+            publish(commit)
+    finally:
+        staged.unlink(missing_ok=True)
     return {"path": str(output), "count": len(paths), "norm_of_mean": norm}
 
 
@@ -429,8 +487,11 @@ def encode_prompt(engine, pipe, text: str, gp, c: dict, plain_encode):
     sdxl = bool(engine.sdxl)
     base = plain_encode(pipe, text)
     path = resolve_embedding(c["embedding"])
+    snapshot, digest = embedding_snapshot(path)
+    if c.get("embedding_sha256") and c["embedding_sha256"] != digest:
+        raise EngineError(INVALID_PARAMS, "Aesthetic Gradients: embedding fingerprint does not match the recorded file")
     stat = path.stat()
-    key = (id(te), text, path.resolve().as_posix(), stat.st_size, stat.st_mtime_ns, c["steps"], c["lr"],
+    key = (id(te), text, path.resolve().as_posix(), stat.st_size, stat.st_mtime_ns, digest, c["steps"], c["lr"],
            c["slerp"], c["slerp_angle"], c["text"] if c["slerp"] else "", sdxl, gp.clip_skip)
     hit = _cache.get(key)
     if hit is not None and hit[0]() is te:
@@ -439,7 +500,7 @@ def encode_prompt(engine, pipe, text: str, gp, c: dict, plain_encode):
     else:
         from . import prompt as prompt_mod
         device = prompt_mod._te_device(pipe, te)
-        emb = load_embedding(path)
+        emb = decode_embedding_snapshot(snapshot, path.name)
         head = text_head(device)
         state = state_copy(engine, te, sdxl)
         target = _target_embedding(pipe, te, c, emb, device, head, state)
@@ -453,6 +514,8 @@ def encode_prompt(engine, pipe, text: str, gp, c: dict, plain_encode):
         _cache[key] = (weakref.ref(te), tuned)
         while len(_cache) > CACHE_LIMIT:
             _cache.popitem(last=False)
+    if getattr(engine, "_aesthetic_digests", None) is not None:
+        engine._aesthetic_digests.add(digest)
     w = c["weight"]
     def mix(b, t):
         t = t.to(b.device, torch.float32)
@@ -490,7 +553,7 @@ def main(argv=None) -> int:
     if output.exists() and not args.overwrite:
         print(f"{output} exists (use --overwrite)")
         return 1
-    result = create_embedding(args.images, output)
+    result = create_embedding(args.images, output, overwrite=args.overwrite)
     print(f"{result['count']} image(s) -> {result['path']}")
     return 0
 

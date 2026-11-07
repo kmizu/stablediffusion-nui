@@ -1,15 +1,17 @@
 package sdfx.mcp
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
+import java.io.ByteArrayOutputStream
 import java.util.Base64
 import sdfx.core.infotext.Infotext
 import sdfx.core.plugins.api.{Control, Plugin, Values}
 import sdfx.core.png.PngMetadata
-import sdfx.plugins.{CompilePlugin, ClipIoPlugin, CnAnimationPlugin, AnimateDiffPlugin, BatchFaceSwapPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
+import sdfx.plugins.{CompilePlugin, DeepCachePlugin, ClipIoPlugin, CnAnimationPlugin, AnimateDiffPlugin, BatchFaceSwapPlugin, AestheticScorePlugin, AestheticGradientsPlugin, LlulPlugin, OldSdFirstpasserPlugin, CorridorCrawlerPlugin, AgentAttentionPlugin, CdTunerPlugin, CharacteristicGuidancePlugin, IncantationsPlugin, ConditioningHighresFixPlugin, Img2ImgHiresFixPlugin, NsfwCheckerPlugin, SemanticGuidancePlugin, SonarPlugin, StandardPlugins, TokenDownsamplingPlugin}
 import scala.util.control.NonFatal
 
 /** Inspect only: no model load, plugin execution, script execution or generation. */
-final class InspectGenerationMetadataTool(policy: PathPolicy, base: Path) extends McpTool:
+final class InspectGenerationMetadataTool(policy: PathPolicy, baseProvider: () => Path, aestheticRegistry: Option[Path] = None) extends McpTool:
+  def this(policy: PathPolicy, base: Path) = this(policy, () => base, None)
   def name = "inspect_generation_metadata"
   override def title = "Inspect generation metadata"
   def description = "Read PNG parameters and return typed txt2img arguments and explicit AlwaysOn replay candidates. Never starts generation; missing inputs, unsupported settings and unknown metadata require review."
@@ -18,21 +20,23 @@ final class InspectGenerationMetadataTool(policy: PathPolicy, base: Path) extend
     val args = Args(input, Seq("image"))
     if ctx.isCancelled then throw ToolError("cancelled")
     if !input.value.get("image").exists(_.isInstanceOf[ujson.Str]) then throw ToolError("image must be a string")
-    ToolResult.json(InspectGenerationMetadata.inspect(args.reqStr("image"), policy, base))
+    ToolResult.json(InspectGenerationMetadata.inspect(args.reqStr("image"), policy, baseProvider().toAbsolutePath.normalize(), aestheticRegistry))
 
 object InspectGenerationMetadata:
   private val MaxBytes = 16 * 1024 * 1024
   private val signature = Array[Byte](-119, 80, 78, 71, 13, 10, 26, 10)
 
-  private def read(spec: String, policy: PathPolicy, base: Path): Array[Byte] =
+  private[mcp] def read(spec: String, policy: PathPolicy, base: Path, afterResolve: () => Unit = () => ()): Array[Byte] =
     val s = spec.trim
     if s.isEmpty then throw ToolError("image is empty")
     if PathPolicy.isNetworkPath(s) || Images.looksLikePath(s) && !s.startsWith("data:") then
       val path = policy.resolve(s, "image", base)
-      val in = Files.newInputStream(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)
-      val bytes = try in.readNBytes(MaxBytes + 1) finally in.close()
-      if bytes.length > MaxBytes then throw ToolError("image exceeds 16 MiB")
-      bytes
+      afterResolve()
+      val roots = policy.allowedRoots.flatMap(r => scala.util.Try(r.toRealPath()).toOption)
+      val out = new ByteArrayOutputStream()
+      try sdfx.engine.VerifiedFolderInput.copy(path, roots, out, maxBytes = MaxBytes.toLong)
+      catch case NonFatal(_) => throw ToolError("image: verified input could not be read inside an allowed folder or exceeds 16 MiB; use base64 image data if verified file handles are unavailable")
+      out.toByteArray
     else
       val data = if s.startsWith("data:") then
         if !s.startsWith("data:image/png;base64,") then throw ToolError("image must be a PNG base64 data URI")
@@ -98,15 +102,11 @@ object InspectGenerationMetadata:
       key -> v
     }})
 
-  def inspect(spec: String, policy: PathPolicy, base: Path): ujson.Obj =
+  def inspect(spec: String, policy: PathPolicy, base: Path, aestheticRegistry: Option[Path] = None): ujson.Obj =
     val bytes = read(spec, policy, base)
     validateChunks(bytes)
-    val temp = Files.createTempFile("sdfx-mcp-infotext-", ".png")
-    val text = try
-      Files.write(temp, bytes)
-      Images.rejectProtectedPng(temp, "image")
-      PngMetadata.readParameters(temp).getOrElse(throw ToolError("PNG has no parameters infotext"))
-    finally Files.deleteIfExists(temp)
+    Images.rejectProtectedPng(bytes, "image")
+    val text = PngMetadata.readParameters(bytes).getOrElse(throw ToolError("PNG has no parameters infotext"))
     val parsed = Infotext.parse(text)
     val p = try Infotext.toParams(parsed) catch case NonFatal(_) => throw ToolError("invalid generation parameters")
     val workErrors = try
@@ -160,12 +160,30 @@ object InspectGenerationMetadata:
       "aesthetic_gradients" -> AestheticGradientsPlugin.replay(f).filter(_ => f.contains(AestheticGradientsPlugin.EmbeddingKey)),
       "clip_io" -> ClipIoPlugin.replay(f).filter(_ => ClipIoPlugin.InfotextKeys.exists(f.contains)),
       "compile" -> CompilePlugin.replay(f).filter(_ => f.contains(CompilePlugin.BackendKey)),
+      "deepcache" -> DeepCachePlugin.replay(f).filter(_ => f.contains(DeepCachePlugin.IntervalKey)),
       "aesthetic_score" -> AestheticScorePlugin.replay(f).filter(_ => AestheticScorePlugin.TriggerKeys.exists(f.contains)),
       "batch_face_swap" -> BatchFaceSwapPlugin.replay(f).filter(_ => f.contains(BatchFaceSwapPlugin.InfotextKey)),
       "model_keyword" -> Option.when(f.contains("Model keyword settings") || f.get("Model keyword replay").exists(_.equalsIgnoreCase("true")))(Values(Map("enabled" -> "false")))
     )
     val plugins = StandardPlugins.alwaysOn.map(p => p.id -> p).toMap
     val on = ujson.Obj.from(candidates.flatMap { (id, values) => values.flatMap(v => plugins.get(id).map(p => id -> typed(p, v))) })
+    // Fingerprinted metadata may only produce a replay candidate when the exact
+    // local file is present and currently permitted. Do not turn an unresolved
+    // identity back into a name-only request that could select a different file.
+    val aestheticError = f.get("Aesthetic embedding SHA256").flatMap { hash =>
+      on.value.get("aesthetic_gradients").map { candidate =>
+        def permitted(path: Path): Boolean =
+          scala.util.Try(policy.resolveDirectory(path.toString, "embedding", base))
+            .orElse(scala.util.Try(policy.resolve(path.toString, "embedding", base))).isSuccess
+        val dirs = aestheticRegistry.fold[Either[String, Vector[Path]]](Right(Vector.empty))(path =>
+          sdfx.core.aesthetic.AestheticEmbeddingDirectories.read(path, permitted))
+        val resolved = dirs.flatMap(registered => sdfx.core.aesthetic.AestheticEmbeddingLocator.resolve(
+          candidate("embedding").str, Some(hash), base.resolve("aesthetic_embeddings") +: registered, permitted))
+        resolved match
+          case Right(path) => candidate("embedding") = ujson.Str(path.toString); None
+          case Left(error) => on.value.remove("aesthetic_gradients"); Some(s"Aesthetic embedding not restored: $error")
+      }.getOrElse(Some("Aesthetic embedding not restored: invalid or ambiguous recorded settings."))
+    }
     PluginMetadataCandidates.freeu(f).foreach(v => on("freeu") = v)
     PluginMetadataCandidates.hypertile(f).foreach(v => on("hypertile") = v)
     PluginMetadataCandidates.pag(f).foreach(v => on("pag") = v)
@@ -216,18 +234,25 @@ object InspectGenerationMetadata:
       (if on.value.contains("llul") then LlulPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("clip_io") then ClipIoPlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("compile") then CompilePlugin.InfotextKeys.toSet else Set.empty[String]) ++
+      (if on.value.contains("deepcache") then DeepCachePlugin.InfotextKeys.toSet else Set.empty[String]) ++
       (if on.value.contains("aesthetic_gradients") then AestheticGradientsPlugin.InfotextKeys.toSet else Set.empty[String]) ++
+      (if on.value.contains("aesthetic_gradients") && f.contains("Aesthetic embedding SHA256") then Set("Aesthetic embedding SHA256") else Set.empty[String]) ++
       (if on.value.contains("aesthetic_score") then AestheticScorePlugin.InfotextKeys.toSet else Set.empty[String]) ++
-      (if on.value.contains("batch_face_swap") then Set(BatchFaceSwapPlugin.InfotextKey) else Set.empty[String])
+      (if on.value.contains("batch_face_swap") then Set(BatchFaceSwapPlugin.InfotextKey, "Face checkpoint hash") else Set.empty[String])
     // Script candidates: only reported, run_script is called by the agent with these values and generation_args.
     val scriptCandidates: Seq[(String, Values, Seq[String])] =
       OldSdFirstpasserPlugin.replay(f).map(v => (OldSdFirstpasserPlugin.Id, v, OldSdFirstpasserPlugin.InfotextKeys)).toSeq ++
         AnimateDiffPlugin.replay(f).map(v => (AnimateDiffPlugin.Id, v, AnimateDiffPlugin.InfotextKeys)).toSeq ++
-        CnAnimationPlugin.replay(f).map(v => (CnAnimationPlugin.Id, v, CnAnimationPlugin.InfotextKeys)).toSeq
+        CnAnimationPlugin.replay(f).map(v => (CnAnimationPlugin.Id, v, CnAnimationPlugin.InfotextKeys)).toSeq ++
+        CorridorCrawlerPlugin.replay(f).map(v => ("corridor_crawler", v, Seq(CorridorCrawlerPlugin.ReplayKey))).toSeq
     val scripts = ujson.Obj.from(scriptCandidates.flatMap { case (id, v, _) =>
       StandardPlugins.scripts(() => Nil).find(_.id == id).map(pl => id -> typed(pl, v)) })
     val scriptKeys = scriptCandidates.filter { case (id, _, _) => scripts.value.contains(id) }.flatMap(_._3).toSet
     val unconsumed = f.filterNot((key, _) => represented.contains(key) || scriptKeys.contains(key))
     ujson.Obj("infotext" -> text, "generation_args" -> args, "always_on" -> on, "scripts" -> scripts,
       "unapplied_fields" -> ujson.Obj.from(unconsumed.map((k, v) => k -> ujson.Str(v))),
-      "warnings" -> ujson.Arr("Review candidates and missing model, LoRA, image, mask and unsupported plugin settings before replay; nothing was executed."))
+      "warnings" -> ujson.Arr.from(Seq("Review candidates and missing model, LoRA, image, mask and unsupported plugin settings before replay; nothing was executed.") ++ aestheticError ++
+        Option.when(scripts.value.contains("corridor_crawler"))(
+          "Corridor Crawler requires an initial image; custom prefabs also require an explicitly supplied image. Recorded inputs are not restored.") ++
+        Option.when(f.contains("Face checkpoint hash") && !on.value.contains("batch_face_swap"))(
+          "Face checkpoint fingerprint or settings are invalid; Batch Face Swap was not restored.")))

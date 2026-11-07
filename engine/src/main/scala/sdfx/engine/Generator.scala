@@ -29,6 +29,7 @@ trait GenerationListener:
   private[engine] def payloadJobId: Option[String] = None
   private[engine] def submittedPayloadContext: Option[SubmittedPayloadContext] = None
   private[engine] def payloadCaptureOptions: Option[CaptureOptions] = None
+  private[engine] def inputProvenance: Option[(String, String)] = None
   private[engine] def nextPayloadKey(): PayloadKey = PayloadKey(s"direct-${java.util.UUID.randomUUID()}", 1)
   def onPreparedRequest(snapshot: PayloadSnapshot): Unit = ()
   def onPayloadLifecycle(key: PayloadKey, state: PayloadState, completionJson: Option[String]): Unit = ()
@@ -145,7 +146,8 @@ final class Generator(
     })
 
   /** A context bound to one job: events go to `listener`; every `generate` applies the active AlwaysOn plugins. */
-  def forJob(listener: GenerationListener, alwaysOn: Seq[(Plugin, Values)] = Nil, limits: JobLimits = JobLimits()): PluginContext =
+  def forJob(listener: GenerationListener, alwaysOn: Seq[(Plugin, Values)] = Nil, limits: JobLimits = JobLimits(),
+      provenanceProvider: () => Option[(String, String)] = () => None): PluginContext =
     val self = this
     val generations = new java.util.concurrent.atomic.AtomicInteger(0)
     val fastloadPlan = alwaysOn.find((plugin, values) => plugin.id == "controlnet_fastload" && plugin.isActive(values))
@@ -173,6 +175,7 @@ final class Generator(
       override private[engine] def payloadJobId: Option[String] = listener.payloadJobId
       override private[engine] def submittedPayloadContext: Option[SubmittedPayloadContext] = listener.submittedPayloadContext
       override private[engine] def payloadCaptureOptions: Option[CaptureOptions] = listener.payloadCaptureOptions
+      override private[engine] def inputProvenance: Option[(String, String)] = provenanceProvider()
       override private[engine] def nextPayloadKey(): PayloadKey = listener.nextPayloadKey()
       override def onPreparedRequest(snapshot: PayloadSnapshot): Unit = listener.onPreparedRequest(snapshot)
       override def onPayloadLifecycle(key: PayloadKey, state: PayloadState, completionJson: Option[String]): Unit =
@@ -231,7 +234,7 @@ final class Generator(
         out
       }
       def saveImage(img: BufferedImage, kind: String, params: GenerationParams, infotext: String): OutputImage =
-        self.saveWith(img, kind, params, infotext, listener)
+        self.saveWith(img, kind, params, infotext, scopedListener)
       override def readImage(path: Path): BufferedImage =
         val decoded = sdfx.core.png.ScrambledPng.read(path, listener.imageSecret.map(_.use(identity)))
         if decoded.scrambled && decoded.passwordVerified.isEmpty then listener.onLog(ScrambledInput.LegacyWarning)
@@ -282,6 +285,15 @@ final class Generator(
 
   def resolveHookModels(hooks: Map[String, ujson.Value], warn: String => Unit): Map[String, ujson.Value] =
     hooks.map {
+      case ("batch_face_swap", o: ujson.Obj) =>
+        o.value.get("checkpoint") match
+          case Some(ujson.Str(name)) if name.trim.nonEmpty && !name.trim.equalsIgnoreCase("none") =>
+            val model = catalog.findCheckpoint(name.trim).getOrElse(
+              throw EngineError(Protocol.ErrorCodes.InvalidParams, s"Batch Face Swap checkpoint not found: $name"))
+            "batch_face_swap" -> ujson.Obj.from(o.value.toSeq.map((field, value) =>
+              field -> (if field == "checkpoint" then ujson.Str(model.path) else value)))
+          case Some(ujson.Str(_)) | None => "batch_face_swap" -> o
+          case _ => throw EngineError(Protocol.ErrorCodes.InvalidParams, "Batch Face Swap checkpoint must be a string")
       case (k, o: ujson.Obj) if hookModelSources.contains(k) =>
         o.value.get("model") match
           case Some(ujson.Str(name)) if name.nonEmpty && name != "None" =>
@@ -305,7 +317,7 @@ final class Generator(
     val refinement = Img2ImgHiresMetadata.active(composed.hooks)
     val recorded = composed.copy(seed = seed, subseed = subseed,
       extra = p0.extra.filterNot((key, _) => HardwareInfo.fieldNames(key) ||
-        Set("Hires prompt mode", "NUI Hires template", "NUI Manual LoRAs", Img2ImgHiresMetadata.key)(key)) ++
+        Set("Hires prompt mode", "NUI Hires template", "NUI Manual LoRAs", "Aesthetic embedding SHA256", Img2ImgHiresMetadata.key)(key)) ++
         refinement.map(h => Img2ImgHiresMetadata.key -> Img2ImgHiresMetadata.encode(h)))
 
     val keywordReplay = p0.extra.contains("Model keyword settings") ||
@@ -340,6 +352,22 @@ final class Generator(
       else recorded.loras ++ ex.loras ++ hrEx.loras.filterNot(l => ex.loras.exists(x => x.name == l.name && x.dyn == l.dyn))
     val separateHiresLoras = HiresPreparation.active(recorded).isDefined && !composable
     val warnings = Seq.newBuilder[String]
+    // A user explicitly selected this local embedding for the job. Remember its
+    // parent locally for future name/hash replay, never in the PNG itself.
+    recorded.hooks.get("aesthetic_gradients").collect { case o: ujson.Obj => o }
+      .flatMap(_.value.get("embedding")).collect { case ujson.Str(value) => value.trim }.filter(_.nonEmpty).foreach { value =>
+        val network = value.startsWith("\\\\") || value.startsWith("//") || value.startsWith("\\/") || value.startsWith("/\\") ||
+          value.toLowerCase(java.util.Locale.ROOT).startsWith("file:") || value.toLowerCase(java.util.Locale.ROOT).startsWith("smb:")
+        if !network then scala.util.Try(Paths.get(value)).toOption.filter(_.isAbsolute).filter(Files.isRegularFile(_)).foreach { file =>
+          scala.util.Try(file.toRealPath()).toOption.foreach { real =>
+            val parent = real.getParent
+            if parent != null && !parent.toString.startsWith("\\\\") && !parent.toString.startsWith("//") then
+              sdfx.core.aesthetic.AestheticEmbeddingDirectories.register(
+                home.configDir.resolve("aesthetic-embedding-directories.json"), parent, p => p == parent)
+                .left.foreach(warning => warnings += s"Aesthetic replay directory was not registered: $warning")
+          }
+        }
+      }
     val refinementLoras = refinement.map(_ => recorded.loras ++ refineEx.loras)
     val keywordActive = recorded.hooks.get("model_keyword").exists(_.isInstanceOf[ujson.Obj])
     val keywordSelected = recorded.hooks.get("model_keyword").collect { case o: ujson.Obj => o }
@@ -496,7 +524,7 @@ final class Generator(
         .getOrElse(throw EngineError(Protocol.ErrorCodes.InvalidParams, s"checkpoint not found: $name"))
       if !client.supervisor.loadedModel.exists(m => samePath(m.path, path)) then
         listener.onLog(s"loading checkpoint $name")
-        val m = await(client.loadModelOwned(LoadModelRequest(path, s.dtype, s.vramMode, None, s.vaeTiling), listener.interruptionOwner), timeouts.load, "load_model")
+        val m = await(client.loadModelOwned(LoadModelRequest(path, s.dtype, s.vramMode, None, s.vaeTiling, s.vaeSlicing, s.fp8Storage, s.vaeAuto, s.vaeFp16), listener.interruptionOwner), timeouts.load, "load_model")
         catalog.rememberHash(m)
     }
     p.vae.map(_.trim).filter(_.nonEmpty).foreach { v =>
@@ -640,7 +668,8 @@ final class Generator(
 
   private def runEngine(p: GenerationParams, listener: GenerationListener): (PreparedGeneration, GenerationResult) =
     if listener.isInterrupted then throw interruptedError
-    val original = prepare(EditorPreviewMetadata.forJob(p, listener.editorPreview.nonEmpty))
+    val prepared = prepare(EditorPreviewMetadata.forJob(p, listener.editorPreview.nonEmpty))
+    val original = prepared.copy(recorded = Img2ImgFolderRunner.recordedParams(prepared.recorded, listener.inputProvenance))
     ScrambledInput.withParams(original.request.params, home.tmpDir(settings()), listener.imageSecret, listener.onLog) { params =>
       runEnginePrepared(p, listener, original.copy(request = original.request.copy(params = params)))
     }
@@ -919,13 +948,23 @@ final class Generator(
   /** Saves an image to outputs/<kind>/<date>/ (`grid`/`grids` -> outputs/grids). */
   def saveWith(img: BufferedImage, kind: String, params: GenerationParams, infotext: String, listener: GenerationListener): OutputImage =
     val k = if kind == "grid" then "grids" else kind
-    val dst = OutputNaming.nextFile(outputsDir, k, params.seed, if k.contains("grid") then "-grid" else "")
-    try sdfx.core.png.ScrambledPng.write(img, dst, Seq(PngMetadata.ParametersKey -> infotext), listener.imageSecret.map(_.use(identity)))
+    val recorded = Img2ImgFolderRunner.recordedParams(params, listener.inputProvenance)
+    val source = listener.inputProvenance.collect {
+      case (staged, original) if params.img2img.exists(i => i.initImage == staged || i.initImage == original) => original
+    }
+    val text = source.fold(infotext) { path =>
+      val parsed = Infotext.parse(infotext)
+      if parsed.fields.nonEmpty then Infotext.render(parsed.prompt, parsed.negativePrompt, parsed.fields.updated("NUI img2img source", path))
+      else infotext
+    }
+    val dst = OutputNaming.nextFile(outputsDir, k, recorded.seed, if k.contains("grid") then "-grid" else "")
+    val texts = Seq(PngMetadata.ParametersKey -> text) ++ source.toSeq.map("NUI img2img source" -> _)
+    try sdfx.core.png.ScrambledPng.write(img, dst, texts, listener.imageSecret.map(_.use(identity)))
     catch
       case NonFatal(e) =>
         Files.deleteIfExists(dst)
         throw e
-    val out = OutputImage(dst, params, infotext, params.seed)
+    val out = OutputImage(dst, recorded, text, recorded.seed)
     listener.onImageSaved(out, grid = k.contains("grid"))
     out
 

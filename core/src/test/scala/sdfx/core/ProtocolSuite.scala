@@ -212,7 +212,8 @@ class ProtocolSuite extends munit.FunSuite:
       assertEquals(Json.fromJs[T](js), t)
     rt(ModelEntry("m", "p", "sdxl", 6617.5), "size_mb")
     rt(FileEntry("f", "p"), "size_mb")
-    rt(LoadModelRequest("p", vaePath = Some("v"), vaeTiling = true), "vae_path", "vae_tiling", "vram_mode")
+    rt(LoadModelRequest("p", vaePath = Some("v"), vaeTiling = true, vaeSlicing = true,
+      fp8Storage = true, vaeAuto = false, vaeFp16 = true), "vae_path", "vae_tiling", "vram_mode", "vae_slicing", "fp8_storage", "vae_auto", "vae_fp16")
     rt(LoadedModel("n", "p", "sdxl", "h", 1234, Some("vae"), Some("vh")), "loaded_ms", "vae_name", "vae_hash")
     rt(SamplerList(Seq(SamplerInfo("Euler a"), SamplerInfo("DDIM", false, "Uniform")), Seq("Automatic", "Karras")), "samplers", "schedulers")
     rt(SamplerInfo("x"), "default_scheduler")
@@ -234,6 +235,13 @@ class ProtocolSuite extends munit.FunSuite:
     assertEquals(native.deviceUsedMb,Some(1234.0))
     val legacy=Json.fromJs[MemoryInfo](ujson.read("""{"allocated_mb":100,"reserved_mb":150,"total_mb":4096,"ram_used_mb":300}"""))
     assertEquals(legacy.deviceUsedMb,None)
+  }
+
+  test("loaded model VAE path is optional for older workers and round trips for new workers") {
+    val old = Json.fromJs[LoadedModel](ujson.read("""{"name":"n","path":"p","kind":"sd15","hash":"h","vae_name":"custom"}"""))
+    assertEquals(old.vaePath, None)
+    val current = old.copy(vaePath = Some("/private/vae.safetensors"))
+    assertEquals(Json.fromJs[LoadedModel](Json.toJs(current)), current)
   }
 
   test("EngineError") {

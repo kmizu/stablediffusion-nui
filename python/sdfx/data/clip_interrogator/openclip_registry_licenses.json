@@ -1,0 +1,1086 @@
+{
+  "openclip_version": "2.32.0",
+  "observed": "2026-11-03",
+  "models": {
+    "RN50/openai": {
+      "repo": "timm/resnet50_clip.openai",
+      "revision": "ec3d92cf63a5f9d591f0d611b736895966c73076",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50/yfcc15m": {
+      "repo": "timm/resnet50_clip.yfcc15m",
+      "revision": "c94a9e3bde942b58c1cd13bb0a03d3c1ff4cb056",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50/cc12m": {
+      "repo": "timm/resnet50_clip.cc12m",
+      "revision": "d72a2fdb0278498f216ca970010d730b95249beb",
+      "license": "mit",
+      "gated": false
+    },
+    "RN101/openai": {
+      "repo": "timm/resnet101_clip.openai",
+      "revision": "57ca0a94c6eeabf11fefa2f4c0d1748d43a0de99",
+      "license": "mit",
+      "gated": false
+    },
+    "RN101/yfcc15m": {
+      "repo": "timm/resnet101_clip.yfcc15m",
+      "revision": "d671c8ed34350b653cb58bcba8c7f249146a0ede",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50x4/openai": {
+      "repo": "timm/resnet50x4_clip.openai",
+      "revision": "b4f04cac7ac8a139850feb016771d4d5dc561b6b",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50x16/openai": {
+      "repo": "timm/resnet50x16_clip.openai",
+      "revision": "a56966b528ecd2e375df2403d3f397821eb8cdd0",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50x64/openai": {
+      "repo": "timm/resnet50x64_clip.openai",
+      "revision": "373458f303f7b30467f8858bab8b2e307d1f7837",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/openai": {
+      "repo": "timm/vit_base_patch32_clip_224.openai",
+      "revision": "a6f597a30f7b82c51704746581f9a4e41421e878",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-32/laion400m_e31": {
+      "repo": "timm/vit_base_patch32_clip_224.laion400m_e31",
+      "revision": "846175f5d195393bbd18db7687626d2ad3f3735d",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/laion400m_e32": {
+      "repo": "timm/vit_base_patch32_clip_224.laion400m_e32",
+      "revision": "faf88d716a164f74a5eaf785acf215a1bb7cfccd",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/laion2b_e16": {
+      "repo": "timm/vit_base_patch32_clip_224.laion2b_e16",
+      "revision": "825e019510c276bde39060d9bc8925d901acde74",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/laion2b_s34b_b79k": {
+      "repo": "laion/CLIP-ViT-B-32-laion2B-s34B-b79K",
+      "revision": "1a25a446712ba5ee05982a381eed697ef9b435cf",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/datacomp_xl_s13b_b90k": {
+      "repo": "laion/CLIP-ViT-B-32-DataComp.XL-s13B-b90K",
+      "revision": "f0e2ffa09cbadab3db6a261ec1ec56407ce42912",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/datacomp_m_s128m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-DataComp.M-s128M-b4K",
+      "revision": "54e96babb352b7544d36afbcfc639a75e4cf426a",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_m_clip_s128m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.M.clip-s128M-b4K",
+      "revision": "18b42b90ff78d9bd8de0ca252fe16ae564e09cdb",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_m_laion_s128m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.M.laion-s128M-b4K",
+      "revision": "a2545a884607139af5790c6456b79189e684a908",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_m_image_s128m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.M.image-s128M-b4K",
+      "revision": "d5283cbf1cdefa5a2d9bd98876a2acd0f459908c",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_m_text_s128m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.M.text-s128M-b4K",
+      "revision": "01c9d4763305d0eb0cc637939bcf5649a97ecdc4",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_m_basic_s128m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.M.basic-s128M-b4K",
+      "revision": "56ebe2a1e6f99786e66283018a934a840b117429",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_m_s128m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.M-s128M-b4K",
+      "revision": "f8f1545ebca38815a07b34382275c210cfac7e03",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/datacomp_s_s13m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-DataComp.S-s13M-b4K",
+      "revision": "010f3e90392dfa6c9f8d872ed375ae124e7b1857",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_s_clip_s13m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.S.clip-s13M-b4K",
+      "revision": "d0240c9dd88bee5c7f9605aad4d2ba405674f8c6",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_s_laion_s13m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.S.laion-s13M-b4K",
+      "revision": "7fd5ef574859e6396931a0b7e5059e8bb4c6d779",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_s_image_s13m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.S.image-s13M-b4K",
+      "revision": "40a3962a2e227e42dd307fee4c753faa21ebe421",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_s_text_s13m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.S.text-s13M-b4K",
+      "revision": "5127c353baa88ac82c8c8132ee29e005585a2f51",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_s_basic_s13m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.S.basic-s13M-b4K",
+      "revision": "7028cf47182d42a29081ca78be34c208c86a662f",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/commonpool_s_s13m_b4k": {
+      "repo": "laion/CLIP-ViT-B-32-CommonPool.S-s13M-b4K",
+      "revision": "810f3a865269b2de82068a1b8db22944161e7626",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32/metaclip_400m": {
+      "repo": "timm/vit_base_patch32_clip_224.metaclip_400m",
+      "revision": "52dc0f732ea7b1f56c260f9c05f449cdc24b2814",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-B-32/metaclip_fullcc": {
+      "repo": "timm/vit_base_patch32_clip_224.metaclip_2pt5b",
+      "revision": "11a59be381208279468108c9d8ba02cd3e466748",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-B-32-256/datacomp_s34b_b86k": {
+      "repo": "laion/CLIP-ViT-B-32-256x256-DataComp-s34B-b86K",
+      "revision": "4afec35ffe57a943d569ff7ee888061830164da8",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/openai": {
+      "repo": "timm/vit_base_patch16_clip_224.openai",
+      "revision": "977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-16/laion400m_e31": {
+      "repo": "timm/vit_base_patch16_clip_224.laion400m_e31",
+      "revision": "dd197efc7ff0d9579df593e35ac3dc5d97fe9f73",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/laion400m_e32": {
+      "repo": "timm/vit_base_patch16_clip_224.laion400m_e32",
+      "revision": "f07dd91aded299f886ab2e484b7fb84de65fc46d",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/laion2b_s34b_b88k": {
+      "repo": "laion/CLIP-ViT-B-16-laion2B-s34B-b88K",
+      "revision": "7288da5a0d6f0b51c4a2b27c624837a9236d0112",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/datacomp_xl_s13b_b90k": {
+      "repo": "laion/CLIP-ViT-B-16-DataComp.XL-s13B-b90K",
+      "revision": "d110532e8d4ff91c574ee60a342323f28468b287",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/datacomp_l_s1b_b8k": {
+      "repo": "laion/CLIP-ViT-B-16-DataComp.L-s1B-b8K",
+      "revision": "d4a06501b383e5110dda2409838d16a91b8f0cf2",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/commonpool_l_clip_s1b_b8k": {
+      "repo": "laion/CLIP-ViT-B-16-CommonPool.L.clip-s1B-b8K",
+      "revision": "f1d3bd791c3215608845dec18d7523a062d76622",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/commonpool_l_laion_s1b_b8k": {
+      "repo": "laion/CLIP-ViT-B-16-CommonPool.L.laion-s1B-b8K",
+      "revision": "5d0b6562ca611a6265842d3436ec24f1bc515c49",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/commonpool_l_image_s1b_b8k": {
+      "repo": "laion/CLIP-ViT-B-16-CommonPool.L.image-s1B-b8K",
+      "revision": "3cb59a2a2e55a29dab26172cfc11f800e9c12b57",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/commonpool_l_text_s1b_b8k": {
+      "repo": "laion/CLIP-ViT-B-16-CommonPool.L.text-s1B-b8K",
+      "revision": "062f98b88bd0425c0a262c1107d166e5028a2239",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/commonpool_l_basic_s1b_b8k": {
+      "repo": "laion/CLIP-ViT-B-16-CommonPool.L.basic-s1B-b8K",
+      "revision": "492384a2fc35f805d0a473012871cbe1cc2ce583",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/commonpool_l_s1b_b8k": {
+      "repo": "laion/CLIP-ViT-B-16-CommonPool.L-s1B-b8K",
+      "revision": "e9c216268345d441a1da1f0dddb26eec70d41dcd",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16/dfn2b": {
+      "repo": "apple/DFN2B-CLIP-ViT-B-16",
+      "revision": "8b023e8bb8b0a27c17859af548c9fc3105d6c29c",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "ViT-B-16/metaclip_400m": {
+      "repo": "timm/vit_base_patch16_clip_224.metaclip_400m",
+      "revision": "b9e318ae7ebed751491a6e22e02c5992e67bed2d",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-B-16/metaclip_fullcc": {
+      "repo": "timm/vit_base_patch16_clip_224.metaclip_2pt5b",
+      "revision": "a984c098af95302ebc96bee023f7b8f69536f37b",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-B-16-plus-240/laion400m_e31": {
+      "repo": "timm/vit_base_patch16_plus_clip_240.laion400m_e31",
+      "revision": "6dbe024bee4f13f90ad3676d92957e68868a616d",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16-plus-240/laion400m_e32": {
+      "repo": "timm/vit_base_patch16_plus_clip_240.laion400m_e31",
+      "revision": "6dbe024bee4f13f90ad3676d92957e68868a616d",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-L-14/openai": {
+      "repo": "timm/vit_large_patch14_clip_224.openai",
+      "revision": "18d0535469bb561bf468d76c1d73aa35156c922b",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-L-14/laion400m_e31": {
+      "repo": "timm/vit_large_patch14_clip_224.laion400m_e31",
+      "revision": "448b555ef026e887e8d160e3679f1d9c382245f5",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-L-14/laion400m_e32": {
+      "repo": "timm/vit_large_patch14_clip_224.laion400m_e32",
+      "revision": "2fa800248fb235f0c0f7b55efe4ddcf6a397e5ab",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-L-14/laion2b_s32b_b82k": {
+      "repo": "laion/CLIP-ViT-L-14-laion2B-s32B-b82K",
+      "revision": "1627032197142fbe2a7cfec626f4ced3ae60d07a",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-L-14/datacomp_xl_s13b_b90k": {
+      "repo": "laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K",
+      "revision": "84c9828e63dc9a9351d1fe637c346d4c1c4db341",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-L-14/commonpool_xl_clip_s13b_b90k": {
+      "repo": "laion/CLIP-ViT-L-14-CommonPool.XL.clip-s13B-b90K",
+      "revision": "de1c90b9159dde7d65cd0d89a572b786adce3819",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-L-14/commonpool_xl_laion_s13b_b90k": {
+      "repo": "laion/CLIP-ViT-L-14-CommonPool.XL.laion-s13B-b90K",
+      "revision": "f92344467162a92480cea7704ee84558edf04dc9",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-L-14/commonpool_xl_s13b_b90k": {
+      "repo": "laion/CLIP-ViT-L-14-CommonPool.XL-s13B-b90K",
+      "revision": "d979a50bf428edbb14b32c4dce7da2d49f7f46ed",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-L-14/metaclip_400m": {
+      "repo": "timm/vit_large_patch14_clip_224.metaclip_400m",
+      "revision": "41b287cf80fb4f3af3e9393d5d866a451cd7bffd",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-L-14/metaclip_fullcc": {
+      "repo": "timm/vit_large_patch14_clip_224.metaclip_2pt5b",
+      "revision": "1c09b97e09fb19bba2bf4548c9c7cca4b87f7888",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-L-14/dfn2b": {
+      "repo": "apple/DFN2B-CLIP-ViT-L-14",
+      "revision": "13d68e40771108ec1812f566404e8c6f7de85f67",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "ViT-L-14/dfn2b_s39b": {
+      "repo": "apple/DFN2B-CLIP-ViT-L-14-39B",
+      "revision": "702df57661aa9807613e38a55014e02265a238a1",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "ViT-L-14-336/openai": {
+      "repo": "timm/vit_large_patch14_clip_336.openai",
+      "revision": "81e38efc4637de5023b10e75a7f9bd1c6fa6b010",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-H-14/laion2b_s32b_b79k": {
+      "repo": "laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
+      "revision": "1c2b8495b28150b8a4922ee1c8edee224c284c0c",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-H-14/metaclip_fullcc": {
+      "repo": "timm/vit_huge_patch14_clip_224.metaclip_2pt5b",
+      "revision": "28cc5adb1d99fec4d4e1f60272187807942d333e",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-H-14/metaclip_altogether": {
+      "repo": "timm/vit_huge_patch14_clip_224.metaclip_altogether",
+      "revision": "79ca86b54e97d41bd9f555bbb272bb1dcaa11f75",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-H-14/dfn5b": {
+      "repo": "apple/DFN5B-CLIP-ViT-H-14",
+      "revision": "11738501a1db6d5e0a3451a71ba100be02e577e6",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "ViT-H-14-378/dfn5b": {
+      "repo": "apple/DFN5B-CLIP-ViT-H-14-378",
+      "revision": "01b771ed0d1395ca5ffdd279897d665ebe00dfd2",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "ViT-g-14/laion2b_s12b_b42k": {
+      "repo": "laion/CLIP-ViT-g-14-laion2B-s12B-b42K",
+      "revision": "4b0305adc6802b2632e11cbe6606a9bdd43d35c9",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-g-14/laion2b_s34b_b88k": {
+      "repo": "laion/CLIP-ViT-g-14-laion2B-s34B-b88K",
+      "revision": "a20bc450485fc2dd335317234582df0e69d21b5a",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-bigG-14/laion2b_s39b_b160k": {
+      "repo": "laion/CLIP-ViT-bigG-14-laion2B-39B-b160k",
+      "revision": "743c27bd53dfe508a0ade0f50698f99b39d03bec",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-bigG-14/metaclip_fullcc": {
+      "repo": "timm/vit_gigantic_patch14_clip_224.metaclip_2pt5b",
+      "revision": "2b4a234e9e22a182b34d372c6cf6f02f44182a30",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "roberta-ViT-B-32/laion2b_s12b_b32k": {
+      "repo": "laion/CLIP-ViT-B-32-roberta-base-laion2B-s12B-b32k",
+      "revision": "e22e1c12b0a1ba4af9fb6474626585351ea0da25",
+      "license": "mit",
+      "gated": false
+    },
+    "xlm-roberta-base-ViT-B-32/laion5b_s13b_b90k": {
+      "repo": "laion/CLIP-ViT-B-32-xlm-roberta-base-laion5B-s13B-b90k",
+      "revision": "506d40eb551f4801a1c27fc20a31c7b8f590deda",
+      "license": "mit",
+      "gated": false
+    },
+    "xlm-roberta-large-ViT-H-14/frozen_laion5b_s13b_b90k": {
+      "repo": "laion/CLIP-ViT-H-14-frozen-xlm-roberta-large-laion5B-s13B-b90k",
+      "revision": "f9ab955287d06ac45c7654f26fecd29301c70a1f",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_base/laion400m_s13b_b51k": {
+      "repo": "laion/CLIP-convnext_base-laion400M-s13B-b51K",
+      "revision": "4c478c07a1511dafb7331443cd20bf7867a0f1b1",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_base_w/laion2b_s13b_b82k": {
+      "repo": "laion/CLIP-convnext_base_w-laion2B-s13B-b82K",
+      "revision": "43cc4adea32de0ca94f71bfe1162eba29c824d6e",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_base_w/laion2b_s13b_b82k_augreg": {
+      "repo": "laion/CLIP-convnext_base_w-laion2B-s13B-b82K-augreg",
+      "revision": "f231e88547aac0dd86ad224432612fcf91aa4226",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_base_w/laion_aesthetic_s13b_b82k": {
+      "repo": "laion/CLIP-convnext_base_w-laion_aesthetic-s13B-b82K",
+      "revision": "473314b26e60f0d4a0f2e987d484aeed26b2418b",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_base_w_320/laion_aesthetic_s13b_b82k": {
+      "repo": "laion/CLIP-convnext_base_w_320-laion_aesthetic-s13B-b82K",
+      "revision": "02dbcad4596a5fa4ee71a16d35c701e7b12943f0",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_base_w_320/laion_aesthetic_s13b_b82k_augreg": {
+      "repo": "laion/CLIP-convnext_base_w_320-laion_aesthetic-s13B-b82K-augreg",
+      "revision": "d52c7bb6ef5a9f30f524279344cb4bc960e86ae7",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_large_d/laion2b_s26b_b102k_augreg": {
+      "repo": "laion/CLIP-convnext_large_d.laion2B-s26B-b102K-augreg",
+      "revision": "5b2b0daa712b546eddc16d7e03e737aa48e7d4d3",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_large_d_320/laion2b_s29b_b131k_ft": {
+      "repo": "laion/CLIP-convnext_large_d_320.laion2B-s29B-b131K-ft",
+      "revision": "3e5f19be095f2e5426dd88a74ec8b6e21e32883f",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_large_d_320/laion2b_s29b_b131k_ft_soup": {
+      "repo": "laion/CLIP-convnext_large_d_320.laion2B-s29B-b131K-ft-soup",
+      "revision": "654d0f80ff73c58e7281a3ca7dc425589049e2e1",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_xxlarge/laion2b_s34b_b82k_augreg": {
+      "repo": "laion/CLIP-convnext_xxlarge-laion2B-s34B-b82K-augreg",
+      "revision": "51633fd7e056b2fbac1f83e5579a916baa88b90f",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_xxlarge/laion2b_s34b_b82k_augreg_rewind": {
+      "repo": "laion/CLIP-convnext_xxlarge-laion2B-s34B-b82K-augreg-rewind",
+      "revision": "8d451836f9cba0ac9d21459998e3339dd5171b63",
+      "license": "mit",
+      "gated": false
+    },
+    "convnext_xxlarge/laion2b_s34b_b82k_augreg_soup": {
+      "repo": "laion/CLIP-convnext_xxlarge-laion2B-s34B-b82K-augreg-soup",
+      "revision": "9f3e8ee3f383c672388d9178afe70af9e63ac9df",
+      "license": "mit",
+      "gated": false
+    },
+    "coca_ViT-B-32/laion2b_s13b_b90k": {
+      "repo": "laion/CoCa-ViT-B-32-laion2B-s13B-b90k",
+      "revision": "47aff38863cd40aa76d915bb04e4a3d8edf5824c",
+      "license": "mit",
+      "gated": false
+    },
+    "coca_ViT-B-32/mscoco_finetuned_laion2b_s13b_b90k": {
+      "repo": "laion/mscoco_finetuned_CoCa-ViT-B-32-laion2B-s13B-b90k",
+      "revision": "ef0732eb039c932624eb8b867c82ab2311001b09",
+      "license": "mit",
+      "gated": false
+    },
+    "coca_ViT-L-14/laion2b_s13b_b90k": {
+      "repo": "laion/CoCa-ViT-L-14-laion2B-s13B-b90k",
+      "revision": "74207cb7fde8eafc9864451ebd332fa8e75b150f",
+      "license": "mit",
+      "gated": false
+    },
+    "coca_ViT-L-14/mscoco_finetuned_laion2b_s13b_b90k": {
+      "repo": "laion/mscoco_finetuned_CoCa-ViT-L-14-laion2B-s13B-b90k",
+      "revision": "f895105fb18cf5ea3ba7a1172966e4cc0ad8d743",
+      "license": "mit",
+      "gated": false
+    },
+    "EVA01-g-14/laion400m_s11b_b41k": {
+      "repo": "timm/eva_giant_patch14_clip_224.laion400m_s11b_b41k",
+      "revision": "25fe82a41cc0cda08c93e15083324b807d6aa569",
+      "license": "mit",
+      "gated": false
+    },
+    "EVA01-g-14-plus/merged2b_s11b_b114k": {
+      "repo": "timm/eva_giant_patch14_plus_clip_224.merged2b_s11b_b114k",
+      "revision": "33da2145e99805f40827308abef21aaf853f7bf2",
+      "license": "mit",
+      "gated": false
+    },
+    "EVA02-B-16/merged2b_s8b_b131k": {
+      "repo": "timm/eva02_base_patch16_clip_224.merged2b_s8b_b131k",
+      "revision": "1db484c6a022ce66497420e0f60800aeffae5fe3",
+      "license": "mit",
+      "gated": false
+    },
+    "EVA02-L-14/merged2b_s4b_b131k": {
+      "repo": "timm/eva02_large_patch14_clip_224.merged2b_s4b_b131k",
+      "revision": "bf4190eb65dd5204ffb03e980108beb1200e0873",
+      "license": "mit",
+      "gated": false
+    },
+    "EVA02-L-14-336/merged2b_s6b_b61k": {
+      "repo": "timm/eva02_large_patch14_clip_336.merged2b_s6b_b61k",
+      "revision": "4f62907359c8506be7021582f360564693b22c15",
+      "license": "mit",
+      "gated": false
+    },
+    "EVA02-E-14/laion2b_s4b_b115k": {
+      "repo": "timm/eva02_enormous_patch14_clip_224.laion2b_s4b_b115k",
+      "revision": "024ba9b2189e08b69b9f1477b44d07c51aad25fb",
+      "license": "mit",
+      "gated": false
+    },
+    "EVA02-E-14-plus/laion2b_s9b_b144k": {
+      "repo": "timm/eva02_enormous_patch14_plus_clip_224.laion2b_s9b_b144k",
+      "revision": "0162f50c2742be3c90b3a81e4e8066fc5a90e125",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-16-SigLIP/webli": {
+      "repo": "timm/ViT-B-16-SigLIP",
+      "revision": "41f575766f40e752fdd1383e9565b7f02388c1c4",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-16-SigLIP-256/webli": {
+      "repo": "timm/ViT-B-16-SigLIP-256",
+      "revision": "149fecaed17d2230c5b631c8b66f93cbfabcfcb9",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-16-SigLIP-i18n-256/webli": {
+      "repo": "timm/ViT-B-16-SigLIP-i18n-256",
+      "revision": "ec35f9450b91a8ea263a50e31f55ae069069d1df",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-16-SigLIP-384/webli": {
+      "repo": "timm/ViT-B-16-SigLIP-384",
+      "revision": "9477b5b38a19eb7ff44123329ee6eaf1fcc724e3",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-16-SigLIP-512/webli": {
+      "repo": "timm/ViT-B-16-SigLIP-512",
+      "revision": "5ecddc904f4c25c8089e1dfc58b9e56236eacfca",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-L-16-SigLIP-256/webli": {
+      "repo": "timm/ViT-L-16-SigLIP-256",
+      "revision": "853182fe9d4672475a7a0cc3a6dc55501189b954",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-L-16-SigLIP-384/webli": {
+      "repo": "timm/ViT-L-16-SigLIP-384",
+      "revision": "d8837d1669e859c65bc949b26c6050fb0fb82981",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-SO400M-14-SigLIP/webli": {
+      "repo": "timm/ViT-SO400M-14-SigLIP",
+      "revision": "9179d15177ece40964c50492136eda2f3e0c9f61",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-SO400M-16-SigLIP-i18n-256/webli": {
+      "repo": "timm/ViT-SO400M-16-SigLIP-i18n-256",
+      "revision": "cc6d637646b892557d3c0a33c4998cfe81b5db10",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-SO400M-14-SigLIP-378/webli": {
+      "repo": "timm/ViT-SO400M-14-SigLIP-384",
+      "revision": "ac16108d567c4389e6cd2b11c9b8585f7474435b",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-SO400M-14-SigLIP-384/webli": {
+      "repo": "timm/ViT-SO400M-14-SigLIP-384",
+      "revision": "ac16108d567c4389e6cd2b11c9b8585f7474435b",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-32-SigLIP2-256/webli": {
+      "repo": "timm/ViT-B-32-SigLIP2-256",
+      "revision": "cd1efb47643f2794413dd79ef24397c175032780",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-16-SigLIP2/webli": {
+      "repo": "timm/ViT-B-16-SigLIP2",
+      "revision": "eee10eff6dd8cabae2d7f379d4e8cfcd352030aa",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-16-SigLIP2-256/webli": {
+      "repo": "timm/ViT-B-16-SigLIP2-256",
+      "revision": "fb14461786ff5cd7b18210817522546f28c7143a",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-16-SigLIP2-384/webli": {
+      "repo": "timm/ViT-B-16-SigLIP2-384",
+      "revision": "369333c629e1ab4eb90806c8e13df3054c3c1e63",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-16-SigLIP2-512/webli": {
+      "repo": "timm/ViT-B-16-SigLIP2-512",
+      "revision": "5e7f4f980e465036486ce78dfc721bbedf291939",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-L-16-SigLIP2-256/webli": {
+      "repo": "timm/ViT-L-16-SigLIP2-256",
+      "revision": "da9426945c7c5acbd3afd0c158c8bb9cfd4d8cc0",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-L-16-SigLIP2-384/webli": {
+      "repo": "timm/ViT-L-16-SigLIP2-384",
+      "revision": "31b4df0bbf802888308ad91850c388b2870ef922",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-L-16-SigLIP2-512/webli": {
+      "repo": "timm/ViT-L-16-SigLIP2-512",
+      "revision": "c116dcc6a8062481377ca45c9a48aaa882552a41",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-SO400M-14-SigLIP2/webli": {
+      "repo": "timm/ViT-SO400M-14-SigLIP2",
+      "revision": "f9e2bfdc4807cd0fbadf67301e45193d6f330c20",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-SO400M-14-SigLIP2-378/webli": {
+      "repo": "timm/ViT-SO400M-14-SigLIP2-378",
+      "revision": "93e0e6ad1063507a7777d0b570292a29a3d94c5f",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-SO400M-16-SigLIP2-256/webli": {
+      "repo": "timm/ViT-SO400M-16-SigLIP2-256",
+      "revision": "8b4c2efdfd48e0d72644df99ed5dc20c110fc352",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-SO400M-16-SigLIP2-384/webli": {
+      "repo": "timm/ViT-SO400M-16-SigLIP2-384",
+      "revision": "fec784dabb3081a5f101fc74eefaf9d1ed08237b",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-SO400M-16-SigLIP2-512/webli": {
+      "repo": "timm/ViT-SO400M-16-SigLIP2-512",
+      "revision": "41c4437fbc0bd5507a5743d2358bf535d922abf4",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-gopt-16-SigLIP2-256/webli": {
+      "repo": "timm/ViT-gopt-16-SigLIP2-256",
+      "revision": "bda0197e1c5816f592548007d24019e4b6b3b686",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-gopt-16-SigLIP2-384/webli": {
+      "repo": "timm/ViT-gopt-16-SigLIP2-384",
+      "revision": "ad3410bee2c3373be5ed01e7c4e7fcd2bf95a183",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-L-14-CLIPA/datacomp1b": {
+      "repo": "UCSC-VLAA/ViT-L-14-CLIPA-datacomp1B",
+      "revision": "dfcab8358fb0df963352dfdd296a66f8ad6306b9",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-L-14-CLIPA-336/datacomp1b": {
+      "repo": "UCSC-VLAA/ViT-L-14-CLIPA-336-datacomp1B",
+      "revision": "0acb412e9302e97133f7df0277261f1e4e41c21d",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-H-14-CLIPA/datacomp1b": {
+      "repo": "UCSC-VLAA/ViT-H-14-CLIPA-datacomp1B",
+      "revision": "2861d431b4047112f7c380d496e11a1180d92fb5",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-H-14-CLIPA-336/laion2b": {
+      "repo": "UCSC-VLAA/ViT-H-14-CLIPA-336-laion2B",
+      "revision": "ea364fb37134e422a266765cc8d3647830b80207",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-H-14-CLIPA-336/datacomp1b": {
+      "repo": "UCSC-VLAA/ViT-H-14-CLIPA-336-datacomp1B",
+      "revision": "2b317e167769cd30a0b8a6bf5f995424fbf32781",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-bigG-14-CLIPA/datacomp1b": {
+      "repo": "UCSC-VLAA/ViT-bigG-14-CLIPA-datacomp1B",
+      "revision": "3b99830400202c72cecd5faebf1fdff77edcb29b",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-bigG-14-CLIPA-336/datacomp1b": {
+      "repo": "UCSC-VLAA/ViT-bigG-14-CLIPA-336-datacomp1B",
+      "revision": "dcc262620e0e182adaac7ee03c32ae48fa4f02f3",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "nllb-clip-base/v1": {
+      "repo": "visheratin/nllb-clip-base-oc",
+      "revision": "f16398ba58d1d5cff27450ce2fe971b087969444",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "nllb-clip-large/v1": {
+      "repo": "visheratin/nllb-clip-large-oc",
+      "revision": "a133efc35018d609f0160eaaa6acc3ffcd3507db",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "nllb-clip-base-siglip/v1": {
+      "repo": "visheratin/nllb-clip-base-siglip",
+      "revision": "a7c4a9bf24872c73a2c059ab2f9e9123a4d4144e",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "nllb-clip-base-siglip/mrl": {
+      "repo": "visheratin/nllb-siglip-mrl-base",
+      "revision": "48763e15fe00507a253c8a47969707720674c10f",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "nllb-clip-large-siglip/v1": {
+      "repo": "visheratin/nllb-clip-large-siglip",
+      "revision": "7f904302846871e4db6825f9237cb940191607c6",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "nllb-clip-large-siglip/mrl": {
+      "repo": "visheratin/nllb-siglip-mrl-large",
+      "revision": "35a3d237d5cfe835e7d9fd59511807281117d6d0",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "MobileCLIP-S1/datacompdr": {
+      "repo": "apple/MobileCLIP-S1-OpenCLIP",
+      "revision": "59d35241939f6942255489b83c9068e48ebf57f8",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "MobileCLIP-S2/datacompdr": {
+      "repo": "apple/MobileCLIP-S2-OpenCLIP",
+      "revision": "8e8a808316aeb7c24d0400e1cf8f74b6937832aa",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "MobileCLIP-B/datacompdr": {
+      "repo": "apple/MobileCLIP-B-OpenCLIP",
+      "revision": "9424ff5d3b878ce7da8996ce2f4c5e77e8e384ae",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "MobileCLIP-B/datacompdr_lt": {
+      "repo": "apple/MobileCLIP-B-LT-OpenCLIP",
+      "revision": "733c34d283d2a9d29b0e0af46244070520353810",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "ViTamin-S/datacomp1b": {
+      "repo": "jienengchen/ViTamin-S",
+      "revision": "a33161305bb0c4154173fdb306de6a224440f616",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-S-LTT/datacomp1b": {
+      "repo": "jienengchen/ViTamin-S-LTT",
+      "revision": "53fdf22e7a2bc0b48b6f64bdc7c2182c5030a367",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-B/datacomp1b": {
+      "repo": "jienengchen/ViTamin-B",
+      "revision": "286b77834188391c32e7739fd03c3e8ba45052ab",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-B-LTT/datacomp1b": {
+      "repo": "jienengchen/ViTamin-B-LTT",
+      "revision": "31a2422b3ac91ac8ae41baa42b0e82dcd28b7a45",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-L/datacomp1b": {
+      "repo": "jienengchen/ViTamin-L-224px",
+      "revision": "94c5f97c70b4fbbaccb657165d28486fa7dc2465",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-L-256/datacomp1b": {
+      "repo": "jienengchen/ViTamin-L-256px",
+      "revision": "f7b3b1c55465e026d89ba61f78e1ddc436c5b778",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-L-336/datacomp1b": {
+      "repo": "jienengchen/ViTamin-L-336px",
+      "revision": "bac545787e30fafdf8848ef17d1c61bfd44b9c77",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-L-384/datacomp1b": {
+      "repo": "jienengchen/ViTamin-L-384px",
+      "revision": "a8bd536320237a2a0fc65480bcdfc4a67c00133d",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-L2/datacomp1b": {
+      "repo": "jienengchen/ViTamin-L2-224px",
+      "revision": "e962159c3733c5c2b0eaf563fe9b39fbfcfed96e",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-L2-256/datacomp1b": {
+      "repo": "jienengchen/ViTamin-L2-256px",
+      "revision": "3262e9bb90ea214ae3169c707483a6c6035ec4d5",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-L2-336/datacomp1b": {
+      "repo": "jienengchen/ViTamin-L2-336px",
+      "revision": "9025c4603fee67909a3dbe95b95a3aa922fbe5ff",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-L2-384/datacomp1b": {
+      "repo": "jienengchen/ViTamin-L2-384px",
+      "revision": "8daf6621441be111271c6d671266ad5e99f10053",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-XL-256/datacomp1b": {
+      "repo": "jienengchen/ViTamin-XL-256px",
+      "revision": "35c5f8ede623db3c49c47024ac6b29e0f6e04d35",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-XL-336/datacomp1b": {
+      "repo": "jienengchen/ViTamin-XL-336px",
+      "revision": "82f517a082a68cbf061b82c9ce360c38883799a0",
+      "license": "mit",
+      "gated": false
+    },
+    "ViTamin-XL-384/datacomp1b": {
+      "repo": "jienengchen/ViTamin-XL-384px",
+      "revision": "45808eae69ad19e0f7dfe2b5a51a9a4e7d396f8f",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50-quickgelu/openai": {
+      "repo": "timm/resnet50_clip.openai",
+      "revision": "ec3d92cf63a5f9d591f0d611b736895966c73076",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50-quickgelu/yfcc15m": {
+      "repo": "timm/resnet50_clip.yfcc15m",
+      "revision": "c94a9e3bde942b58c1cd13bb0a03d3c1ff4cb056",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50-quickgelu/cc12m": {
+      "repo": "timm/resnet50_clip.cc12m",
+      "revision": "d72a2fdb0278498f216ca970010d730b95249beb",
+      "license": "mit",
+      "gated": false
+    },
+    "RN101-quickgelu/openai": {
+      "repo": "timm/resnet101_clip.openai",
+      "revision": "57ca0a94c6eeabf11fefa2f4c0d1748d43a0de99",
+      "license": "mit",
+      "gated": false
+    },
+    "RN101-quickgelu/yfcc15m": {
+      "repo": "timm/resnet101_clip.yfcc15m",
+      "revision": "d671c8ed34350b653cb58bcba8c7f249146a0ede",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50x4-quickgelu/openai": {
+      "repo": "timm/resnet50x4_clip.openai",
+      "revision": "b4f04cac7ac8a139850feb016771d4d5dc561b6b",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50x16-quickgelu/openai": {
+      "repo": "timm/resnet50x16_clip.openai",
+      "revision": "a56966b528ecd2e375df2403d3f397821eb8cdd0",
+      "license": "mit",
+      "gated": false
+    },
+    "RN50x64-quickgelu/openai": {
+      "repo": "timm/resnet50x64_clip.openai",
+      "revision": "373458f303f7b30467f8858bab8b2e307d1f7837",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32-quickgelu/openai": {
+      "repo": "timm/vit_base_patch32_clip_224.openai",
+      "revision": "a6f597a30f7b82c51704746581f9a4e41421e878",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-32-quickgelu/laion400m_e31": {
+      "repo": "timm/vit_base_patch32_clip_224.laion400m_e31",
+      "revision": "846175f5d195393bbd18db7687626d2ad3f3735d",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32-quickgelu/laion400m_e32": {
+      "repo": "timm/vit_base_patch32_clip_224.laion400m_e32",
+      "revision": "faf88d716a164f74a5eaf785acf215a1bb7cfccd",
+      "license": "mit",
+      "gated": false
+    },
+    "ViT-B-32-quickgelu/metaclip_400m": {
+      "repo": "timm/vit_base_patch32_clip_224.metaclip_400m",
+      "revision": "52dc0f732ea7b1f56c260f9c05f449cdc24b2814",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-B-32-quickgelu/metaclip_fullcc": {
+      "repo": "timm/vit_base_patch32_clip_224.metaclip_2pt5b",
+      "revision": "11a59be381208279468108c9d8ba02cd3e466748",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-B-16-quickgelu/openai": {
+      "repo": "timm/vit_base_patch16_clip_224.openai",
+      "revision": "977e3dd0ec55ab8da155f2fbeb6b5f54948b6e3d",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-B-16-quickgelu/dfn2b": {
+      "repo": "apple/DFN2B-CLIP-ViT-B-16",
+      "revision": "8b023e8bb8b0a27c17859af548c9fc3105d6c29c",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "ViT-B-16-quickgelu/metaclip_400m": {
+      "repo": "timm/vit_base_patch16_clip_224.metaclip_400m",
+      "revision": "b9e318ae7ebed751491a6e22e02c5992e67bed2d",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-B-16-quickgelu/metaclip_fullcc": {
+      "repo": "timm/vit_base_patch16_clip_224.metaclip_2pt5b",
+      "revision": "a984c098af95302ebc96bee023f7b8f69536f37b",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-L-14-quickgelu/openai": {
+      "repo": "timm/vit_large_patch14_clip_224.openai",
+      "revision": "18d0535469bb561bf468d76c1d73aa35156c922b",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-L-14-quickgelu/metaclip_400m": {
+      "repo": "timm/vit_large_patch14_clip_224.metaclip_400m",
+      "revision": "41b287cf80fb4f3af3e9393d5d866a451cd7bffd",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-L-14-quickgelu/metaclip_fullcc": {
+      "repo": "timm/vit_large_patch14_clip_224.metaclip_2pt5b",
+      "revision": "1c09b97e09fb19bba2bf4548c9c7cca4b87f7888",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-L-14-quickgelu/dfn2b": {
+      "repo": "apple/DFN2B-CLIP-ViT-L-14",
+      "revision": "13d68e40771108ec1812f566404e8c6f7de85f67",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "ViT-L-14-336-quickgelu/openai": {
+      "repo": "timm/vit_large_patch14_clip_336.openai",
+      "revision": "81e38efc4637de5023b10e75a7f9bd1c6fa6b010",
+      "license": "apache-2.0",
+      "gated": false
+    },
+    "ViT-H-14-quickgelu/metaclip_fullcc": {
+      "repo": "timm/vit_huge_patch14_clip_224.metaclip_2pt5b",
+      "revision": "28cc5adb1d99fec4d4e1f60272187807942d333e",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    },
+    "ViT-H-14-quickgelu/dfn5b": {
+      "repo": "apple/DFN5B-CLIP-ViT-H-14",
+      "revision": "11738501a1db6d5e0a3451a71ba100be02e577e6",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "ViT-H-14-378-quickgelu/dfn5b": {
+      "repo": "apple/DFN5B-CLIP-ViT-H-14-378",
+      "revision": "01b771ed0d1395ca5ffdd279897d665ebe00dfd2",
+      "license": "apple-amlr",
+      "gated": false
+    },
+    "ViT-bigG-14-quickgelu/metaclip_fullcc": {
+      "repo": "timm/vit_gigantic_patch14_clip_224.metaclip_2pt5b",
+      "revision": "2b4a234e9e22a182b34d372c6cf6f02f44182a30",
+      "license": "cc-by-nc-4.0",
+      "gated": false
+    }
+  }
+}

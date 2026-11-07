@@ -54,10 +54,13 @@ object RealTagAutocompleteExtrasCheck:
     Files.writeString(wildcardDir.resolve("animals.txt"), "a red fox\n")
     Files.writeString(wildcardDir.resolve("hair.txt"), "short hair\n")
     Files.createDirectories(wildcardDir.resolve("colors"))
-    Files.writeString(wildcardDir.resolve("colors/warm.txt"), "orange\n")
+    Files.createDirectories(wildcardDir.resolve("costumes"))
+    Files.writeString(wildcardDir.resolve("costumes/blue.txt"), "blue dress\n")
+    Files.writeString(wildcardDir.resolve("colors/warm.txt"), (Vector("orange") ++ (2 to 15).map(n => s"item $n")).mkString("\n"))
+    Files.writeString(wildcardDir.resolve("colors/cold.txt"), "blue\n")
     val files = Files.createDirectories(run.resolve("data"))
-    val tagCsv = files.resolve("tags.csv")
-    Files.writeString(tagCsv, "blue_hair,0,20,azure_hair\nblue_eyes,0,10,\nred_(dress),0,5,\n")
+    val tagCsv = files.resolve("danbooru.csv")
+    Files.writeString(tagCsv, "blue_hair,4,20,azure_hair\nblue_eyes,0,10,\nred_(dress),0,5,\n")
     val translationCsv = files.resolve("translation.csv")
     Files.writeString(translationCsv, "blue_hair,青い髪\nblue_eyes,青い目\n", java.nio.charset.StandardCharsets.UTF_8)
     val extraCsv = files.resolve("extra.csv")
@@ -122,17 +125,90 @@ object RealTagAutocompleteExtrasCheck:
         def field(id: String) = root.lookup("#" + id).asInstanceOf[TextField]
         field("tac-tags").setText(tagCsv.toString); field("tac-translation").setText(translationCsv.toString)
         field("tac-extra").setText(extraCsv.toString); field("tac-chants-file").setText(chantsJson.toString)
+        root.lookup("#tac-colormap").asInstanceOf[TextArea].setText("""{"danbooru":{"4":["red","blue"],"1":["gold","purple"]},"extra":{"0":["lime","orange"]}}""")
+        root.lookup("#tac-wiki").asInstanceOf[CheckBox].setSelected(true)
+        root.lookup("#tac-live-translation").asInstanceOf[CheckBox].setSelected(true)
+        root.lookup("#tac-delay").asInstanceOf[javafx.scene.control.Spinner[Integer]].getEditor.setText("250")
+        root.lookup("#tac-wildcard-path-mode").asInstanceOf[javafx.scene.control.ComboBox[String]].getSelectionModel.select(1)
         check("dialog exposes the new options")(Seq("tac-underscores", "tac-escape", "tac-comma", "tac-alias", "tac-wildcards",
           "tac-networks", "tac-chants", "tac-trigger", "tac-preview", "tac-legacy", "tac-extra-after").forall(id => root.lookup("#" + id).isInstanceOf[CheckBox]))
         ImageIO.write(SwingFXUtils.fromFXImage(dialog.getScene.snapshot(null), null), "png", run.resolve("01-dialog.png").toFile)
         root.getButtonTypes.asScala.find(_.getText == "Save").map(root.lookupButton).get.asInstanceOf[Button].fire()
       }
       eventually("data loaded") { fx { window.ctx.tagDictionary.data.translations.size == 2 && window.ctx.tagDictionary.data.chants.size == 1 &&
-        window.ctx.tagDictionary.data.extra.size == 1 && window.ctx.tagDictionary.tags.size == 3 && window.ctx.tagDictionary.data.wildcards.size == 3 } }
+        window.ctx.tagDictionary.data.extra.size == 1 && window.ctx.tagDictionary.tags.size == 3 && window.ctx.tagDictionary.data.wildcards.size == 5 } }
       check("dialog Save persisted paths in settings")(services.settings.tagComplete.translationCsv.contains(translationCsv.toString) &&
         services.settings.tagAutocompleteCsv.contains(tagCsv.toString) && services.settings.tagComplete.chantsJson.contains(chantsJson.toString))
+      check("wiki link enabled and saved")(services.settings.tagComplete.showWikiLinks)
+      fx {
+        area.setText("blue hair")
+        val preview = window.stage.getScene.lookup("#txt2img-prompt-translation").asInstanceOf[javafx.scene.layout.FlowPane]
+        val translated = preview.getChildren.asScala.collectFirst { case b: Button => b }.get
+        check("live translation appears")(translated.getText.contains("青い髪"))
+        translated.fire()
+        check("live translation selects original prompt")(area.getSelectedText == "blue hair")
+        shot("00-live-translation.png")
+      }
       fx { area.requestFocus() }
       eventually("prompt focus") { fx { area.isFocused } }
+      fx {
+        check("completion delay saved")(services.settings.tagComplete.completionDelayMs == 250)
+        area.setText("__co"); area.positionCaret(area.getLength)
+        check("delayed completion is not immediate")(!editor.completionVisible)
+      }
+      eventually("delayed wildcard results") { fx { editor.completionItems.exists(_.label == "colors/warm") } }
+      check("delayed completion appears after quiet period")(fx(editor.completionVisible))
+      services.updateSettings(s => s.copy(tagComplete = s.tagComplete.copy(completionDelayMs = 0)))
+
+      // The real dictionary scans the real wildcard roots and reads the chosen file asynchronously.
+      fx {
+        check("next-folder mode saved")(services.settings.tagComplete.wildcardPathMode == "next-folder")
+        area.setText("__co"); area.positionCaret(area.getLength)
+        key(area, KeyCode.TAB)
+        check("next-folder Tab follows the first matching branch")(area.getText == "__colors/")
+        area.setText("__col"); area.positionCaret(area.getLength)
+        key(area, KeyCode.TAB)
+        check("partial wildcard path")(area.getText == "__colors/")
+        area.insertText(area.getCaretPosition, "w")
+        key(area, KeyCode.ENTER)
+        check("wildcard reference inserted")(area.getText == "__colors/warm__")
+      }
+      eventually("wildcard file lines") { fx { editor.completionItems.exists(_.label == "orange") } }
+      def clickPopup(selector: String): Unit = fx {
+        val node = Window.getWindows.asScala.collect { case p: PopupWindow if p.isShowing => p }.iterator
+          .flatMap(w => Option(w.getScene).flatMap(s => Option(s.lookup(selector)))).next()
+        val bounds = node.localToScreen(node.getBoundsInLocal)
+        val robot = new javafx.scene.robot.Robot()
+        robot.mouseMove((bounds.getMinX + bounds.getMaxX) / 2, (bounds.getMinY + bounds.getMaxY) / 2)
+        robot.mouseClick(javafx.scene.input.MouseButton.PRIMARY)
+      }
+      clickPopup("#tac-lines-next")
+      eventually("mouse next page") { fx { editor.completionItems.headOption.exists(_.label == "item 13") } }
+      fx {
+        check("mouse navigation keeps prompt focus")(area.isFocused)
+        popupShot("pop-wildcard-lines")
+        key(area, KeyCode.ENTER)
+        check("Enter inserts line after real mouse navigation")(area.getText == "item 13")
+        area.setText("__col"); area.positionCaret(area.getLength)
+        key(area, KeyCode.TAB)
+        area.insertText(area.getCaretPosition, "w")
+        key(area, KeyCode.ENTER)
+      }
+      eventually("wildcard lines reopen") { fx { editor.completionItems.headOption.exists(_.label == "orange") } }
+      fx {
+        val cell = Window.getWindows.asScala.collect { case p: PopupWindow if p.isShowing => p }.iterator
+          .flatMap(p => p.getScene.getRoot.lookupAll(".list-cell").asScala)
+          .collectFirst { case c: javafx.scene.control.ListCell[?] if Option(c.getText).exists(_.contains("orange")) => c }.get
+        val bounds = cell.localToScreen(cell.getBoundsInLocal)
+        val robot = new javafx.scene.robot.Robot()
+        robot.mouseMove((bounds.getMinX + bounds.getMaxX) / 2, (bounds.getMinY + bounds.getMaxY) / 2)
+        robot.mouseClick(javafx.scene.input.MouseButton.PRIMARY)
+      }
+      eventually("mouse line inserted") { fx { area.getText == "orange" } }
+      fx {
+        check("mouse click inserts a line through the real dictionary")(area.getText == "orange")
+        area.setText("")
+      }
 
       // 2. Build the prompt with the real editor.
       def complete(a: TextArea, typed: String, label: String, down: Int = 0, expectPreview: Boolean = false): Unit =
@@ -141,6 +217,22 @@ object RealTagAutocompleteExtrasCheck:
           a.setText(before + typed); a.positionCaret(a.getText.length)
           check(s"popup for '$typed'")(editor.completionVisible && editor.completionItems.nonEmpty)
           check(s"first row of '$typed' is '$label'")(editor.completionItems(down).label == label)
+          if label == "blue_hair" then check("translated tag retains category 4")(editor.completionItems(down).category.contains(4))
+          if label == "Basic-HighQuality" then check("chant retains category 1")(editor.completionItems(down).category.contains(1))
+          if Set("blue_hair", "Basic-HighQuality", "masterpiece")(label) then
+            val popup = Window.getWindows.asScala.collectFirst { case p: PopupWindow if p.isShowing => p }.get
+            popup.getScene.getRoot.applyCss(); popup.getScene.getRoot.layout()
+            val cell = popup.getScene.getRoot.lookupAll(".list-cell").asScala.collectFirst {
+              case c: javafx.scene.control.ListCell[?] if Option(c.getItem).exists(_.isInstanceOf[sdfx.ui.vm.Suggestion]) &&
+                  c.getItem.asInstanceOf[sdfx.ui.vm.Suggestion].label == label => c
+            }.get
+            val expected = if label == "blue_hair" then javafx.scene.paint.Color.RED
+              else if label == "Basic-HighQuality" then javafx.scene.paint.Color.GOLD else javafx.scene.paint.Color.LIME
+            val circle = cell.getGraphic match
+              case c: javafx.scene.shape.Circle => c
+              case h: javafx.scene.layout.HBox => h.getChildren.asScala.collectFirst { case c: javafx.scene.shape.Circle => c }.get
+            check(s"$label uses the correct source colour")(circle.getFill == expected)
+            if label == "blue_hair" then check("wiki link appears next to ordinary tag")(cell.lookup("#tac-wiki-link").isInstanceOf[Button])
           if expectPreview then check(s"preview window shown for '$typed'")(editor.previewVisible)
         }
         if expectPreview then
@@ -195,13 +287,13 @@ object RealTagAutocompleteExtrasCheck:
       }
 
       // 3. Generate the completed prompt through the ordinary Generate path.
-      def generate(prompt: String, label: String): (Path, sdfx.core.infotext.ParsedInfotext) =
+      def generate(prompt: String, label: String, steps: Int = 8): (Path, sdfx.core.infotext.ParsedInfotext) =
         events.clear()
         fx {
           val vm = window.vms(Mode.Txt2Img)
           vm.prompt.set(prompt); vm.negativePrompt.set("blurry")
           val size = if sdxl then (832, 1216) else (512, 512)
-          vm.width.set(size._1); vm.height.set(size._2); vm.steps.set(8); vm.seed.set(4242)
+          vm.width.set(size._1); vm.height.set(size._2); vm.steps.set(steps); vm.seed.set(4242)
           vm.batchSize.set(1); vm.batchCount.set(1); vm.cfgScale.set(6.0); vm.sampler.set("Euler a")
           window.plugins(Mode.Txt2Img).selectedScript.set("dynamic_prompts")
           window.plugins(Mode.Txt2Img).form("dynamic_prompts").get.props("wildcard_dirs").set(wildcardDir.toString)
@@ -218,6 +310,26 @@ object RealTagAutocompleteExtrasCheck:
       Files.copy(pathA, run.resolve("generated-completed.png"), StandardCopyOption.REPLACE_EXISTING)
       check("PNG prompt keeps the completed text (wildcard resolved by Dynamic Prompts)")(
         infoA.prompt.contains("masterpiece, blue hair, (best quality, highres)") && infoA.prompt.contains("a red fox") && !infoA.prompt.contains("__animals__"))
+      if sdxl then
+        def togglePreview(on: Boolean): Unit = fx {
+          val cfg = services.settings.tagComplete.copy(showTranslationPreview = on)
+          require(window.ctx.tagDictionary.apply(services.settings.tagAutocompleteCsv, cfg).isRight)
+        }
+        def samePixels(a: Path, b: Path): Boolean =
+          val x = ImageIO.read(a.toFile); val y = ImageIO.read(b.toFile)
+          x.getWidth == y.getWidth && x.getHeight == y.getHeight &&
+            (0 until x.getHeight).forall(row => (0 until x.getWidth).forall(col => x.getRGB(col, row) == y.getRGB(col, row)))
+        togglePreview(false)
+        val (without8, _) = generate(completed, "preview off 8 steps")
+        Files.copy(without8, run.resolve("preview-off-8.png"), StandardCopyOption.REPLACE_EXISTING)
+        check("preview on/off 8 steps have identical pixels")(samePixels(pathA, without8))
+        togglePreview(true)
+        val (with20, _) = generate(completed, "preview on 20 steps", 20)
+        Files.copy(with20, run.resolve("preview-on-20.png"), StandardCopyOption.REPLACE_EXISTING)
+        togglePreview(false)
+        val (without20, _) = generate(completed, "preview off 20 steps", 20)
+        Files.copy(without20, run.resolve("preview-off-20.png"), StandardCopyOption.REPLACE_EXISTING)
+        check("preview on/off 20 steps have identical pixels")(samePixels(with20, without20))
       loraStem.foreach { stem =>
         // The first version of this check looked for a "Lora hashes" field; this app's infotext does not write one
         // (the tag itself is kept in the prompt), so the assertion was changed to the tag and the trigger words.

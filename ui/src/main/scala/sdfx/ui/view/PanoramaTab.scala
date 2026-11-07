@@ -10,7 +10,7 @@ import javafx.scene.image.{ImageView, PixelFormat, WritableImage}
 import javafx.scene.input.{KeyCode, KeyEvent, MouseButton, MouseEvent, ScrollEvent}
 import javafx.scene.layout.{Priority, Region, StackPane, VBox}
 import javafx.scene.shape.Rectangle
-import javafx.stage.Stage
+import javafx.stage.{FileChooser, Stage}
 import javafx.util.Duration
 import sdfx.core.panorama.*
 import sdfx.core.png.PngMetadata
@@ -19,7 +19,7 @@ import sdfx.ui.vm.Mode
 
 import java.nio.file.{Files, Path}
 import java.util.concurrent.{Executors, ThreadFactory}
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import scala.util.control.NonFatal
 
 /** What the viewers show: one picture, how it is projected, and where the camera looks. */
@@ -31,6 +31,7 @@ final class PanoramaModel:
   val fov = new SimpleDoubleProperty(90)
   /** File the picture came from (or was saved to); used to step through its folder and to send it on. */
   val path = new SimpleObjectProperty[Path](null)
+  val video = new SimpleBooleanProperty(false)
   def view: View = View(yaw.get, pitch.get, fov.get)
   def setView(v: View): Unit =
     val n = v.normalized
@@ -58,6 +59,19 @@ final class PanoramaViewport(val model: PanoramaModel) extends Region:
   private val executor = Executors.newSingleThreadExecutor(new ThreadFactory:
     def newThread(r: Runnable): Thread = { val t = new Thread(r, "panorama-render"); t.setDaemon(true); t })
   private val ticket = new AtomicLong(0)
+  private val videoEpoch = new AtomicLong(0)
+  private case class VideoRender(source: Raster, projection: Projection, view: View, width: Int, height: Int, epoch: Long)
+  private val videoFrames = new LatestFrame[VideoRender](job =>
+    val out = Panorama.render(job.source, job.projection, job.view, job.width, job.height)
+    if videoEpoch.get == job.epoch then
+      lastPixels = out; lastSize = (job.width, job.height); renders += 1
+      Fx.run {
+        if videoEpoch.get == job.epoch then
+          val img = new WritableImage(job.width, job.height)
+          img.getPixelWriter.setPixels(0, 0, job.width, job.height, PixelFormat.getIntArgbInstance, out.argb, 0, job.width)
+          imageView.setImage(img)
+      }
+  )
   private var dragging = false
   /** True while something else (auto-rotate) moves the camera continuously. */
   var live = false
@@ -76,10 +90,16 @@ final class PanoramaViewport(val model: PanoramaModel) extends Region:
   observed.foreach(_.addListener(invalidated))
   widthProperty.addListener(invalidated)
   heightProperty.addListener(invalidated)
+  private val videoModeChanged: javafx.beans.InvalidationListener = _ =>
+    videoEpoch.incrementAndGet(); ticket.incrementAndGet(); request(coarse = false)
+  model.video.addListener(videoModeChanged)
 
   def dispose(): Unit =
     observed.foreach(_.removeListener(invalidated))
+    model.video.removeListener(videoModeChanged)
     ticket.incrementAndGet()
+    videoEpoch.incrementAndGet()
+    videoFrames.close()
     settle.stop()
     executor.shutdownNow()
 
@@ -94,13 +114,16 @@ final class PanoramaViewport(val model: PanoramaModel) extends Region:
     if src == null || getWidth < 8 || getHeight < 8 || executor.isShutdown then
       if src == null then imageView.setImage(null)
     else
-      val scale = if coarse then 0.5 else 1.0
+      val isVideo = model.video.get
+      val scale = if coarse || isVideo then 0.5 else 1.0
       val w = math.max(8, (getWidth * scale).toInt)
       val h = math.max(8, (getHeight * scale).toInt)
       val projection = model.projection.get
       val view = model.view
       val mine = ticket.incrementAndGet()
-      try
+      if isVideo then
+        videoFrames.submit(VideoRender(src, projection, view, w, h, videoEpoch.get))
+      else try
         executor.execute { () =>
           if ticket.get == mine then
             try
@@ -183,7 +206,26 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   empty.getStyleClass.add("empty-preview")
   empty.setId("panorama-empty")
   private var busy = false
+  private var sourceProtectionRevision: Option[Long] = None
+  // Some(None) means a verified snapshot with no generation parameters; None means unverified fallback.
+  private var sourceParameters: Option[Option[String]] = None
+
+  private def sourceAccessibleAt(revision: Long): Boolean =
+    if sourceProtectionRevision.exists(_ != revision) then
+      say("Image protection session changed; reopen the protected panorama.")
+      false
+    else true
+
+  private def sourceAccessible: Boolean = sourceAccessibleAt(ctx.services.imageScrambleSession.state.revision)
+  private var composeCancel: Option[AtomicBoolean] = None
+  private[ui] def perspectivePending: Boolean = busy
   private val actions = scala.collection.mutable.ArrayBuffer.empty[Control]
+  private var player: Option[PanoramaVideoPlayback] = None
+  private var videoProbe: Option[PanoramaFrameDecoder] = None
+  private var videoInfo: Option[PanoramaVideoInfo] = None
+  private var videoTicket = 0L
+  private var lastVideoTick = 0L
+  private var updatingVideoSlider = false
 
   private def action(text: String, tip: String, id: String, primary: Boolean = false)(body: => Unit): Button =
     val b = W.button(text, tip, if primary then Seq("primary") else Nil)(body)
@@ -197,15 +239,32 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
   def open(path: Path): Unit =
     if disposed then return
     if !Files.isRegularFile(path) then { say(s"Not found: $path"); return }
+    composeCancel.foreach(_.set(true))
+    stopVideo()
     loadTicket += 1
     val mine = loadTicket
     say(s"Loading ${path.getFileName}…")
-    ctx.imageCopyReads.request(path) {
+    val session = ctx.services.imageScrambleSession
+    val captured = session.state
+    def fallback(): Unit = ctx.imageCopyReads.request(path) {
       case scala.util.Success(display) =>
         if mine == loadTicket && !disposed then
-          Fx.async(pixelsOf(display.image))(r => if mine == loadTicket && !disposed then install(r, Some(path), display.scrambled))(
+          Fx.async(pixelsOf(display.image))(r =>
+            if mine == loadTicket && !disposed && session.state.revision == captured.revision then
+              install(r, Some(path), if display.scrambled then Some(captured.revision) else None))(
             e => if mine == loadTicket then say("Cannot read the picture: " + Fx.message(e)))
       case scala.util.Failure(e) => if mine == loadTicket then say("Cannot read the picture: " + Fx.message(e).stripPrefix("requirement failed: "))
+    }
+    Fx.async {
+      val snapshot = sdfx.core.png.PanoramaSourceSnapshot.read(path)
+      val decoded = snapshot.decode(captured.secret.map(_.use(identity)))
+      (Raster.fromImage(decoded.image), snapshot.parameters, decoded.scrambled)
+    } { (r, parameters, scrambled) =>
+      if mine == loadTicket && !disposed && session.state.revision == captured.revision then
+        install(r, Some(path), if scrambled then Some(captured.revision) else None, Some(parameters))
+    } {
+      case _: sdfx.core.png.PanoramaSourceSnapshot.Unavailable => if mine == loadTicket && !disposed then fallback()
+      case e => if mine == loadTicket && !disposed then say("Cannot read the picture: " + Fx.message(e))
     }
 
   private def pixelsOf(image: javafx.scene.image.Image): Raster =
@@ -222,12 +281,15 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
       case v if v == Projection.CubemapNet.label => Projection.CubemapNet
       case _ => Panorama.detect(r.width, r.height).getOrElse(Projection.Equirectangular)
 
-  private def install(r: Raster, path: Option[Path], scrambled: Boolean = false): Unit =
+  private def install(r: Raster, path: Option[Path], protectionRevision: Option[Long] = None,
+      parameters: Option[Option[String]] = None): Unit =
     var projection = chosenProjection(r)
     var note = ""
     if projection == Projection.CubemapNet && !PanoramaFiles.isCubeNet(r.width, r.height) then
       projection = Projection.Equirectangular
       note = " A cubemap net needs square faces (width = 4 x face, height = 3 x face), so it is shown as equirectangular."
+    sourceProtectionRevision = protectionRevision
+    sourceParameters = parameters
     model.path.set(path.orNull)
     model.projection.set(projection)
     model.raster.set(r)
@@ -236,7 +298,8 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     hintLabel.setText(Panorama.hint(r.width, r.height, projection))
     empty.setVisible(false)
     controls()
-    say(s"${r.width}x${r.height} shown as ${projection.label}." + note + (if scrambled then " Decoded in memory from a protected file." else ""))
+    val metadataNotice = if parameters.isEmpty then " Source metadata could not be verified; applying a view is unavailable and saved images omit parameters." else ""
+    say(s"${r.width}x${r.height} shown as ${projection.label}." + note + (if protectionRevision.nonEmpty then " Decoded in memory from a protected file." else "") + metadataNotice)
     viewport.requestFocus()
 
   /** Previous / next picture of the same folder (wraps around). */
@@ -252,52 +315,306 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     Option(model.path.get).flatMap(p => Option(p.getParent)).filter(Files.isDirectory(_)).foreach(d => fc.setInitialDirectory(d.toFile))
     Option(fc.showOpenDialog(ctx.stage)).foreach(f => open(f.toPath))
 
+  /** Open local equirectangular video using the user's ffmpeg installation. */
+  def openVideo(path: Path): Unit =
+    if disposed then return
+    if !Files.isRegularFile(path) then { say(s"Not found: $path"); return }
+    val configured = ctx.services.settings.panoramaFfmpegExe.filter(_.trim.nonEmpty)
+    if configured.isEmpty then { say("Choose an ffmpeg executable before opening video."); return }
+    composeCancel.foreach(_.set(true))
+    stopVideo()
+    loadTicket += 1
+    videoTicket += 1
+    val mine = videoTicket
+    try
+      val ffmpeg = Path.of(configured.get).toAbsolutePath.normalize()
+      val probeName = if System.getProperty("os.name").toLowerCase.startsWith("windows") then "ffprobe.exe" else "ffprobe"
+      val ffprobe = ffmpeg.resolveSibling(probeName)
+      if !Files.isRegularFile(ffmpeg) then throw new IllegalArgumentException("Configured ffmpeg executable not found")
+      if !Files.isRegularFile(ffprobe) then throw new IllegalArgumentException("ffprobe was not found beside ffmpeg")
+      val probe = new PanoramaFrameDecoder(ffprobe, 10000)
+      val generation = probe.generation
+      videoProbe = Some(probe)
+      controls()
+      say(s"Reading video information for ${path.getFileName}…")
+      Fx.async(PanoramaVideoInfo.probeUsing(probe, ffprobe, path, generation)) { info =>
+        if videoProbe.contains(probe) then videoProbe = None
+        Fx.async(probe.close())(_ => ())(_ => ())
+        if mine == videoTicket && !disposed then
+          try
+            val ratio = math.min(1.0, math.min(1024.0 / info.width, 1024.0 / info.height))
+            val w = math.max(1, (info.width * ratio).toInt)
+            val h = math.max(1, (info.height * ratio).toInt)
+            val decoder = new PanoramaFrameDecoder(ffmpeg, 10000)
+            var next: PanoramaVideoPlayback = null
+            next = new PanoramaVideoPlayback(path, info.duration, w, h, decoder, () => System.nanoTime(),
+              (epoch, _, bytes) =>
+                val pixels = new Array[Int](w * h)
+                var i = 0
+                while i < pixels.length do
+                  val j = i * 3
+                  pixels(i) = 0xff000000 | ((bytes(j) & 255) << 16) | ((bytes(j + 1) & 255) << 8) | (bytes(j + 2) & 255)
+                  i += 1
+                val frame = new Raster(w, h, pixels)
+                Fx.run {
+                  if mine == videoTicket && !disposed && player.contains(next) && next.currentEpoch == epoch then
+                    val firstFrame = model.raster.get == null
+                    sourceProtectionRevision = None
+                    sourceParameters = None
+                    model.raster.set(frame)
+                    if firstFrame then controls()
+                },
+              (epoch, error) => Fx.run {
+                if mine == videoTicket && !disposed && player.contains(next) && next.currentEpoch == epoch then
+                  stopVideo()
+                  say("Cannot decode video: " + Fx.message(error))
+              })
+            player = Some(next)
+            videoInfo = Some(info)
+            model.path.set(null)
+            model.projection.set(Projection.Equirectangular)
+            model.video.set(true)
+            model.resetView()
+            nameLabel.setText(path.getFileName.toString)
+            hintLabel.setText(Panorama.hint(info.width, info.height, Projection.Equirectangular))
+            empty.setVisible(false)
+            updatingVideoSlider = true
+            try { videoSeek.setMax(info.duration); videoSeek.setValue(0.0) }
+            finally updatingVideoSlider = false
+            val selectedSpeed = Option(videoSpeed.getValue).fold(1.0)(_.doubleValue())
+            if selectedSpeed != 1.0 then next.setSpeed(selectedSpeed)
+            controls()
+            say(s"Playing ${path.getFileName} as equirectangular video.")
+            next.play()
+          catch case NonFatal(e) =>
+            stopVideo()
+            say("Cannot play video: " + Fx.message(e))
+      } { error =>
+        if videoProbe.contains(probe) then videoProbe = None
+        Fx.async(probe.close())(_ => ())(_ => ())
+        if mine == videoTicket && !disposed then
+          stopVideo()
+          say("Cannot read video information: " + Fx.message(error))
+      }
+    catch case NonFatal(e) =>
+      stopVideo()
+      say("Cannot play video: " + Fx.message(e))
+
+  def videoActive: Boolean = player.nonEmpty || videoProbe.nonEmpty
+  def videoPaused: Boolean = player.exists(p => !p.playing)
+  def videoSeconds: Double = player.fold(0.0)(_.position)
+  def videoRate: Double = player.fold(1.0)(_.speed)
+  def seekVideo(seconds: Double): Unit = player.foreach { p =>
+    if seconds.isFinite && seconds >= 0 && videoInfo.exists(i => seconds <= i.duration) then p.seek(seconds)
+  }
+  def stopVideo(): Unit =
+    videoTicket += 1
+    val oldProbe = videoProbe; videoProbe = None
+    val oldPlayer = player; player = None
+    videoInfo = None
+    oldProbe.foreach { p => p.cancel(); Fx.async(p.close())(_ => ())(_ => ()) }
+    oldPlayer.foreach { p => Fx.async(p.close())(_ => ())(_ => ()) }
+    model.video.set(false)
+    controls()
+
+  private def captureVideoFrame(now: Long): Unit = player.foreach { p =>
+    if now - lastVideoTick >= 150000000L then
+      lastVideoTick = now
+      p.tick()
+      updatingVideoSlider = true
+      try videoSeek.setValue(p.position)
+      finally updatingVideoSlider = false
+  }
+
+  private def saveWithParameters(r: Raster, target: Path, parameters: Option[String], password: Option[String]): Unit =
+    Files.createDirectories(target.toAbsolutePath.getParent)
+    sdfx.core.png.ScrambledPng.write(r.toBufferedImage, target, parameters.map(PngMetadata.ParametersKey -> _).toSeq, password)
+
   // ---- converting & saving -------------------------------------------------------------------------------------
   private def convert(toCube: Boolean): Unit =
     val src = model.raster.get
-    if src == null || busy then return
+    if src == null || busy || !sourceAccessible then return
     val projection = model.projection.get
+    val ticket = loadTicket
     val sourcePath = Option(model.path.get)
+    val savedParameters = sourceParameters
     if toCube && projection != Projection.Equirectangular then { say("Switch the projection to Equirectangular first: this picture is shown as a cubemap."); return }
     if !toCube && projection != Projection.CubemapNet then { say("Switch the projection to Cubemap first: this picture is shown as equirectangular."); return }
     busy = true; controls()
     say(if toCube then "Converting to a cubemap…" else "Converting to equirectangular…")
     val dir = saveDir()
-    val password = ctx.services.imageScrambleSession.snapshot.map(_.use(identity))
+    val session = ctx.services.imageScrambleSession
+    val captured = session.state
+    if !sourceAccessibleAt(captured.revision) then { busy = false; controls(); return }
+    val password = captured.secret.map(_.use(identity))
     val name = sourcePath.fold("panorama.png")(_.getFileName.toString)
     Fx.async {
       val out = if toCube then Panorama.equirectToCubeNet(src, math.max(16, src.width / 4)) else Panorama.cubeNetToEquirect(src, src.width)
       val target = PanoramaFiles.uniqueTarget(dir, name, if toCube then "cubemap" else "equirect")
-      PanoramaFiles.savePng(out, target, sourcePath, password)
+      session.synchronized {
+        if session.state.revision != captured.revision then throw new IllegalStateException("Image protection session changed; try again")
+        PanoramaFiles.savePngWithParametersNew(out, target, savedParameters.flatten, password)
+      }
       (out, target)
     } { case (out, target) =>
       busy = false
-      if !disposed then
-        val keep = projectionChoice.getValue
-        projectionChoice.setValue(if toCube then Projection.CubemapNet.label else Projection.Equirectangular.label)
-        install(out, Some(target))
-        projectionChoice.setValue(keep)
-        say(s"Converted and saved to $target")
-        ctx.success("Saved " + target.getFileName)
+      session.synchronized {
+        if disposed || loadTicket != ticket || (model.raster.get ne src) || model.projection.get != projection || session.state.revision != captured.revision then
+          if !disposed then { controls(); say(s"The panorama or protection session changed; conversion was not displayed. The saved file remains at $target") }
+        else
+          val keep = projectionChoice.getValue
+          projectionChoice.setValue(if toCube then Projection.CubemapNet.label else Projection.Equirectangular.label)
+          install(out, Some(target), if captured.secret.nonEmpty then Some(captured.revision) else None, savedParameters)
+          projectionChoice.setValue(keep)
+          say(s"Converted and saved to $target")
+          ctx.success("Saved " + target.getFileName)
+      }
     }(e => { busy = false; controls(); say("Conversion failed: " + Fx.message(e)) })
 
   /** Saves the picture the camera sees now; renders and writes in the background and returns the target at once. */
   def saveView(width: Int = 1600): Option[Path] =
     val src = model.raster.get
-    if src == null then None
+    if src == null || !sourceAccessible then None
     else
-      val h = math.max(2, (width * math.max(1.0, viewport.getHeight) / math.max(1.0, viewport.getWidth)).toInt)
+      val dimensions = PanoramaViewSize.forViewport(viewport.getWidth, viewport.getHeight, width)
+      if dimensions.isLeft then { say(dimensions.swap.toOption.get); return None }
+      val (_, h) = dimensions.toOption.get
       val projection = model.projection.get
       val view = model.view
       val sourcePath = Option(model.path.get)
+      val parameters = sourceParameters.flatten
       val target = PanoramaFiles.uniqueTarget(saveDir(), sourcePath.fold("panorama.png")(_.getFileName.toString), "view")
-      val password = ctx.services.imageScrambleSession.snapshot.map(_.use(identity))
+      val captured = ctx.services.imageScrambleSession.state
+      if !sourceAccessibleAt(captured.revision) then return None
+      val password = captured.secret.map(_.use(identity))
       saved = Some(target)
+      val session = ctx.services.imageScrambleSession
       Fx.async {
-        PanoramaFiles.savePng(Panorama.render(src, projection, view, width, h), target, sourcePath, password)
+        val rendered = Panorama.render(src, projection, view, width, h)
+        session.synchronized {
+          if session.state.revision != captured.revision then throw new IllegalStateException("Image protection session changed; try again")
+          PanoramaFiles.savePngWithParametersNew(rendered, target, parameters, password)
+        }
         target
-      }(t => { say(s"Saved the current view (${width}x$h) to $t"); ctx.success("Saved " + t.getFileName) })(e => say("Cannot save the view: " + Fx.message(e)))
+      } { t =>
+        session.synchronized {
+          if disposed || session.state.revision != captured.revision then
+            if !disposed then say(s"Image protection session changed; the saved view remains at $t")
+          else { say(s"Saved the current view (${width}x$h) to $t"); ctx.success("Saved " + t.getFileName) }
+        }
+      }(e => if !disposed then say("Cannot save the view: " + Fx.message(e)))
       Some(target)
+  /** Render a snapshot of the current perspective before handing its path to another tab. */
+  private def sendView(send: (Path, Option[String]) => Unit): Unit =
+    val src = model.raster.get
+    if src == null || busy || disposed || !sourceAccessible then return
+    val dimensions = PanoramaViewSize.forViewport(viewport.getWidth, viewport.getHeight)
+    if dimensions.isLeft then { say(dimensions.swap.toOption.get); return }
+    val (width, height) = dimensions.toOption.get
+    val projection = model.projection.get
+    val view = model.view
+    val parameters = sourceParameters.flatten
+    val session = ctx.services.imageScrambleSession
+    val captured = session.state
+    if !sourceAccessibleAt(captured.revision) then return
+    val password = captured.secret.map(_.use(identity))
+    val dir = saveDir()
+    busy = true; controls()
+    say("Rendering the view…")
+    Fx.async {
+      val raster = Panorama.render(src, projection, view, width, height)
+      session.synchronized {
+        if session.state.revision != captured.revision then throw new IllegalStateException("Image protection session changed; try again")
+        Files.createDirectories(dir)
+        val target = Files.createTempFile(dir, "panorama-view-", ".png")
+        try
+          saveWithParameters(raster, target, parameters, password)
+          (target, PngMetadata.readParameters(target))
+        catch
+          case NonFatal(e) =>
+            try Files.deleteIfExists(target) catch case NonFatal(cleanup) => e.addSuppressed(cleanup)
+            throw e
+      }
+    } { (target, metadata) =>
+      busy = false
+      session.synchronized {
+        if disposed || session.state.revision != captured.revision then
+          try Files.deleteIfExists(target) catch case NonFatal(e) => System.err.println("[sdfx] panorama view cleanup failed: " + e)
+          if !disposed then { controls(); say("Cannot send the view: image protection session changed; try again") }
+        else
+          controls()
+          try
+            send(target, metadata)
+            say(s"Sent the current view; saved to $target")
+          catch case NonFatal(e) =>
+            say(s"Cannot send the view: ${Fx.message(e)}; saved to $target")
+      }
+    } { error =>
+      busy = false
+      if !disposed then { controls(); say("Cannot send the view: " + Fx.message(error)) }
+    }
+
+  /** Apply a chosen perspective image at the camera's current position. */
+  def applyPerspective(path: Path, feather: Int): Unit =
+    val base = model.raster.get
+    if disposed || busy || base == null || !sourceAccessible then return
+    if videoActive || model.projection.get != Projection.Equirectangular then
+      say("Open a still equirectangular panorama before applying a view image."); return
+    if base.width > PanoramaFiles.MaxWidth || base.width.toLong * base.height > PanoramaCompose.MaxPixels then
+      say("The panorama is too large to apply a view image."); return
+    if !Files.isRegularFile(path) then { say(s"Not found: $path"); return }
+    if sourceParameters.isEmpty then
+      say("Cannot apply the view: source metadata could not be verified; reopen a supported image under 64 MiB."); return
+    val parameters = sourceParameters.get
+    val view = model.view
+    val originalTicket = loadTicket
+    val session = ctx.services.imageScrambleSession
+    val captured = session.state
+    if !sourceAccessibleAt(captured.revision) then return
+    val password = captured.secret.map(_.use(identity))
+    val cancel = new AtomicBoolean(false)
+    composeCancel = Some(cancel)
+    busy = true; controls(); say("Reading the view image…")
+    def finishError(error: Throwable): Unit =
+      composeCancel = None; busy = false
+      if !disposed then
+        controls()
+        if !cancel.get then say("Cannot apply the view: " + Fx.message(error))
+        else if loadTicket == originalTicket then say("View application cancelled.")
+    Fx.async(sdfx.core.png.BoundedPatchImage.snapshot(path).decode(password)) { image =>
+        if cancel.get || disposed then finishError(new java.util.concurrent.CancellationException("Cancelled"))
+        else if session.state.revision != captured.revision then finishError(new IllegalStateException("Image protection session changed; try again"))
+        else
+          Fx.async {
+            val patch = Raster.fromImage(image)
+            val combined = PanoramaCompose.applyView(base, patch, view, feather, () => cancel.get)
+            session.synchronized {
+              if cancel.get then throw new java.util.concurrent.CancellationException("Cancelled")
+              if session.state.revision != captured.revision then throw new IllegalStateException("Image protection session changed; try again")
+              val dir = saveDir()
+              Files.createDirectories(dir)
+              val target = Files.createTempFile(dir, "panorama-composite-", ".png")
+              try
+                saveWithParameters(combined, target, parameters, password)
+                (combined, target)
+              catch case NonFatal(e) =>
+                try Files.deleteIfExists(target) catch case NonFatal(cleanup) => e.addSuppressed(cleanup)
+                throw e
+            }
+          } { (combined, target) =>
+            composeCancel = None; busy = false
+            session.synchronized {
+              if disposed || cancel.get || loadTicket != originalTicket || (model.raster.get ne base) || model.projection.get != Projection.Equirectangular || session.state.revision != captured.revision then
+                try Files.deleteIfExists(target) catch case NonFatal(e) => System.err.println("[sdfx] panorama composite cleanup failed: " + e)
+                if !disposed then { controls(); say("The panorama or protection session changed; view not applied.") }
+              else
+                install(combined, Some(target), if captured.secret.nonEmpty then Some(captured.revision) else None, Some(parameters))
+                model.setView(view)
+                say(s"Applied the view and saved to $target")
+            }
+          }(finishError)
+    }(finishError)
+
   /** Last path handed to saveView (test seam). */
   var saved: Option[Path] = None
 
@@ -331,22 +648,69 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
 
   // ---- controls ------------------------------------------------------------------------------------------------
   private val openButton = action("Open…", "Open an equirectangular picture or a cubemap net", "panorama-open")(chooseFile())
+  private val openVideoButton = action("Open video…", "Open a local equirectangular video", "panorama-open-video") {
+    val chooser = new FileChooser()
+    chooser.setTitle("Open a panorama video")
+    chooser.getExtensionFilters.add(new FileChooser.ExtensionFilter("Video", "*.mp4", "*.m4v", "*.mov", "*.mkv", "*.webm", "*.avi"))
+    Option(chooser.showOpenDialog(ctx.stage)).foreach(f => openVideo(f.toPath))
+  }
+  private val ffmpegButton = action("Choose ffmpeg…", "Choose your local ffmpeg executable; ffprobe must be beside it", "panorama-choose-ffmpeg") {
+    val chooser = new FileChooser()
+    chooser.setTitle("Choose ffmpeg executable")
+    Option(chooser.showOpenDialog(ctx.stage)).foreach { f =>
+      val selected = f.toPath.toAbsolutePath.normalize().toString
+      ctx.services.updateSettingsChecked(_.copy(panoramaFfmpegExe = Some(selected))) match
+        case Right(_) => say("ffmpeg executable saved: " + selected)
+        case Left(error) => say(error)
+    }
+  }
+  private val videoPlay = action("Pause", "Pause or resume the panorama video", "panorama-video-play") {
+    player.foreach { p => if p.playing then p.pause() else p.play() }
+  }
+  private val videoStop = action("Stop video", "Close the current video", "panorama-video-stop")(stopVideo())
+  private val videoSeek = new Slider(0, 1, 0)
+  videoSeek.setId("panorama-video-seek")
+  videoSeek.valueProperty.addListener((_, _, value) => if !updatingVideoSlider then seekVideo(value.doubleValue()))
+  private val videoSpeed = new ComboBox[java.lang.Double](FXCollections.observableArrayList(
+    java.lang.Double.valueOf(0.25), java.lang.Double.valueOf(0.5), java.lang.Double.valueOf(1.0),
+    java.lang.Double.valueOf(2.0), java.lang.Double.valueOf(4.0)))
+  videoSpeed.setId("panorama-video-speed")
+  videoSpeed.setValue(java.lang.Double.valueOf(1.0))
+  videoSpeed.valueProperty.addListener((_, _, value) => if value != null then player.foreach(_.setSpeed(value.doubleValue())))
   private val prevButton = action("◀", "Previous picture in this folder", "panorama-prev")(step(-1))
   private val nextButton = action("▶", "Next picture in this folder", "panorama-next")(step(1))
   private val resetButton = action("Reset view", "Look straight ahead at 90° (double click does the same)", "panorama-reset")(model.resetView())
+  private val directionButtons = Seq(
+    ("front", "Front", 0.0, 0.0), ("back", "Back", 180.0, 0.0),
+    ("left", "Left", -90.0, 0.0), ("right", "Right", 90.0, 0.0),
+    ("up", "Up", 0.0, 90.0), ("down", "Down", 0.0, -90.0)
+  ).map { (id, label, yaw, pitch) =>
+    action(label, s"Look $label while keeping the current field of view", "panorama-direction-" + id) {
+      model.setView(View(yaw, pitch, model.fov.get))
+    }
+  }
   private val fullButton = action("Fullscreen", "Show the panorama on a full-screen window; Esc leaves", "panorama-fullscreen")(openFullscreen())
   private val saveViewButton = action("Save view", "Save what the camera sees now as a PNG in the panorama folder of the outputs", "panorama-save-view")(saveView())
   private val toCube = action("→ Cubemap", "Convert the equirectangular picture to a 4:3 cubemap net, save it and show it", "panorama-to-cube")(convert(toCube = true))
   private val toEqui = action("→ Equirectangular", "Convert the cubemap net back to an equirectangular picture, save it and show it", "panorama-to-equirect")(convert(toCube = false))
   private def sendOn(f: Path => Unit): Unit =
     Option(model.path.get).foreach(f)
-  private val toImg2img = action("⇢ img2img", "Send this picture and its parameters to img2img", "panorama-to-img2img")(
+  private val toImg2img = action("Source → img2img", "Send this picture and its parameters to img2img", "panorama-to-img2img")(
     sendOn(p => ctx.sendToTab(Mode.Img2Img, p, PngMetadata.readParameters(p))))
-  private val toInpaint = action("⇢ Inpaint", "Send this picture to Inpaint, e.g. to repair the seams or the poles", "panorama-to-inpaint")(
+  private val toInpaint = action("Source → Inpaint", "Send this picture to Inpaint, e.g. to repair the seams or the poles", "panorama-to-inpaint")(
     sendOn(p => ctx.sendToTab(Mode.Inpaint, p, PngMetadata.readParameters(p))))
-  private val toExtras = action("⇢ Extras", "Send this picture to Extras, e.g. to upscale it", "panorama-to-extras")(sendOn(ctx.sendToExtras))
+  private val toExtras = action("Source → Extras", "Send this picture to Extras, e.g. to upscale it", "panorama-to-extras")(sendOn(ctx.sendToExtras))
+  private val viewToImg2img = action("View → img2img", "Render the current perspective and send it to img2img", "panorama-view-to-img2img") {
+    sendView((p, metadata) => ctx.sendToTab(Mode.Img2Img, p, metadata))
+  }
+  private val viewToInpaint = action("View → Inpaint", "Render the current perspective and send it to Inpaint", "panorama-view-to-inpaint") {
+    sendView((p, metadata) => ctx.sendToTab(Mode.Inpaint, p, metadata))
+  }
+  private val viewToExtras = action("View → Extras", "Render the current perspective and send it to Extras", "panorama-view-to-extras") {
+    sendView((p, _) => ctx.sendToExtras(p))
+  }
   private val pathButtons = Seq(prevButton, nextButton, toImg2img, toInpaint, toExtras)
-  private val pictureButtons = Seq(resetButton, fullButton, saveViewButton, toCube, toEqui)
+  private val pictureButtons = Seq(resetButton, fullButton, saveViewButton, toCube, toEqui, viewToImg2img, viewToInpaint, viewToExtras) ++ directionButtons
   private val autoRotate = new CheckBox("Auto-rotate")
   autoRotate.setId("panorama-autorotate")
   W.tip(autoRotate, "Turn slowly to the right while the tab is open")
@@ -367,8 +731,17 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     pictureButtons.foreach(_.setDisable(!has || busy))
     pathButtons.foreach(_.setDisable(!hasPath))
     openButton.setDisable(busy)
-    toCube.setDisable(!has || busy || model.projection.get != Projection.Equirectangular)
-    toEqui.setDisable(!has || busy || model.projection.get != Projection.CubemapNet)
+    openVideoButton.setDisable(busy)
+    videoPlay.setDisable(player.isEmpty)
+    videoStop.setDisable(!videoActive)
+    videoSeek.setDisable(player.isEmpty)
+    videoSpeed.setDisable(player.isEmpty)
+    projectionChoice.setDisable(videoActive)
+    composeButton.setDisable(!has || busy || videoActive || model.projection.get != Projection.Equirectangular)
+    composeFeatherSpinner.setDisable(!has || busy || videoActive || model.projection.get != Projection.Equirectangular)
+    composeCancelButton.setDisable(composeCancel.isEmpty)
+    toCube.setDisable(!has || busy || videoActive || model.projection.get != Projection.Equirectangular)
+    toEqui.setDisable(!has || busy || videoActive || model.projection.get != Projection.CubemapNet)
 
   projectionChoice.valueProperty.addListener((_, _, _) =>
     Option(model.raster.get).foreach { r =>
@@ -390,17 +763,33 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
     override def handle(now: Long): Unit =
       val dt = if lastTick == 0 then 0.0 else (now - lastTick) / 1e9
       lastTick = now
+      captureVideoFrame(now)
+      videoPlay.setText(if videoPaused then "Play" else "Pause")
       if autoRotate.isSelected && model.raster.get != null && node.isVisible && node.getScene != null then
         model.setView(model.view.turned(speed.get * math.min(dt, 0.25), 0))
   autoRotate.selectedProperty.addListener((_, _, on) => { viewport.live = on; lastTick = 0L; if !on then viewport.request(coarse = false) })
   timer.start()
 
-  private val toolbar1 = W.hbox(6, openButton, prevButton, nextButton, nameLabel, W.spacer(), W.label("Projection"), projectionChoice)
+  private val toolbar1 = W.hbox(6, openButton, openVideoButton, prevButton, nextButton, nameLabel, W.spacer(), W.label("Projection"), projectionChoice)
   private val toolbar2 = W.hbox(8, W.label("Yaw"), yawSpinner, W.label("Pitch"), pitchSpinner, W.label("FOV"), W.hgrow(fovBox), resetButton, autoRotate, speedSpinner)
   private val toolbar3 = W.hbox(6, fullButton, saveViewButton, toCube, toEqui, W.spacer(), toImg2img, toInpaint, toExtras)
+  private val composeFeather = new SimpleIntegerProperty(0)
+  private val composeFeatherSpinner = W.intSpinner(composeFeather, 0, 256, 1, 72)
+  private val composeButton = action("Apply view image…", "Project a view image into the current still panorama at the current camera", "panorama-apply-view") {
+    val chooser = ImageFiles.chooser("Choose a view image to apply")
+    Option(chooser.showOpenDialog(ctx.stage)).foreach(f => applyPerspective(f.toPath, composeFeather.get))
+  }
+  private val composeCancelButton: Button = action("Cancel apply", "Cancel the current view image operation", "panorama-cancel-apply") {
+    composeCancel.foreach(_.set(true))
+    composeCancelButton.setDisable(true)
+    say("Cancelling the view image operation…")
+  }
+  private val composeToolbar = W.hbox(6, composeButton, composeCancelButton, W.label("Edge feather (px)"), composeFeatherSpinner)
+  private val videoToolbar = W.hbox(6, ffmpegButton, videoPlay, videoStop, W.label("Speed"), videoSpeed, W.label("Video position"), W.hgrow(videoSeek))
+  private val directionsToolbar = W.hbox(6, (Seq(W.label("Look")) ++ directionButtons ++ Seq(W.spacer(), viewToImg2img, viewToInpaint, viewToExtras))*)
   private val stage = new StackPane(viewport, empty)
   VBox.setVgrow(stage, Priority.ALWAYS)
-  val node: VBox = new VBox(8, toolbar1, toolbar2, toolbar3, stage, W.hbox(12, readout, W.hgrow(hintLabel)), status)
+  val node: VBox = new VBox(8, toolbar1, toolbar2, toolbar3, directionsToolbar, composeToolbar, videoToolbar, stage, W.hbox(12, readout, W.hgrow(hintLabel)), status)
   node.setPadding(new Insets(10))
   node.setId("panorama-tab")
   node.setMinWidth(0)
@@ -418,7 +807,9 @@ final class PanoramaTab(ctx: UiContext, saveDir: () => Path):
 
   def dispose(): Unit =
     disposed = true
+    composeCancel.foreach(_.set(true))
     timer.stop()
+    stopVideo()
     closeFullscreen()
     viewport.dispose()
 

@@ -97,8 +97,12 @@ Python、精度、VRAM モード、VAE タイル化、オフラインモード�
 | `output_dir` | `outputs` | 出力先（相対パスはアプリのフォルダが基準） |
 | `python_exe` | `null` | エンジン用の Python。空なら `python/.venv`、なければシステムの Python |
 | `dtype` | `fp16` | `fp16` / `bf16` / `fp32` |
-| `vram_mode` | `gpu` | VRAM モード |
+| `vram_mode` | `gpu` | VRAM モード: `gpu` / `model_offload` / `sequential_offload` / `auto`(モデル読み込み時の空き VRAM から選ぶ) |
 | `vae_tiling` | `false` | 大きい画像の VAE デコードをタイル化 |
+| `vae_slicing` | `false` | バッチを 1 枚ずつ VAE デコード(batch > 1 のピーク VRAM を下げる。画素は同一) |
+| `vae_auto` | `true` | VAE デコードが空き VRAM に収まらない場合だけ自動でスライス/タイル化 |
+| `vae_fp16` | `false` | SDXL 系(force-upcast)の VAE を fp16 でデコード(非有限なら fp32 に戻す) |
+| `fp8_storage` | `false` | U-Net の重みを float8 で保持し層ごとに upcast(GPU VRAM モードのみ) |
 | `preview_every` / `preview_method` | `2` / `approx` | ライブプレビューの間隔（0 で無効）/ `approx` または `taesd` |
 | `last_model` / `last_vae` | `null` | 前回使ったモデルと VAE |
 | `mcp_http_enabled` / `mcp_http_port` / `mcp_token` | `false` / `7861` / `null` | GUI 内蔵の MCP HTTP サーバー |

@@ -41,6 +41,9 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   // overlapping model / VAE loads: the chip shows the latest one until all are done
   private var loads = Vector.empty[(Long, String)]
   private var loadSeq = 0L
+  private val checkpointLoadRecovery = new CheckpointLoadRecovery
+  private val modelSelectionQueue = new ModelSelectionQueue(Fx.bg)
+  private val vaeSelectionRevision = new VaeSelectionRevision
   private val cardWindowsPaths = LocalPreviewFiles.systemPlatform.windows
   private def validateCardModel(id: CardId): scala.concurrent.Future[Either[String, Unit]] =
     scala.concurrent.Future {
@@ -158,6 +161,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     Mode.values.map(m => m -> new GenerationPanel(ctx, vms(m), plugins(m), initial.expanded,
       () => lastSeed, openPayload, openPresets, openGenerationStates)).toMap
   ctx.commitPresetEditors = m => panels(m).commitPresetEditors()
+  ctx.resetPresetEditorDrafts = (m, owners) => panels(m).resetPresetEditorDrafts(owners)
   ctx.fastloadTarget = (mode, index) => vms.get(mode).flatMap(_.controlNet.lift(index)).map(_.toUnit)
   ctx.applyFastloadTarget = (mode, index, expected, incoming) =>
     vms.get(mode).toRight("ControlNet destination is unavailable")
@@ -185,6 +189,15 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   val tokenizer = new TokenizerTab(ctx, () => vms(activeMode).prompt.get)
   val embeddingInspector = new EmbeddingInspectorTab(ctx)
   val embeddingEditor = new EmbeddingEditorTab(ctx, draft => generate(false, Some(draft.render())))
+  val aestheticEmbedding = new AestheticEmbeddingTab(ctx, selected =>
+    plugins(lastMode).form("aesthetic_gradients") match
+      case Some(form) =>
+        (form.prop("embedding"), form.prop("enabled")) match
+          case (Some(embedding), Some(enabled)) =>
+            embedding.set(selected); form.prop("embedding_sha256").foreach(_.set("")); enabled.set("true"); select(lastMode); Right(())
+          case _ => Left("Aesthetic Gradients controls are unavailable in this mode.")
+      case None => Left("Aesthetic Gradients is disabled or unavailable in this mode.")
+  )
   val temporalLab = new TemporalLabTab(ctx)
   val systemInfo = new SystemInfoTab(ctx)
   val vramEstimator = new VramEstimatorTab(ctx)
@@ -242,6 +255,8 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   embeddingInspectorTab.setId("embedding-inspector-tab")
   private val embeddingEditorTab = new Tab("Embedding Editor", embeddingEditor.node)
   embeddingEditorTab.setId("embedding-editor-tab")
+  private val aestheticEmbeddingTab = new Tab("Aesthetic Embeddings", aestheticEmbedding.node)
+  aestheticEmbeddingTab.setId("aesthetic-embedding-tab")
   private val tokenizerTab = new Tab("Tokenizer", tokenizer.node)
   tokenizerTab.setId("tokenizer-tab")
   private val systemInfoTab = new Tab("System Info", systemInfo.node)
@@ -289,7 +304,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   scramblePages.setId("scramble-pages")
   private val scrambleTab = new Tab("Image Scrambling", scramblePages)
   scrambleTab.setId("image-scrambling-tab")
-  tabs.getTabs.addAll(pngTab, extrasTab, tokenizerTab, embeddingInspectorTab, embeddingEditorTab, temporalLabTab, systemInfoTab, stylesTab, keywordTab, comparisonTab, vaeToolsTab, metadataUtilsTab, clipInterrogatorTab, embeddingMergeTab, modelPresetsTab, controlNetFastloadTab, controlNetFastloadGalleryTab, scrambleTab)
+  tabs.getTabs.addAll(pngTab, extrasTab, tokenizerTab, embeddingInspectorTab, embeddingEditorTab, aestheticEmbeddingTab, temporalLabTab, systemInfoTab, stylesTab, keywordTab, comparisonTab, vaeToolsTab, metadataUtilsTab, clipInterrogatorTab, embeddingMergeTab, modelPresetsTab, controlNetFastloadTab, controlNetFastloadGalleryTab, scrambleTab)
   tabs.getTabs.add(new Tab("VRAM Estimator", vramEstimator.node))
   private val imageBrowserTab = new Tab("Image Browser", imageBrowser.node)
   imageBrowserTab.setId("image-browser-tab")
@@ -515,26 +530,48 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       val id = beginLoad(s"Style ${style.name}")
       val currentCheckpoint = model.checkpoint.get
       val currentVae = model.vae.get
-      Fx.async {
-        if style.checkpoint.nonEmpty && currentCheckpoint != style.checkpoint then services.loadCheckpoint(style.checkpoint)
-        if ExtendedStyle.normalizeVae(currentVae) != targetVae || currentCheckpoint != style.checkpoint then services.setVae(Some(targetVae))
-      } { _ =>
-        try
+      checkpointLoadRecovery.beginStyleCheckpoint(currentCheckpoint, style.checkpoint)
+      val styleCheckpointEpoch = checkpointLoadRecovery.currentEpoch
+      val changesVae = ExtendedStyle.normalizeVae(currentVae) != targetVae || currentCheckpoint != style.checkpoint
+      vaeSelectionRevision.begin()
+      val styleVaeRevision = vaeSelectionRevision.current
+      Fx.onFx(modelSelectionQueue.submit {
+        val uncertain = modelSelectionQueue.isUncertain
+        if uncertain && style.checkpoint.isEmpty then
+          throw new IllegalStateException("A previous model selection failed; select a checkpoint before applying this style")
+        if style.checkpoint.nonEmpty then
+          val target = services.catalog.findCheckpoint(style.checkpoint)
+            .getOrElse(throw new IllegalArgumentException(s"Extended style checkpoint not found: ${style.checkpoint}"))
+          if ModelSelectionPolicy.needsCheckpoint(target.path, services.supervisor.loadedModel.map(_.path), uncertain) then
+            services.loadCheckpoint(style.checkpoint)
+        // Compare with the actual worker response, not optimistic UI selection.
+        val targetPath = Option.when(targetVae != "Automatic" && targetVae != "None") {
+          services.catalog.findVae(targetVae).getOrElse(throw new IllegalArgumentException(s"Extended style VAE not found: $targetVae")).path
+        }
+        services.supervisor.loadedModel match
+          case Some(loaded) if ModelSelectionPolicy.needsVae(targetPath, loaded.vaeName, loaded.vaePath) => services.setVae(Some(targetVae))
+          case None if changesVae => services.setVae(Some(targetVae))
+          case _ => ()
+      }) { _ =>
+        if !disposed then try
           endLoad(id)
           // Update only documented settings; unrelated settings and disabled drafts remain intact.
           vm.prompt.set(style.prompt)
           vm.negativePrompt.set(style.negativePrompt)
           vm.width.set(style.width)
           vm.height.set(style.height)
-          if style.checkpoint.nonEmpty then model.checkpoint.set(style.checkpoint)
-          model.vae.set(targetVae)
+          if style.checkpoint.nonEmpty && checkpointLoadRecovery.canApplyStyle(styleCheckpointEpoch, currentCheckpoint, model.checkpoint.get) then
+            model.checkpoint.set(style.checkpoint)
+          if vaeSelectionRevision.unchanged(styleVaeRevision, currentVae, model.vae.get) then
+            model.vae.set(targetVae)
           select(mode)
           ctx.success(s"Applied extended style '${style.name}'")
         finally ctx.extendedStyleApplying.set(false)
       } { e =>
-        try
+        if !disposed then try
           endLoad(id)
-          services.supervisor.loadedModel.foreach(m => model.checkpoint.set(m.name))
+          if checkpointLoadRecovery.canRestoreStyle(styleCheckpointEpoch, currentCheckpoint, model.checkpoint.get) then
+            services.supervisor.loadedModel.foreach(m => model.checkpoint.set(m.name))
           ctx.error(s"Cannot apply extended style: ${Fx.message(e)}")
         finally ctx.extendedStyleApplying.set(false)
       }
@@ -643,6 +680,9 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   // ---- actions -----------------------------------------------------------------------------------------
   def generate(queueOnly: Boolean, editorPreview: Option[String] = None): Unit =
     val mode = activeMode
+    if !ModelSelectionPolicy.canGenerate(loads.nonEmpty, disposed) then
+      if !disposed then ctx.info("Wait for the model selection to finish before generating")
+      return
     if !queueOnly && progress.get.running then
       ctx.info("A job is running — use Queue (Ctrl+Shift+Enter) to add another")
       return
@@ -654,19 +694,35 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     if Option(tabs.getSelectionModel.getSelectedItem).flatMap(modeOf).isEmpty then select(mode)
     val panel = panels(mode)
     val wdEnabled = mode == Mode.Img2Img && panel.wdBatchEnabled.get
+    val folderEnabled = mode == Mode.Img2Img && panel.imgFolderEnabled.get
+    if folderEnabled && wdEnabled then
+      ctx.error("Choose either Img2Img folder or WD batch, not both.")
+      return
+    val folder = if folderEnabled then
+      try
+        val value = panel.imgFolderInput.get.trim
+        require(value.nonEmpty, "Choose an input image folder")
+        val path = Path.of(value).toAbsolutePath.normalize()
+        require(Files.isDirectory(path), "Input image folder does not exist")
+        Some(path.toString)
+      catch
+        case NonFatal(e) =>
+          ctx.error(s"Cannot prepare Img2Img folder: ${Fx.message(e)}")
+          return
+    else None
     val wdAvailable = services.supervisor.hello.exists(_.features.contains("batch_interrogate_wd_v3_partial"))
     val wdChoice = WdBatchUiState.validate(wdEnabled, wdAvailable, panel.wdBatchInput.get, panel.wdBatchOutputName.get) match
       case Left(message) =>
         ctx.error(message)
         return
       case Right(value) => value
-    if editorPreview.nonEmpty && (plugins(mode).scriptJob.nonEmpty || wdChoice.nonEmpty) then
+    if editorPreview.nonEmpty && (plugins(mode).scriptJob.nonEmpty || wdChoice.nonEmpty || folder.nonEmpty) then
       ctx.error("Embedding editor preview cannot run with a script or WD batch.")
       return
     // never reuse a mask exported for an earlier job: it is re-exported from the canvas below
     vm.maskImage.set("")
     val difference = panel.difference.filter(_.enabled)
-    val problems = vm.validate(batchImages = wdChoice.nonEmpty, differenceActive = difference.nonEmpty) ++
+    val problems = vm.validate(batchImages = wdChoice.nonEmpty || folder.nonEmpty, differenceActive = difference.nonEmpty) ++
       difference.toList.flatMap(d => Option.when(!scala.util.Try(Files.isRegularFile(Path.of(d.basePath))).getOrElse(false))(
         "Choose an existing base image for Inpaint Difference"))
     if problems.nonEmpty then
@@ -683,17 +739,23 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       return
     def submit(tempFiles: Seq[Path]): Unit =
       val built = JobBuilder.build(vm, plugins(mode), sdfx.engine.CaptureOptions(services.settings.apiPayloadIncludeImageContents), imageSecret)
-      ctx.recordPrompt(vm.prompt.get, vm.negativePrompt.get)
       val ordinary = built.copy(editorPreview = editorPreview.map(EditorPreviewPayload(_)))
-      if editorPreview.nonEmpty && (ordinary.script.nonEmpty || wdChoice.nonEmpty) then
+      if !ModelSelectionPolicy.canGenerate(loads.nonEmpty, disposed) then
+        ctx.temps.registerJob(ordinary.id, tempFiles)
+        ctx.temps.releaseJob(ordinary.id)
+        if tempFiles.exists(_.toString == vm.maskImage.get) then vm.maskImage.set("")
+        if !disposed then ctx.info("Wait for the model selection to finish before generating")
+        return
+      if editorPreview.nonEmpty && (ordinary.script.nonEmpty || wdChoice.nonEmpty || folder.nonEmpty) then
         // A script can change while an asynchronous mask export is in flight.
         ctx.temps.registerJob(ordinary.id, tempFiles)
         ctx.temps.releaseJob(ordinary.id)
         if tempFiles.exists(_.toString == vm.maskImage.get) then vm.maskImage.set("")
         ctx.error("Embedding editor preview cannot run with a script or WD batch.")
         return
+      ctx.recordPrompt(vm.prompt.get, vm.negativePrompt.get)
       val job = wdChoice match
-        case None => ordinary
+        case None => ordinary.copy(img2imgFolder = folder.map(sdfx.engine.Img2ImgFolderSpec(_)))
         case Some((input, name)) =>
           val spec = try
             val source = Path.of(input).toAbsolutePath.normalize()
@@ -772,12 +834,18 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       noticeHardware(t)
     }
     select(mode)
-    ctx.info(s"Sent to ${mode.label}")
+    val corridorNotice = if infotext.exists(t => sdfx.plugins.CorridorCrawlerPlugin.replay(sdfx.core.infotext.Infotext.parse(t).fields).nonEmpty) then
+      (if mode == Mode.Img2Img then " · Corridor Crawler: this image is the new input, not the original; select a custom prefab again if needed"
+       else " · Corridor Crawler settings apply in Img2Img; this destination keeps its own script")
+    else ""
+    ctx.info(s"Sent to ${mode.label}$corridorNotice")
 
   def restore(infotext: String): Unit =
     val parsed = sdfx.core.infotext.Infotext.parse(infotext)
     noticeHardware(infotext)
-    val mode = if activeMode == Mode.Txt2Img && sdfx.plugins.LatentUpscalePlugin.replay(parsed.fields).nonEmpty then Mode.Img2Img else activeMode
+    val corridor = sdfx.plugins.CorridorCrawlerPlugin.replay(parsed.fields)
+    val corridorTarget = sdfx.ui.vm.CorridorRestore.prepare(parsed.fields, vms)
+    val mode = corridorTarget.getOrElse(if activeMode == Mode.Txt2Img && sdfx.plugins.LatentUpscalePlugin.replay(parsed.fields).nonEmpty then Mode.Img2Img else activeMode)
     restorePlugins(mode, infotext, vms(mode).restoreInfotext(infotext, ctx.styles.asScala.toSeq,
       services.settings.hiresFixTweaks.restoreTemplate))
     select(mode)
@@ -789,14 +857,15 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
         case None => s" · VAE '$requested' was not found; current selection retained"
     }.getOrElse("")
     val parsedModel = sdfx.core.infotext.Infotext.parse(infotext).get("Model").filter(_.nonEmpty)
+    val corridorNotice = if corridor.nonEmpty then " · Corridor Crawler: select the initial image again; custom prefabs must also be selected again" else ""
     parsedModel.flatMap(services.catalog.findCheckpoint).filter(_.name != model.checkpoint.get) match
       case Some(e) =>
         loadCheckpoint(e.name)
-        ctx.info(s"Parameters restored · switching checkpoint to ${e.name}$vaeNotice")
+        ctx.info(s"Parameters restored · switching checkpoint to ${e.name}$vaeNotice$corridorNotice")
       case None =>
         val modelNotice = parsedModel.filter(name => services.catalog.findCheckpoint(name).isEmpty)
           .map(name => s" · Checkpoint '$name' was not found; current selection retained").getOrElse("")
-        ctx.success(s"Parameters restored into ${mode.label}$vaeNotice$modelNotice")
+        ctx.success(s"Parameters restored into ${mode.label}$vaeNotice$modelNotice$corridorNotice")
 
   private val hardwareNotices = new HardwareInfo.PasteNotices
   private var disposed = false
@@ -808,15 +877,71 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       }
     }(_ => ()) // Provenance lookup failure must not interfere with ordinary parameter restoration.
 
+  private val aestheticRestoreEpoch = scala.collection.mutable.Map.empty[Mode, Long].withDefaultValue(0L)
+
   private def restorePlugins(mode: Mode, infotext: String, params: sdfx.core.model.GenerationParams): Unit =
+    aestheticRestoreEpoch(mode) += 1
     plugins(mode).restoreInfotext(infotext)
+    restoreAestheticEmbedding(mode, sdfx.core.infotext.Infotext.parse(infotext).fields)
     plugins(mode).restoreHiresParams(params)
     if mode != Mode.Txt2Img then
       plugins(mode).restoreLatentUpscale(sdfx.core.infotext.Infotext.parse(infotext).fields)
     plugins(mode).restoreOldSdFirstpasser(sdfx.core.infotext.Infotext.parse(infotext).fields)
     plugins(mode).restoreAnimateDiff(sdfx.core.infotext.Infotext.parse(infotext).fields)
     plugins(mode).restoreCnAnimation(sdfx.core.infotext.Infotext.parse(infotext).fields)
+    if mode == Mode.Img2Img then plugins(mode).restoreCorridorCrawler(sdfx.core.infotext.Infotext.parse(infotext).fields)
     restoreComposable(mode, params)
+
+  /** A PNG contains a name, never an executable local path. Resolve it only in explicitly configured directories. */
+  private def restoreAestheticEmbedding(mode: Mode, fields: Map[String, String]): Unit =
+    if fields.contains(sdfx.plugins.AestheticGradientsPlugin.EmbeddingKey) &&
+        sdfx.plugins.AestheticGradientsPlugin.replay(fields).isEmpty then
+      plugins(mode).form("aesthetic_gradients").flatMap(_.prop("enabled")).foreach(_.set("false"))
+      ctx.error("Aesthetic embedding not restored: invalid or ambiguous recorded settings.")
+    fields.get(sdfx.plugins.AestheticGradientsPlugin.EmbeddingKey).map(_.trim).filter(_.nonEmpty)
+      .filter(_ => sdfx.plugins.AestheticGradientsPlugin.replay(fields).exists(_.bool("enabled"))).foreach { name =>
+      plugins(mode).form("aesthetic_gradients").foreach { form =>
+        for embedding <- form.prop("embedding"); enabled <- form.prop("enabled") do
+          enabled.set("false")
+          val fingerprint = fields.get("Aesthetic embedding SHA256").map(_.trim).filter(_.nonEmpty)
+          val revision = aestheticRestoreEpoch(mode)
+          val edited = new javafx.beans.value.ChangeListener[String]:
+            def changed(observable: javafx.beans.value.ObservableValue[? <: String], oldValue: String, newValue: String): Unit =
+              aestheticRestoreEpoch(mode) += 1
+          form.props.values.foreach(_.addListener(edited))
+          def release(): Unit = form.props.values.foreach(_.removeListener(edited))
+          Fx.async {
+            def local(raw: String): Option[Path] =
+              if sdfx.mcp.PathPolicy.isNetworkPath(raw) then None
+              else scala.util.Try(Path.of(raw).toAbsolutePath.normalize()).toOption
+            val envDirs = Seq("SDFX_AESTHETIC_EMBEDDINGS", "SDFX_MCP_ALLOWED_DIRS").flatMap(k =>
+              Option(System.getenv(k)).toSeq.flatMap(_.split(java.io.File.pathSeparator)).flatMap(local))
+            val cache = Option(System.getenv("SDFX_AESTHETIC_GRADIENTS_CACHE")).flatMap(local)
+              .getOrElse(Path.of(System.getProperty("user.home"), ".cache", "stablediffusion-nui", "aesthetic_gradients"))
+            val index = services.home.configDir.resolve("aesthetic-embedding-directories.json")
+            def localOnly(path: Path): Boolean = !sdfx.mcp.PathPolicy.isNetworkPath(path.toString)
+            sdfx.core.aesthetic.AestheticEmbeddingDirectories.read(index, localOnly).flatMap { registered =>
+              val configured = (Seq(services.generator.outputsDir, cache.resolve("embeddings")) ++ envDirs ++ registered)
+                .map(_.toAbsolutePath.normalize())
+              val roots = (configured ++ configured.flatMap(p => scala.util.Try(p.toRealPath()).toOption)).distinct
+              def permitted(path: Path): Boolean = localOnly(path) && roots.exists(path.startsWith)
+              val dirs = Vector(services.generator.outputsDir.resolve("aesthetic_embeddings"), cache.resolve("embeddings")) ++ envDirs ++ registered
+              sdfx.core.aesthetic.AestheticEmbeddingLocator.resolve(name, fingerprint, dirs, permitted)
+            }
+          } { resolved =>
+            release()
+            if !disposed && aestheticRestoreEpoch(mode) == revision && embedding.get == name && enabled.get == "false" then
+              resolved match
+                case Right(path) =>
+                  embedding.set(path.toString); enabled.set("true")
+                  if fingerprint.isEmpty then ctx.info("Aesthetic embedding restored by its unique name; older metadata has no content fingerprint.")
+                case Left(error) => ctx.error(s"Aesthetic embedding not restored: $error")
+          } { error =>
+            release()
+            if !disposed && aestheticRestoreEpoch(mode) == revision then ctx.error(s"Aesthetic embedding not restored: ${Fx.message(error)}")
+          }
+      }
+    }
 
   /** Restore this tool's complete PNG settings into its native form as well as the request. */
   private def restoreComposable(mode: Mode, params: sdfx.core.model.GenerationParams): Unit =
@@ -870,24 +995,36 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     ()
 
   private def startCheckpointLoad(name: String): Long =
+    val attempt = checkpointLoadRecovery.beginCheckpoint()
     model.checkpoint.set(name)
     val id = beginLoad(name)
-    Fx.async(services.loadCheckpoint(name)) { m =>
-      endLoad(id)
-      ctx.success(f"Loaded ${m.name}%s (${m.kind}%s) in ${m.loadedMs / 1000.0}%.1f s")
+    Fx.onFx(modelSelectionQueue.submit(services.loadCheckpoint(name))) { m =>
+      if !disposed then
+        endLoad(id)
+        ctx.success(f"Loaded ${m.name}%s (${m.kind}%s) in ${m.loadedMs / 1000.0}%.1f s")
     } { e =>
-      endLoad(id)
-      ctx.error(s"Cannot load checkpoint: ${friendly(Fx.message(e))}")
+      if !disposed then
+        endLoad(id)
+        // This specific worker rejection happens before it frees the prior model.
+        // Keep the selection aligned with that model, but never overwrite a newer
+        // user selection when an older asynchronous request finishes late.
+        if checkpointLoadRecovery.shouldRestore(attempt, name, model.checkpoint.get, e) then
+          services.supervisor.loadedModel.foreach { current =>
+            model.checkpoint.set(services.catalog.findCheckpoint(current.path).map(_.name).getOrElse(current.name))
+          }
+        ctx.error(s"Cannot load checkpoint: ${friendly(Fx.message(e))}")
     }
     id
 
   def setVae(v: String): Unit =
+    vaeSelectionRevision.begin()
     val id = beginLoad(s"VAE $v")
-    Fx.async(services.setVae(Some(v))) { _ =>
-      endLoad(id)
+    Fx.onFx(modelSelectionQueue.submit(services.setVae(Some(v)))) { _ =>
+      if !disposed then endLoad(id)
     } { e =>
-      endLoad(id)
-      ctx.error(s"Cannot set VAE: ${Fx.message(e)}")
+      if !disposed then
+        endLoad(id)
+        ctx.error(s"Cannot set VAE: ${Fx.message(e)}")
     }
 
   def refreshCatalog(): Unit =
@@ -955,7 +1092,8 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
             s.scalaTorchJava != before.scalaTorchJava || s.scalaTorchUnetDevice != before.scalaTorchUnetDevice ||
             s.scalaTorchVaeDevice != before.scalaTorchVaeDevice || s.scalaTorchUnetOffloadWeights != before.scalaTorchUnetOffloadWeights ||
             s.scalaTorchVaeOffloadWeights != before.scalaTorchVaeOffloadWeights || s.pythonExe != before.pythonExe || s.dtype != before.dtype || s.vramMode != before.vramMode ||
-            s.vaeTiling != before.vaeTiling || s.hfOffline != before.hfOffline ||
+            s.vaeTiling != before.vaeTiling || s.vaeSlicing != before.vaeSlicing || s.fp8Storage != before.fp8Storage ||
+            s.vaeAuto != before.vaeAuto || s.vaeFp16 != before.vaeFp16 || s.hfOffline != before.hfOffline ||
             WdSettingsState.restartRequired(before, s)
           if engineChanged then
             val a = new Alert(Alert.AlertType.CONFIRMATION, "Engine settings changed. Restart the engine now?", ButtonType.NO, ButtonType.YES)
@@ -976,7 +1114,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
     if k == KeyCode.ENTER && e.isShortcutDown && !promptEditor.isComposingInput then
       generate(queueOnly = e.isShiftDown)
       e.consume()
-    else if k == KeyCode.ESCAPE && progress.get.running && !promptEditor.isComposingInput && !promptEditor.completionVisible then
+    else if k == KeyCode.ESCAPE && progress.get.running && !promptEditor.isComposingInput && !promptEditor.completionVisible && !promptEditor.completionPending then
       interrupt()
       e.consume()
     else if e.isShortcutDown && k == KeyCode.V && !typing && activeMode.usesInitImage && tabs.getSelectionModel.getSelectedItem == modeTabs(activeMode) then
@@ -1129,6 +1267,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
   private val cleanup = new UiCleanup
   def dispose(): Unit =
     disposed = true
+    modelSelectionQueue.close()
     cleanup.run(Seq(
       "image scrambling controls" -> (() => { scrambleBatch.dispose(); scrambleSession.dispose() }),
       "difference previews" -> (() => panels.values.foreach(_.difference.foreach(_.dispose()))),
@@ -1150,6 +1289,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
       "VRAM estimator" -> (() => vramEstimator.dispose()),
       "VRAM estimates" -> (() => vramEstimates.values.foreach(_.dispose())),
       "embedding merge" -> (() => embeddingMerge.dispose()),
+      "aesthetic embedding" -> (() => aestheticEmbedding.dispose()),
       "temporal lab" -> (() => temporalLab.dispose()),
       "styles editor" -> (() => stylesEditor.dispose()),
       "metadata utils" -> (() => metadataUtils.dispose()),

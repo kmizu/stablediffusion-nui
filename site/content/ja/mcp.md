@@ -157,10 +157,33 @@ claude mcp add --transport http stablediffusion-nui-gui http://127.0.0.1:7861/mc
 | `list_recent` | 出力フォルダの新しい画像と infotext。`limit`（既定 10、最大 200）と `query` で絞り込みます。 |
 | `get_image` | 出力フォルダまたは許可フォルダの画像 1 枚を infotext 付きで返します。`max_side`（既定 1024、0 は元のサイズ）でプレビューを縮小します。`.png`、`.jpg`、`.webp` を読めます。 |
 | `inspect_generation_metadata` | PNG に埋め込まれたパラメータを読み、`txt2img` の引数、AlwaysOn の再現候補、適用できなかった項目を返します。何も実行しません。 |
+| `aesthetic_embedding` | `operation: "create"` に `name` と `images`（1〜32枚）を渡して Aesthetic Gradients 用の埋め込みを作ります。`operation: "list"` は保存先の一覧を返します。画像と任意の `output_dir` は許可フォルダ内に指定します。既定の保存先は出力フォルダの `aesthetic_embeddings`、`overwrite` の既定値は `false` です。初回は CLIP ViT-L/14 をダウンロードします。 |
 | `controlnet_fastload` | `operation: "inspect"` で Fastload 画像や `.cni` ファイルに保存された ControlNet 設定を読み、`operation: "version"` で形式のバージョンを返します。 |
 | `clip_interrogate` | CLIP Interrogator で画像からプロンプトを推定します。`operation` は `prompt`（`mode` は best・fast・classic・negative・caption）、`analyze`（媒体・作家・芸術運動・流行・フレーバーの上位 5 件）、`batch`（許可フォルダ `folder` に `.txt`、`batch.txt`、`batch.csv` を書き出します。`overwrite: true` でない限り上書きしません）、`models`、`unload` です。`keep_loaded: true` でない限り、呼び出しごとにモデルを解放します。初回は Hugging Face からモデルをダウンロードします。 |
 | `controlnet_preprocess` | 画像生成なしで、画像またはフォルダに ControlNet プリプロセッサを実行します（拡張機能 ControlNet Preprocessor の Extras 相当）。`preprocessor` は `operation=list` で確認できるモジュール（canny、invert、recolor_*、tile_*、blur_gaussian、depth、Marigold、検出系）、`processor_res`（64〜2048）または `pixel_perfect` は canny と検出系に効き、`args` でモジュールのスライダーを指定します。結果は `<名前>-<preprocessor>.png` として、パラメータに `ControlNet Preprocessor: "{...}"` を付けて保存され、上書きされません。 |
 | `vae_tools` | 読み込み中の VAE で、ローカルファイル（`input_paths`、最大 64 個）をエンコード、デコード、または往復変換します。TAESD や Approx NN の重みは `allow_download: true` のときだけダウンロードします。 |
+
+### 生成用画像のパス
+
+MCP の画像・マスク指定は、許可したフォルダ内のファイルを検証して一時コピーを作り、そのコピーで処理します。ローカルファイルは 48 MiB 以下です。Windows と、`/usr/bin/python3` を利用できる Linux に対応し、その他の環境では base64 または data URI を使えます。処理中に元画像を変更しても、そのコピーは更新されません。元ファイルの場所を新たに生成履歴へ記録する機能はありません。
+
+この対策は生成用画像など `Images.materialize` を使う経路が対象です。`get_image` も画像と PNG metadata を検証済みの同じ内容から取得します。PNG metadata 検査も検証済みの内容を使います。Fastload の読み込みにも検証済み snapshot を使います。VAE Tools の入力も検証済み snapshot を使います。ほかのファイル読み取り経路には別途調査中の競合があり、一時フォルダを同じユーザーで直接変更できるプロセスにも対応していません。
+
+### 保存したプロンプト
+
+`prompt_library` は Prompt Tools に保存したプロンプトを読み取ります。`action: "list"` で名前と positive／negative の区分を一覧し、`action: "get"` と `name` で本文を取得できます。一覧は `offset` と `limit`（1〜100、既定100）で分割し、途中で保存内容が変わるとページがずれることがあります。名前や本文には個人情報が含まれる場合があります。このツールは内容を変更したり画像を生成したりしません。詳しい制約は `docs/prompt-library-mcp-ja.md` を参照してください。
+
+### 生成履歴
+
+`generation_history` はデスクトップの履歴やお気に入りを読み取ります。`action: "list"`、`mode: "txt2img"`（または `img2img`、`inpaint`）、`collection: "history"`（または `favourites`）で名前と ID を一覧し、`action: "get"` と選んだ `id` で保存済み項目を取得できます。整数と小数の値は精度を保つため文字列として返り、各項目に型が付きます。履歴の名前や項目には個人情報が含まれ得ます。取り込んだ元データや画像は返さず、設定の復元・生成・履歴変更も行いません。
+
+`action: "prepare"` と `mode`、`id` を指定すると、保存値の一部を `txt2img` または `img2img` の引数候補 `params` に変換します。これは候補の作成だけで、画像生成や履歴の変更は行いません。`invalid_fields` は値が不正な項目、`omitted_fields` は変換しなかった保存項目、`missing_fields` は必要な未指定項目を示します。img2img は入力画像、inpaint は入力画像とマスクが必要です。上流から取り込んだデータは、表示された項目以外にも未対応の設定を含み得ます。
+
+variation の有効状態が履歴にある場合は、有効時の seed・strength を候補に含め、無効時は strength を 0 にします。有効状態が不明な場合は変換しません。
+
+候補を確認・補完してから生成ツールを明示的に呼び出してください。モデルの存在、画像の総量などは生成ツール側で検証します。未変換の設定や現在の既定値、拡張機能、入力画像などによって結果は変わるため、元の画像の再現は保証されません。
+
+一覧では `query` にカンマ区切りで語を指定すると、名前・prompt・negative prompt・checkpoint・sampler を大文字小文字を区別せず検索し、すべての語に一致する項目を返します。`limit`（1〜1000、既定1000）と `offset` で分割でき、`total` と次ページの `next_offset`（最後は `null`）を返します。ページ取得の間に履歴が変わると項目がずれることがあります。名前以外の値は一覧に出ませんが、検索結果や件数からその内容を推測できるため、検索も履歴を読む権限のあるクライアントで使ってください。
 
 ## 生成の引数
 
@@ -317,3 +340,6 @@ AlwaysOn 拡張のジョブ単位の設定で、プラグイン ID をキーに�
 - 取り消しと、その後の生成の成功
 
 HTTP の検証は、GUI 内蔵のサーバーではなく、別に起動したヘッドレスの HTTP サーバーで行いました。テストに通っても、すべての拡張の組み合わせが動くとは限りません。モデルとの相性やプロンプトの出来はモデルに左右されます。
+
+
+`img2img_folder_async` などのジョブが途中で失敗した場合、`get_job` は失敗と原因を返し、すでに保存した画像があれば `images` に含めます。同期生成や script の失敗時も、保存済み画像があればエラーとともに返します。再試行は既存の処理を自動的に飛ばさず、同じ入力から新しい画像を作るため、先に部分結果を確認してください。

@@ -1,5 +1,9 @@
 # Tag autocomplete extras: verification (#24)
 
+> Historical record: wildcard line selection and first-difference Tab completion were added later.
+> See [the newer verification](tag24-wildcard-verification.md) for results and remaining limitations.
+> Numeric category markers were also added later; see [category verification](tag24-category-verification.md).
+
 Scope and usage: [tag-autocomplete.md](tag-autocomplete.md). Upstream: DominikDoom/a1111-sd-webui-tagcomplete, MIT,
 README read at the pinned commit `4170882f90b47be130a0ff9314f663c230b9153d` (licence text already in `licenses/`).
 No upstream code, tag lists or translation files were used. No Python code and no non-.py payload file changed

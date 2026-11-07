@@ -45,3 +45,11 @@ class TagCompletionSuite extends FunSuite:
     assertEquals(tags.map(_.name), Vector("blue_eyes", "blue_hair"))
     assertEquals(TagCompletion.parse(Iterator("name,type,count,aliases", "blue_hair,0,1,azure")).head.aliases, Vector("azure"))
   }
+  test("category uses a valid type fallback when both columns exist") {
+    val tags = TagCompletion.parse(Iterator("name,category,type,count", "empty,,4,1", "invalid,bad,3,1", "both,4,3,1", "neither,bad,no,1"))
+    val categories = tags.map(t => t.name -> t.category).toMap
+    assertEquals(categories("empty"), Some(4))
+    assertEquals(categories("invalid"), Some(3))
+    assertEquals(categories("both"), Some(4))
+    assertEquals(categories("neither"), None)
+  }

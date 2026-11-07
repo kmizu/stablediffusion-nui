@@ -44,6 +44,85 @@ class McpToolsSuite extends munit.FunSuite:
     finally Files.deleteIfExists(outside)
   }
 
+  test("VAE file input is an owned snapshot while original path stays the provenance") {
+    val source = home.outputs(services.settings).resolve("snapshot-latent.safetensors")
+    Files.createDirectories(source.getParent)
+    val bytes = Array[Byte](13, 19, -1, 42)
+    Files.write(source, bytes)
+    val result = call("vae_tools", ujson.Obj("input_paths" -> ujson.Arr(source.toString), "operation" -> "decode"))
+    assert(result("isError").bool)
+    val state = Await.result(services.client.raw("get_state"), 10.seconds)
+    val snapshot = Paths.get(state("last_vae_inputs")(0)("path").str)
+    assertNotEquals(snapshot, source.toRealPath())
+    assertEquals(Base64.getDecoder.decode(state("last_vae_inputs")(0)("bytes").str).toSeq, bytes.toSeq)
+    assertEquals(state("last_vae_labels")(0).str, source.toRealPath().toString)
+    assert(eventually()(!Files.exists(snapshot)))
+    assertEquals(Files.readAllBytes(source).toSeq, bytes.toSeq)
+  }
+
+  test("interrupted VAE caller keeps the snapshot until the worker finishes") {
+    val source = home.outputs(services.settings).resolve("vae-interrupt-test.safetensors")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Array[Byte](1, 2, 3))
+    val marker = Paths.get(source.toString + ".started")
+    Files.deleteIfExists(marker)
+    val caller = new Thread(() => {
+      try { call("vae_tools", ujson.Obj("input_paths" -> ujson.Arr(source.toString), "operation" -> "decode")); () }
+      catch case _: Throwable => ()
+    })
+    caller.start()
+    try
+      assert(eventually(10.seconds)(Files.exists(marker)), "worker did not start")
+      val staged = Paths.get(Files.readString(marker))
+      assert(Files.exists(staged))
+      caller.interrupt()
+      caller.join(1500)
+      assert(!caller.isAlive, "interrupted caller did not return")
+      assert(Files.exists(staged), "worker is still using the snapshot")
+      assert(eventually(10.seconds)(!Files.exists(staged)), "snapshot not removed after worker finished")
+    finally
+      if caller.isAlive then { caller.interrupt(); caller.join(3000) }
+      Files.deleteIfExists(marker)
+  }
+
+  test("MCP VAE cancellation keeps the snapshot until the worker finishes") {
+    val source = home.outputs(services.settings).resolve("cancel-vae-interrupt-test.safetensors")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Array[Byte](5, 6, 7))
+    val marker = Paths.get(source.toString + ".started")
+    Files.deleteIfExists(marker)
+    val id = ujson.Str("vae-cancel-1")
+    val request = callReq("vae_tools", ujson.Obj("input_paths" -> ujson.Arr(source.toString), "operation" -> "decode"), id = id)
+    val running = Future(server.handle(request, _ => ()))
+    try
+      assert(eventually(10.seconds)(Files.exists(marker)), "worker did not start")
+      val staged = Paths.get(Files.readString(marker))
+      server.handle(ujson.Obj("jsonrpc" -> "2.0", "method" -> "notifications/cancelled", "params" -> ujson.Obj("requestId" -> id)), _ => ())
+      assert(Files.exists(staged), "worker is still using the snapshot")
+      assertEquals(Await.result(running, 15.seconds), None)
+      assert(eventually(10.seconds)(!Files.exists(staged)), "snapshot not removed after worker finished")
+    finally Files.deleteIfExists(marker)
+  }
+
+  test("VAE timeout keeps the snapshot until the worker finishes") {
+    val source = home.outputs(services.settings).resolve("timeout-vae-interrupt-test.safetensors")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Array[Byte](8, 9, 10))
+    val marker = Paths.get(source.toString + ".started")
+    Files.deleteIfExists(marker)
+    val short = new McpTools(services, McpTools.waitForEngine(services), vaeTimeout = 2.seconds)
+    val shortServer = new McpServer(short.all)
+    val request = callReq("vae_tools", ujson.Obj("input_paths" -> ujson.Arr(source.toString), "operation" -> "decode"), id = ujson.Str("vae-timeout-1"))
+    try
+      val response = shortServer.handle(request, _ => ()).get("result")
+      assert(response("isError").bool)
+      assert(Files.exists(marker), "worker did not start")
+      val staged = Paths.get(Files.readString(marker))
+      assert(Files.exists(staged), "worker is still using the snapshot")
+      assert(eventually(10.seconds)(!Files.exists(staged)), "snapshot not removed after worker finished")
+    finally Files.deleteIfExists(marker)
+  }
+
   private def call(tool: String, args: ujson.Value, rec: ujson.Value => Unit = _ => (), id: ujson.Value = ujson.Null, token: Option[ujson.Value] = None): ujson.Value =
     val r = server.handle(callReq(tool, args, id, token), rec).getOrElse(fail("no response"))
     assert(!r.obj.contains("error"), s"JSON-RPC error: $r")
@@ -53,6 +132,299 @@ class McpToolsSuite extends munit.FunSuite:
     val r = call(tool, args)
     assert(!r("isError").bool, s"$tool failed: ${textOf(r)}")
     r
+
+  test("prompt library MCP lists names and reads one prompt without modifying the library") {
+    val descriptor = tools.all.find(_.name == "prompt_library").getOrElse(fail("prompt library tool missing")).descriptor
+    assert(descriptor("annotations")("readOnlyHint").bool)
+    val service = services.promptTools
+    service.updateLibrary(_.save("quality", "sharp, detailed", false)._1.save("avoid", "blurry", true)._1)
+    val file = service.libraryStore.file
+    val before = Files.readAllBytes(file)
+    val first = ok("prompt_library", ujson.Obj("action" -> "list", "limit" -> 1))("structuredContent")
+    assertEquals(first("entries").arr.head("name").str, "quality")
+    assertEquals(first("entries").arr.head("negative").bool, false)
+    assertEquals(first("next_offset").num.toInt, 1)
+    assert(!first.render().contains("sharp, detailed"))
+    val next = ok("prompt_library", ujson.Obj("action" -> "list", "offset" -> 1))("structuredContent")
+    assertEquals(next("entries").arr.head("name").str, "avoid")
+    val item = ok("prompt_library", ujson.Obj("action" -> "get", "name" -> "avoid"))("structuredContent")
+    assertEquals(item("prompt").str, "blurry")
+    assertEquals(item("negative").bool, true)
+    assert(call("prompt_library", ujson.Obj("action" -> "get", "name" -> "missing"))("isError").bool)
+    assert(call("prompt_library", ujson.Obj("action" -> "delete", "name" -> "avoid"))("isError").bool)
+    assert(call("prompt_library", ujson.Obj("action" -> "get", "name" -> "avoid", "limit" -> 1))("isError").bool)
+    assert(java.util.Arrays.equals(Files.readAllBytes(file), before))
+    val tooLong = ujson.Obj("large" -> ujson.Obj("prompt" -> ("x" * 100001), "is_negative" -> false))
+    Files.writeString(file, tooLong.render())
+    try
+      assert(call("prompt_library", ujson.Obj("action" -> "get", "name" -> "large"))("isError").bool)
+    finally Files.write(file, before)
+    Files.write(file, Array.fill[Byte](sdfx.core.prompttools.PromptLibrary.MaxFileBytes + 1)(32))
+    try
+      assert(call("prompt_library", ujson.Obj("action" -> "list"))("isError").bool)
+    finally Files.write(file, before)
+    Files.delete(file)
+    try
+      val empty = ok("prompt_library", ujson.Obj("action" -> "list"))("structuredContent")
+      assertEquals(empty("entries").arr.size, 0)
+      assert(!Files.exists(file))
+    finally Files.write(file, before)
+  }
+
+  test("generation history MCP lists entries and reads exact typed fields without source metadata") {
+    import sdfx.core.presets.*
+    val store = new PresetStore(home.configDir.resolve("generation-history"), PresetLimits(maxCollections = 6))
+    val id = java.util.UUID.randomUUID()
+    val fields = Map(FieldKey(Vector("generation", "seed")) -> PresetAtom.Integer(9007199254740993L),
+      FieldKey(Vector("generation", "prompt")) -> PresetAtom.Text("private prompt"))
+    val record = PresetRecord(id, "test history", fields, None, Set.empty, Vector.empty, Vector.empty)
+    val library = PresetLibrary(1, Vector(PresetCollection("history-txt2img", fields.keySet, Vector.empty, Vector(record), Vector.empty)), Vector.empty)
+    val before = store.load().toOption.get
+    assert(store.save(before.revision, library).isRight)
+    val listed = ok("generation_history", ujson.Obj("action" -> "list", "mode" -> "txt2img"))("structuredContent")
+    assertEquals(listed("entries").arr.head("id").str, id.toString)
+    assert(!listed.render().contains("private prompt"))
+    val read = ok("generation_history", ujson.Obj("action" -> "get", "mode" -> "txt2img", "id" -> id.toString))("structuredContent")
+    assertEquals(read("fields")("generation.seed")("value").str, "9007199254740993")
+    assertEquals(read("fields")("generation.prompt")("value").str, "private prompt")
+    assert(!read.obj.contains("source"))
+    assertEquals(ok("generation_history", ujson.Obj("action" -> "list", "mode" -> "img2img"))("structuredContent")("entries").arr.size, 0)
+    assertEquals(ok("generation_history", ujson.Obj("action" -> "list", "mode" -> "txt2img", "collection" -> "favourites"))("structuredContent")("entries").arr.size, 0)
+    assert(call("generation_history", ujson.Obj("action" -> "get", "mode" -> "img2img", "id" -> id.toString))("isError").bool)
+    assert(call("generation_history", ujson.Obj("action" -> "list", "mode" -> "../txt2img"))("isError").bool)
+    assert(call("generation_history", ujson.Obj("action" -> "get", "mode" -> "txt2img"))("isError").bool)
+    assert(call("generation_history", ujson.Obj("action" -> "delete", "mode" -> "txt2img"))("isError").bool)
+    assertEquals(store.load().toOption.get.library, library)
+  }
+
+  test("generation history MCP searches saved fields and paginates without returning field values") {
+    import sdfx.core.presets.*
+    def rec(name: String, prompt: String, model: String) =
+      PresetRecord(java.util.UUID.randomUUID(), name, Map(FieldKey(Vector("generation", "prompt")) -> PresetAtom.Text(prompt),
+        FieldKey(Vector("model", "checkpoint")) -> PresetAtom.Text(model)), None, Set.empty, Vector.empty, Vector.empty)
+    val first = rec("first", "Blue fox", "XL one")
+    val second = rec("second", "blue forest", "XL two")
+    val third = rec("third", "red fox", "SD one")
+    val entries = Vector(first, second, third)
+    val library = PresetLibrary(1, Vector(PresetCollection("history-txt2img", entries.flatMap(_.fields.keys).toSet, Vector.empty, entries, Vector.empty)), Vector.empty)
+    val store = new PresetStore(home.configDir.resolve("generation-history"), PresetLimits(maxCollections = 6))
+    assert(store.save(store.load().toOption.get.revision, library).isRight)
+    val firstPage = ok("generation_history", ujson.Obj("action" -> "list", "mode" -> "txt2img", "query" -> " BLUE, xl", "limit" -> 1))("structuredContent")
+    assertEquals(firstPage("total").num.toInt, 2)
+    assertEquals(firstPage("entries").arr.head("id").str, second.id.toString)
+    assertEquals(firstPage("next_offset").num.toInt, 1)
+    assert(!firstPage.render().contains("blue forest"))
+    val secondPage = ok("generation_history", ujson.Obj("action" -> "list", "mode" -> "txt2img", "query" -> "blue,xl", "limit" -> 1, "offset" -> 1))("structuredContent")
+    assertEquals(secondPage("entries").arr.head("id").str, first.id.toString)
+    assertEquals(secondPage("next_offset"), ujson.Null)
+    assert(call("generation_history", ujson.Obj("action" -> "get", "mode" -> "txt2img", "id" -> first.id.toString, "query" -> "blue"))("isError").bool)
+    assert(call("generation_history", ujson.Obj("action" -> "list", "mode" -> "txt2img", "limit" -> 0))("isError").bool)
+    assertEquals(store.load().toOption.get.library, library)
+  }
+
+  test("generation history prepares a partial generation draft and reports omitted or invalid values") {
+    import sdfx.core.presets.*
+    def key(a: String, b: String) = FieldKey(Vector(a, b))
+    val fields = Map(key("generation", "prompt") -> PresetAtom.Text("a blue fox"),
+      key("generation", "negativePrompt") -> PresetAtom.Text("blur"),
+      key("generation", "steps") -> PresetAtom.Integer(8),
+      key("generation", "width") -> PresetAtom.Integer(512),
+      key("generation", "height") -> PresetAtom.Integer(512),
+      key("generation", "seed") -> PresetAtom.Integer(9007199254740993L),
+      key("plugin", "untranslated") -> PresetAtom.Text("preserve"))
+    val record = PresetRecord(java.util.UUID.randomUUID(), "draft", fields, None, Set.empty, Vector.empty, Vector.empty)
+    val library = PresetLibrary(1, Vector(PresetCollection("history-txt2img", fields.keySet, Vector.empty, Vector(record), Vector.empty)), Vector.empty)
+    val store = new PresetStore(home.configDir.resolve("generation-history"), PresetLimits(maxCollections = 6))
+    assert(store.save(store.load().toOption.get.revision, library).isRight)
+    val draft = ok("generation_history", ujson.Obj("action" -> "prepare", "mode" -> "txt2img", "id" -> record.id.toString))("structuredContent")
+    assertEquals(draft("tool").str, "txt2img")
+    assertEquals(draft("params")("prompt").str, "a blue fox")
+    assertEquals(draft("params")("negative_prompt").str, "blur")
+    assertEquals(draft("params")("steps").num.toInt, 8)
+    assert(!draft("params").obj.contains("seed"))
+    assert(draft("invalid_fields").arr.exists(_.str == "generation.seed"))
+    assert(draft("omitted_fields").arr.exists(_.str == "plugin.untranslated"))
+    assert(!draft("replay_guaranteed").bool)
+    assertEquals(store.load().toOption.get.library, library)
+    val generated = ok("txt2img", draft("params"))
+    assert(generated("structuredContent").obj.contains("images"))
+  }
+
+  test("history draft identifies required images and rejects invalid dimensions and combined batch") {
+    import sdfx.core.presets.*
+    def key(s: String) = FieldKey(Vector("generation", s))
+    val fields = Map(key("width") -> PresetAtom.Integer(513), key("batchSize") -> PresetAtom.Integer(8),
+      key("batchCount") -> PresetAtom.Integer(4), key("subseed") -> PresetAtom.Integer(123))
+    val r = PresetRecord(java.util.UUID.randomUUID(), "inpaint", fields, None, Set.empty, Vector.empty, Vector.empty)
+    val result = HistoryGenerationDraft.build(r, "inpaint")
+    assertEquals(result("tool").str, "img2img")
+    assertEquals(result("required_inputs").arr.map(_.str).toSeq, Seq("init_image", "mask"))
+    assertEquals(result("missing_fields").arr.map(_.str).toSeq, Seq("prompt", "init_image", "mask"))
+    assertEquals(result("invalid_fields").arr.map(_.str).toSet, Set("generation.width", "generation.batchSize", "generation.batchCount"))
+    assert(result("omitted_fields").arr.exists(_.str == "generation.subseed"))
+    assert(!result("params").obj.contains("batch_size") && !result("params").obj.contains("n_iter"))
+  }
+
+  test("Aesthetic embedding creation is discoverable and refuses paths outside the permitted roots") {
+    val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
+    val tool = ts.find(_("name").str == "aesthetic_embedding").getOrElse(fail("aesthetic embedding tool missing"))
+    assert(tool("inputSchema")("properties").obj.contains("images"))
+    val outside = Files.createTempFile("aesthetic-outside-", ".png")
+    try
+      val denied = call("aesthetic_embedding", ujson.Obj("operation" -> "create", "name" -> "style",
+        "images" -> ujson.Arr(outside.toString)))
+      assert(denied("isError").bool)
+      assert(textOf(denied).contains("allowed folders"), textOf(denied))
+    finally Files.deleteIfExists(outside)
+  }
+
+  test("Aesthetic embeddings submit owned image inputs and clean temporary files") {
+    val result = ok("aesthetic_embedding", ujson.Obj("operation" -> "create", "name" -> "style",
+      "images" -> ujson.Arr(pngBase64()), "overwrite" -> false))
+    val data = result("structuredContent")
+    assertEquals(data("name").str, "style")
+    assertEquals(data("count").num.toInt, 1)
+    val temporary = Paths.get(data("image_path").str)
+    assert(!Files.exists(temporary), s"temporary image was not removed: $temporary")
+    assert(data("output_dir").str.contains("aesthetic_embeddings"))
+    assert(Files.exists(Paths.get(data("path").str)), s"fake worker did not save ${data("path").str}")
+    val list = ok("aesthetic_embedding", ujson.Obj("operation" -> "list"))
+    assertEquals(list("structuredContent")("output_dir").str, data("output_dir").str)
+    val file = Paths.get(data("path").str)
+    assertEquals(tools.pathPolicy.resolve(file.toString, "embedding", home.outputs(services.settings)), file.toRealPath())
+    assertEquals(list("structuredContent")("embeddings").arr.map(_("name").str).toSeq, Seq("style.pt"))
+  }
+
+  test("Aesthetic embeddings reject protected sessions and unsafe output names") {
+    val params = ujson.Obj("operation" -> "create", "name" -> "../style", "images" -> ujson.Arr(pngBase64()))
+    assert(call("aesthetic_embedding", params)("isError").bool)
+    services.imageScrambleSession.unlock("test-only-password")
+    try
+      val blocked = call("aesthetic_embedding", ujson.Obj("operation" -> "create", "name" -> "style",
+        "images" -> ujson.Arr(pngBase64())))
+      assert(blocked("isError").bool)
+      assert(textOf(blocked).contains("protected image session"), textOf(blocked))
+    finally services.imageScrambleSession.lock()
+  }
+
+  test("Aesthetic names resolve only uniquely in explicitly registered permitted directories") {
+    val base = home.outputs(services.settings)
+    val custom = Files.createDirectories(base.resolve("custom-aesthetic"))
+    val created = ok("aesthetic_embedding", ujson.Obj("operation" -> "create", "name" -> "unique-replay",
+      "images" -> ujson.Arr(pngBase64()), "output_dir" -> custom.toString))
+    assert(!created("structuredContent").obj.contains("directory_registration_warning"))
+    def generation(name: String, hash: Option[String] = None) = call("txt2img", ujson.Obj("prompt" -> "test", "steps" -> 1,
+      "width" -> 64, "height" -> 64, "return_images" -> false,
+      "always_on" -> ujson.Obj("aesthetic_gradients" -> ujson.Obj.from(Seq("enabled" -> ujson.Bool(true),
+        "embedding" -> ujson.Str(name)) ++ hash.toSeq.map(h => "embedding_sha256" -> ujson.Str(h))))))
+    val replay = generation("unique-replay")
+    assert(!replay("isError").bool, textOf(replay))
+    val managed = Files.createDirectories(base.resolve("aesthetic_embeddings"))
+    val collision = Files.writeString(managed.resolve("unique-replay.pt"), "different")
+    try
+      val ambiguous = generation("unique-replay")
+      assert(ambiguous("isError").bool && textOf(ambiguous).contains("ambiguous"), textOf(ambiguous))
+      val expected = sdfx.core.aesthetic.AestheticEmbeddingLocator.fingerprint(Paths.get(created("structuredContent")("path").str))
+      val byHash = generation("unique-replay", Some(expected))
+      assert(!byHash("isError").bool, textOf(byHash))
+      val state = Await.result(services.client.raw("get_state"), 10.seconds)
+      val hook = state("last_generation")("request")("params")("hooks")("aesthetic_gradients")
+      assertEquals(Paths.get(hook("embedding").str), Paths.get(created("structuredContent")("path").str).toRealPath())
+      assertEquals(hook("embedding_sha256").str, expected)
+      val wrong = generation("unique-replay", Some("0" * 64))
+      assert(wrong("isError").bool, textOf(wrong))
+      val explicit = generation(created("structuredContent")("path").str)
+      assert(!explicit("isError").bool, textOf(explicit))
+    finally Files.deleteIfExists(collision)
+  }
+
+  test("an existing permitted aesthetic file becomes discoverable after explicit generation use") {
+    val base = home.outputs(services.settings)
+    val dir = Files.createDirectories(base.resolve("existing-aesthetic"))
+    val file = Files.writeString(dir.resolve("existing-replay.pt"), "pre-existing embedding")
+    val generated = call("txt2img", ujson.Obj("prompt" -> "test", "steps" -> 1, "width" -> 64, "height" -> 64,
+      "return_images" -> false, "always_on" -> ujson.Obj("aesthetic_gradients" -> ujson.Obj("enabled" -> true, "embedding" -> file.toString))))
+    assert(!generated("isError").bool, textOf(generated))
+    val hash = sdfx.core.aesthetic.AestheticEmbeddingLocator.fingerprint(file)
+    val png = base.resolve("existing-aesthetic-replay.png")
+    PngMetadata.write(new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB), png,
+      Seq("parameters" -> s"cat\nSteps: 1, Seed: 1, Size: 64x64, Aesthetic embedding: existing-replay, Aesthetic embedding SHA256: $hash"))
+    val inspected = ok("inspect_generation_metadata", ujson.Obj("image" -> png.toString))
+    assertEquals(Paths.get(inspected("structuredContent")("always_on")("aesthetic_gradients")("embedding").str), file.toRealPath())
+  }
+
+  test("timed-out aesthetic creation retains temporary input until the worker terminates") {
+    var materialized: Option[java.nio.file.Path] = None
+    val tool = new AestheticEmbeddingTool(services, tools.pathPolicy, () => home.outputs(services.settings),
+      suffix => {
+        val p = Files.createTempFile(home.outputs(services.settings), "aesthetic-timeout-", suffix)
+        materialized = Some(p)
+        p
+      }, _ => (), timeout = 100.millis)
+    intercept[ToolError] {
+      tool.call(ujson.Obj("operation" -> "create", "name" -> "slow", "images" -> ujson.Arr(pngBase64())), ToolContext.none)
+    }
+    val path = materialized.getOrElse(fail("temporary input was not made"))
+    assert(Files.exists(path), "worker may still be using the input")
+    val end = System.nanoTime() + 10.seconds.toNanos
+    while Files.exists(path) && System.nanoTime() < end do Thread.sleep(25)
+    assert(!Files.exists(path), "temporary input was not removed after the worker terminated")
+  }
+
+  test("interrupted aesthetic caller retains temporary input until the worker terminates") {
+    val registered = new java.util.concurrent.CountDownLatch(1)
+    val materialized = new java.util.concurrent.atomic.AtomicReference[java.nio.file.Path]()
+    val thrown = new java.util.concurrent.atomic.AtomicReference[Throwable]()
+    val tool = new AestheticEmbeddingTool(services, tools.pathPolicy, () => home.outputs(services.settings),
+      suffix => {
+        val p = Files.createTempFile(home.outputs(services.settings), "aesthetic-interrupt-", suffix)
+        materialized.set(p)
+        p
+      }, _ => (), timeout = 30.seconds)
+    val ctx = new ToolContext:
+      def progress(progress: Double, total: Option[Double], message: String): Unit = ()
+      def onCancel(f: () => Unit): Unit = registered.countDown()
+      def isCancelled: Boolean = false
+    val caller = new Thread(() => {
+      try
+        tool.call(ujson.Obj("operation" -> "create", "name" -> "slow", "images" -> ujson.Arr(pngBase64())), ctx)
+        ()
+      catch case e: Throwable => thrown.set(e)
+    })
+    caller.start()
+    try
+      assert(registered.await(10, java.util.concurrent.TimeUnit.SECONDS), "request was not registered")
+      val path = materialized.get()
+      assert(path != null && Files.exists(path), "temporary input was not made")
+      caller.interrupt()
+      caller.join(3000)
+      assert(!caller.isAlive, "caller did not stop")
+      assert(thrown.get().isInstanceOf[InterruptedException], s"unexpected result: ${thrown.get()}")
+      assert(Files.exists(path), "worker may still be using the input")
+      val end = System.nanoTime() + 10.seconds.toNanos
+      while Files.exists(path) && System.nanoTime() < end do Thread.sleep(25)
+      assert(!Files.exists(path), "temporary input was not removed after the worker terminated")
+    finally
+      if caller.isAlive then { caller.interrupt(); caller.join(3000) }
+  }
+
+  test("aesthetic embedding tools follow a changed output directory") {
+    val before = services.settings
+    val moved = home.root.resolve("moved-output")
+    Files.createDirectories(moved)
+    try
+      services.updateSettings(_.copy(outputDir = moved.toString))
+      val listed = ok("aesthetic_embedding", ujson.Obj("operation" -> "list"))
+      assertEquals(Paths.get(listed("structuredContent")("output_dir").str), moved.resolve("aesthetic_embeddings").toRealPath())
+      val embedding = Files.writeString(moved.resolve("aesthetic_embeddings/change.pt"), "fixture")
+      val hash = sdfx.core.aesthetic.AestheticEmbeddingLocator.fingerprint(embedding)
+      val image = moved.resolve("new.png")
+      PngMetadata.write(new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB), image,
+        Seq("parameters" -> s"cat\nSteps: 1, Seed: 1, Size: 64x64, Aesthetic embedding: change, Aesthetic embedding SHA256: $hash"))
+      val inspected = ok("inspect_generation_metadata", ujson.Obj("image" -> "new.png"))
+      assertEquals(Paths.get(inspected("structuredContent")("always_on")("aesthetic_gradients")("embedding").str), embedding.toRealPath())
+    finally services.updateSettings(_ => before)
+  }
 
   test("ControlNet Fastload is discoverable with an explicit operation schema") {
     val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
@@ -65,6 +437,181 @@ class McpToolsSuite extends munit.FunSuite:
     assertEquals(version("structuredContent")("version").num.toInt, 1)
     val rejected = call("controlnet_fastload", ujson.Obj("operation" -> "not-an-operation"))
     assert(rejected("isError").bool)
+  }
+
+  test("ControlNet Fastload inspect sends a temporary byte-exact snapshot to the worker") {
+    val path = home.outputs(services.settings).resolve("source-fastload.cni")
+    Files.createDirectories(path.getParent)
+    val source = Array[Byte](17, 0, 42, -1)
+    Files.write(path, source)
+    val result = ok("controlnet_fastload", ujson.Obj("operation" -> "inspect", "path" -> path.toString))("structuredContent")
+    val sent = Paths.get(result("test_input_path").str)
+    assertNotEquals(sent, path)
+    assertEquals(Base64.getDecoder.decode(result("test_input_base64").str).toSeq, source.toSeq)
+    assert(!Files.exists(sent), "worker snapshot must be removed after the worker finishes")
+    assertEquals(Files.readAllBytes(path).toSeq, source.toSeq)
+  }
+
+  test("timed-out Fastload inspection retains its snapshot until the worker finishes") {
+    val input = home.outputs(services.settings).resolve("fastload-timeout-source.cni")
+    Files.createDirectories(input.getParent)
+    Files.write(input, Array[Byte](7, 8, 9))
+    var staged: Option[java.nio.file.Path] = None
+    val tool = new ControlNetFastloadTool(services, tools.pathPolicy, home.outputs(services.settings), _ => (),
+      suffix => { val p = Files.createTempFile(input.getParent, "fastload-timeout-", suffix); staged = Some(p); p },
+      timeout = 100.millis)
+    intercept[java.util.concurrent.TimeoutException] {
+      tool.call(ujson.Obj("operation" -> "inspect", "path" -> input.toString), ToolContext.none)
+    }
+    val path = staged.getOrElse(fail("no staged file"))
+    assert(Files.exists(path), "worker has not finished reading")
+    val deadline = System.nanoTime() + 10.seconds.toNanos
+    while Files.exists(path) && System.nanoTime() < deadline do Thread.sleep(25)
+    assert(!Files.exists(path), "staged file must be removed after worker completion")
+  }
+
+  test("Fastload rejects protected PNG before dispatch and removes its snapshot") {
+    val input = home.outputs(services.settings).resolve("protected-fastload.png")
+    Files.createDirectories(input.getParent)
+    val pixels = new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.ScrambledPng.write(pixels, input, Nil, Some("private-test-secret"))
+    var staged: Option[java.nio.file.Path] = None
+    val tool = new ControlNetFastloadTool(services, tools.pathPolicy, home.outputs(services.settings), _ => (),
+      suffix => { val p = Files.createTempFile(input.getParent, "fastload-protected-", suffix); staged = Some(p); p })
+    intercept[ToolError] {
+      tool.call(ujson.Obj("operation" -> "inspect", "path" -> input.toString), ToolContext.none)
+    }
+    assert(staged.isEmpty, "protected bytes must be rejected before staging")
+    assert(Files.exists(input))
+  }
+
+  test("generation-time Fastload sends verified bytes through a job-owned snapshot") {
+    val path = home.outputs(services.settings).resolve("generation-fastload.cni")
+    Files.createDirectories(path.getParent)
+    val bytes = Array[Byte](17, 0, -7, 42)
+    Files.write(path, bytes)
+    val result = call("txt2img", ujson.Obj("prompt" -> "snapshot", "width" -> 64, "height" -> 64,
+      "steps" -> 1, "return_images" -> false, "always_on" -> ujson.Obj("controlnet_fastload" ->
+        ujson.Obj("enabled" -> true, "mode" -> "load_only", "priority" -> "loaded_first", "path" -> path.toString))))
+    assert(!result("isError").bool, textOf(result))
+    val seen = Await.result(services.client.raw("get_state"), 10.seconds)("last_fastload")
+    val snapshot = Paths.get(seen("path").str)
+    assertNotEquals(snapshot, path)
+    assertEquals(Base64.getDecoder.decode(seen("bytes").str).toSeq, bytes.toSeq)
+    assertEquals(Files.readAllBytes(path).toSeq, bytes.toSeq)
+    assert(!Files.exists(snapshot), "job-owned Fastload snapshot must be cleaned after the job")
+  }
+
+  test("generation-time Fastload rejects protected PNG before staging") {
+    val path = home.outputs(services.settings).resolve("protected-generation-fastload.png")
+    Files.createDirectories(path.getParent)
+    sdfx.core.png.ScrambledPng.write(new java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_RGB),
+      path, Nil, Some("private-secret"))
+    val tmp = home.tmpDir(services.settings)
+    def files: Set[java.nio.file.Path] =
+      val s = Files.list(tmp)
+      try { import scala.jdk.CollectionConverters.*; s.iterator().asScala.toSet }
+      finally s.close()
+    val before = files
+    val result = call("txt2img", ujson.Obj("prompt" -> "protected", "width" -> 64, "height" -> 64,
+      "steps" -> 1, "return_images" -> false, "always_on" -> ujson.Obj("controlnet_fastload" ->
+        ujson.Obj("enabled" -> true, "mode" -> "load_only", "priority" -> "loaded_first", "path" -> path.toString))))
+    assert(result("isError").bool)
+    assert(textOf(result).contains("protected image"), textOf(result))
+    assertEquals(files, before)
+  }
+
+  test("failed Fastload preparation cleans its snapshot and permits recovery") {
+    val path = home.outputs(services.settings).resolve("failed-fastload.cni")
+    Files.createDirectories(path.getParent)
+    Files.writeString(path, "fail-fastload")
+    val response = call("txt2img", ujson.Obj("prompt" -> "fail", "width" -> 64, "height" -> 64,
+      "steps" -> 1, "return_images" -> false, "always_on" -> ujson.Obj("controlnet_fastload" ->
+        ujson.Obj("enabled" -> true, "mode" -> "load_only", "priority" -> "loaded_first", "path" -> path.toString))))
+    assert(response("isError").bool, response.toString)
+    val seen = Await.result(services.client.raw("get_state"), 10.seconds)("last_fastload")
+    val snapshot = Paths.get(seen("path").str)
+    assert(eventually()(!Files.exists(snapshot)))
+    assertEquals(Files.readString(path), "fail-fastload")
+    val recovered = ok("txt2img", ujson.Obj("prompt" -> "recover", "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    assertEquals(recovered("structuredContent")("images").arr.size, 1)
+  }
+
+  test("cancelling a generation cleans the job-owned Fastload snapshot") {
+    val source = home.outputs(services.settings).resolve("generation-fastload-cancel.cni")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Array[Byte](6, 7, 8))
+    val tmp = home.tmpDir(services.settings)
+    def snapshots: Set[java.nio.file.Path] =
+      val s = Files.list(tmp)
+      try { import scala.jdk.CollectionConverters.*; s.iterator().asScala.filter(_.toString.endsWith(".cni")).toSet }
+      finally s.close()
+    val before = snapshots
+    val started = scala.concurrent.Promise[Unit]()
+    var id = ""
+    val remove = services.queue.addListener {
+      case event: sdfx.engine.JobEvent.Progress if event.jobId == id => started.trySuccess(()); ()
+      case _ => ()
+    }
+    try
+      val submitted = ok("txt2img_async", ujson.Obj("prompt" -> "cancel snapshot", "width" -> 64, "height" -> 64,
+        "steps" -> 100, "return_images" -> false, "extra" -> ujson.Obj("step_delay" -> "0.05"),
+        "always_on" -> ujson.Obj("controlnet_fastload" ->
+          ujson.Obj("enabled" -> true, "mode" -> "load_only", "priority" -> "loaded_first", "path" -> source.toString))))
+      id = submitted("structuredContent")("job_id").str
+      val added = snapshots -- before
+      assertEquals(added.size, 1)
+      val snapshot = added.head
+      Await.result(started.future, 45.seconds)
+      assert(Files.isRegularFile(snapshot))
+      ok("cancel_job", ujson.Obj("job_id" -> id))
+      val result = call("get_job", ujson.Obj("job_id" -> id, "wait_seconds" -> 45))
+      assertEquals(result("structuredContent")("status").str, "cancelled")
+      assert(eventually()(!Files.exists(snapshot)), "snapshot must be deleted after cancellation")
+      assert(Files.exists(source))
+    finally remove()
+  }
+
+  test("interrupted synchronous caller retains Fastload snapshot until worker finishes") {
+    val source = home.outputs(services.settings).resolve("generation-fastload-interrupt.cni")
+    Files.createDirectories(source.getParent)
+    Files.write(source, Array[Byte](9, 8, 7))
+    val tmp = home.tmpDir(services.settings)
+    def snapshots: Set[java.nio.file.Path] =
+      val s = Files.list(tmp)
+      try { import scala.jdk.CollectionConverters.*; s.iterator().asScala.filter(_.toString.endsWith(".cni")).toSet }
+      finally s.close()
+    val before = snapshots
+    val started = scala.concurrent.Promise[Unit]()
+    val remove = services.queue.addListener {
+      case _: sdfx.engine.JobEvent.Progress => started.trySuccess(()); ()
+      case _ => ()
+    }
+    val thrown = new java.util.concurrent.atomic.AtomicReference[Throwable]()
+    val caller = new Thread(() => {
+      try
+        call("txt2img", ujson.Obj("prompt" -> "interrupt snapshot", "width" -> 64, "height" -> 64,
+          "steps" -> 100, "return_images" -> false, "extra" -> ujson.Obj("step_delay" -> "0.03", "ignore_interrupt" -> "true"),
+          "always_on" -> ujson.Obj("controlnet_fastload" ->
+            ujson.Obj("enabled" -> true, "mode" -> "load_only", "priority" -> "loaded_first", "path" -> source.toString))))
+        ()
+      catch case e: Throwable => thrown.set(e)
+    })
+    caller.start()
+    try
+      Await.result(started.future, 45.seconds)
+      val added = snapshots -- before
+      assertEquals(added.size, 1)
+      val snapshot = added.head
+      caller.interrupt(); caller.join(3000)
+      assert(!caller.isAlive, "synchronous caller did not stop")
+      assert(thrown.get().isInstanceOf[InterruptedException], s"unexpected result ${thrown.get()}")
+      assert(Files.exists(snapshot), "worker can still be using the snapshot")
+      assert(eventually()( !Files.exists(snapshot) ), "snapshot must be deleted after worker completion")
+      assert(Files.exists(source))
+    finally
+      remove()
+      if caller.isAlive then { caller.interrupt(); caller.join(3000) }
   }
 
   test("CLIP Interrogator is discoverable and rejects bad input, out-of-policy files and protected sessions") {
@@ -301,6 +848,112 @@ class McpToolsSuite extends munit.FunSuite:
     assert(eventually()(!Files.list(home.root.resolve("outputs/.tmp")).toList.toString.contains("sdfx-")))
   }
 
+  test("img2img folder queues allowed inputs and records original sources in saved PNGs") {
+    val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-input-test"))
+    val first = Files.write(folder.resolve("a.png"), Base64.getDecoder.decode(pngBase64(64, 64)))
+    val second = Files.write(folder.resolve("b.png"), Base64.getDecoder.decode(pngBase64(64, 64)))
+    val requested = if System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win") then
+      folder.getParent.resolve("FOLDER-INPUT-TEST") else folder
+    val sub = ok("img2img_folder_async", ujson.Obj("prompt" -> "folder test", "image_folder" -> requested.toString,
+      "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    val id = sub("structuredContent")("job_id").str
+    val done = ok("get_job", ujson.Obj("job_id" -> id, "wait_seconds" -> 60))("structuredContent")
+    assertEquals(done("status").str, "done", done.toString)
+    val images = done("images").arr
+    assertEquals(images.size, 2)
+    val recorded = images.map { image =>
+      val png = Paths.get(image("path").str)
+      sdfx.core.infotext.Infotext.parse(PngMetadata.readParameters(png).get).fields("NUI img2img source")
+    }.toSet
+    assertEquals(recorded, Set(first.toRealPath().toString, second.toRealPath().toString))
+    val outside = Files.createTempDirectory("mcp-folder-outside-")
+    try
+      val denied = call("img2img_folder_async", ujson.Obj("prompt" -> "x", "image_folder" -> outside.toString))
+      assert(denied("isError").bool, denied.toString)
+    finally Files.delete(outside)
+  }
+
+  test("img2img folder cancellation keeps finished images and permits a later generation") {
+    val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-cancel-test"))
+    for name <- Seq("a.png", "b.png") do
+      Files.write(folder.resolve(name), Base64.getDecoder.decode(pngBase64(64, 64)))
+    val saved = scala.concurrent.Promise[Unit]()
+    val remove = services.queue.addListener {
+      case e: sdfx.engine.JobEvent.ImageSaved if services.queue.current.exists(_.id == e.jobId) => saved.trySuccess(()); ()
+      case _ => ()
+    }
+    try
+      val sub = ok("img2img_folder_async", ujson.Obj("prompt" -> "folder cancel", "image_folder" -> folder.toString,
+        "width" -> 64, "height" -> 64, "steps" -> 30, "return_images" -> false,
+        "extra" -> ujson.Obj("step_delay" -> "0.04")))
+      val id = sub("structuredContent")("job_id").str
+      Await.result(saved.future, 45.seconds)
+      ok("cancel_job", ujson.Obj("job_id" -> id))
+      val result = call("get_job", ujson.Obj("job_id" -> id, "wait_seconds" -> 45, "return_images" -> false))("structuredContent")
+      assertEquals(result("status").str, "cancelled", result.toString)
+      assertEquals(result("images").arr.size, 1, result.toString)
+      assert(Files.isRegularFile(Paths.get(result("images")(0)("path").str)))
+      ok("txt2img", ujson.Obj("prompt" -> "recovery", "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    finally remove()
+  }
+
+  test("failed folder job reports already saved images, error and original provenance") {
+    val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-failure-partial"))
+    val first = folder.resolve("a.png")
+    Files.write(first, Base64.getDecoder.decode(pngBase64(64, 64)))
+    val second = folder.resolve("b.png")
+    val pixels = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.ScrambledPng.write(pixels, second, Nil, Some("failure-test-secret"))
+    val submission = ok("img2img_folder_async", ujson.Obj("prompt" -> "partial failure", "image_folder" -> folder.toString,
+      "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    val id = submission("structuredContent")("job_id").str
+    val raw = call("get_job", ujson.Obj("job_id" -> id, "wait_seconds" -> 45, "return_images" -> false))
+    assert(raw("isError").bool, raw.toString)
+    val result = raw("structuredContent")
+    assertEquals(result("status").str, "failed")
+    assert(result("error").str.nonEmpty)
+    assertEquals(result("images").arr.size, 1, result.toString)
+    val output = Paths.get(result("images")(0)("path").str)
+    assert(Files.isRegularFile(output))
+    assertEquals(sdfx.core.infotext.Infotext.parse(PngMetadata.readParameters(output).get).fields("NUI img2img source"), first.toRealPath().toString)
+    val next = ok("txt2img", ujson.Obj("prompt" -> "recovery", "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    assertEquals(next("structuredContent")("images").arr.size, 1)
+  }
+
+  test("failed async folder does not return images saved by another queued job") {
+    val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-failure-isolation"))
+    Files.write(folder.resolve("a.png"), Base64.getDecoder.decode(pngBase64(64, 64)))
+    val pixels = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.ScrambledPng.write(pixels, folder.resolve("b.png"), Nil, Some("failure-isolation-secret"))
+    val first = ok("txt2img_async", ujson.Obj("prompt" -> "unrelated", "width" -> 64, "height" -> 64,
+      "steps" -> 30, "extra" -> ujson.Obj("step_delay" -> "0.04"), "return_images" -> false))
+    val firstId = first("structuredContent")("job_id").str
+    assert(eventually()(services.queue.current.exists(_.id == firstId)))
+    val second = ok("img2img_folder_async", ujson.Obj("prompt" -> "failure isolation", "image_folder" -> folder.toString,
+      "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    val firstResult = ok("get_job", ujson.Obj("job_id" -> firstId, "wait_seconds" -> 45, "return_images" -> false))("structuredContent")
+    val raw = call("get_job", ujson.Obj("job_id" -> second("structuredContent")("job_id").str, "wait_seconds" -> 45, "return_images" -> false))
+    assert(raw("isError").bool)
+    val secondResult = raw("structuredContent")
+    assertEquals(secondResult("status").str, "failed")
+    assertEquals(secondResult("images").arr.size, 1, secondResult.toString)
+    assert(firstResult("images")(0)("path").str != secondResult("images")(0)("path").str)
+    assertEquals(sdfx.core.infotext.Infotext.parse(PngMetadata.readParameters(Paths.get(secondResult("images")(0)("path").str)).get).fields("NUI img2img source"), folder.resolve("a.png").toRealPath().toString)
+  }
+
+  test("img2img folder MCP does not process protected pixels without a password session") {
+    val folder = Files.createDirectories(home.outputs(services.settings).resolve("folder-protected-test"))
+    val input = folder.resolve("protected.png")
+    val pixels = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.ScrambledPng.write(pixels, input, Nil, Some("mcp-folder-secret"))
+    val submitted = ok("img2img_folder_async", ujson.Obj("prompt" -> "protected input", "image_folder" -> folder.toString,
+      "width" -> 64, "height" -> 64, "steps" -> 1, "return_images" -> false))
+    val result = call("get_job", ujson.Obj("job_id" -> submitted("structuredContent")("job_id").str,
+      "wait_seconds" -> 30, "return_images" -> false))("structuredContent")
+    assertEquals(result("status").str, "failed", result.toString)
+    assertEquals(sdfx.core.png.PngMetadata.readTexts(input).get("Encrypt"), Some("pixel_shuffle_3"))
+  }
+
   test("progress notifications are emitted when a progressToken is given") {
     val rec = new Recorder
     val r = call("txt2img", ujson.Obj("prompt" -> "p", "steps" -> 5, "width" -> 64, "height" -> 64, "extra" -> ujson.Obj("step_delay" -> "0.02")),
@@ -468,6 +1121,18 @@ class McpToolsSuite extends munit.FunSuite:
       deleteTree(isolatedHome.root)
   }
 
+  test("worker VAE path stays out of MCP status and model responses") {
+    ok("set_model", ujson.Obj("name" -> "foo"))
+    val model = services.setVae(Some("vae-ft-mse"), remember = false)
+    val privatePath = model.vaePath.getOrElse(fail("fake worker did not return VAE path"))
+    try
+      for tool <- Seq("get_status", "list_models") do
+        val response = ok(tool, ujson.Obj())
+        assert(!response.toString.contains("vae_path"), s"$tool exposed the worker field")
+        assert(!response.toString.contains(privatePath.replace("\\", "\\\\")), s"$tool exposed the VAE path")
+    finally services.setVae(None, remember = false)
+  }
+
   test("structuredContent of txt2img / img2img conforms to the declared outputSchema") {
     val ts = server.handle(request("tools/list"), _ => ()).get("result")("tools").arr
     def schemaOf(n: String) = ts.find(_("name").str == n).get("outputSchema")
@@ -553,6 +1218,17 @@ class McpToolsSuite extends munit.FunSuite:
     finally
       s2.shutdown()
       deleteTree(home2.root)
+  }
+
+  test("synchronous script failure returns saved partial images and remains an error") {
+    val r = call("run_script", ujson.Obj("script_id" -> "xyz_grid",
+      "values" -> ujson.Obj("x_type" -> "Size", "x_values" -> "64x64,8192x8192"),
+      "params" -> ujson.Obj("prompt" -> "partial sync", "steps" -> 1, "width" -> 64, "height" -> 64),
+      "return_images" -> false))
+    assert(r("isError").bool, r.toString)
+    assert(textOf(r).contains("job limit exceeded"), textOf(r))
+    assertEquals(r("structuredContent")("images").arr.size, 1, r.toString)
+    assert(Files.isRegularFile(Paths.get(r("structuredContent")("images")(0)("path").str)))
   }
 
   test("run_script obeys the strict job limits (X/Y/Z Size axis, cell count)") {

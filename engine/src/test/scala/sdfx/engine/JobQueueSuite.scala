@@ -116,6 +116,64 @@ class JobQueueSuite extends munit.FunSuite:
     assertEquals(sdfx.core.png.ScrambledPng.read(output.grids.head.path, Some(password)).passwordVerified, Some(true))
   }
 
+  test("folder job preserves the captured secret and refuses protected input without it") {
+    val folder = java.nio.file.Files.createTempDirectory(home.root, "protected-folder-")
+    val input = folder.resolve("protected.png")
+    val pixels = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.ScrambledPng.write(pixels, input, Nil, Some("folder-password"))
+    val session = new sdfx.core.png.ImageScrambleSession
+    session.unlock("folder-password")
+    val params = base.copy(img2img = Some(sdfx.core.model.Img2ImgParams("")))
+    val job = Job(params).copy(img2imgFolder = Some(Img2ImgFolderSpec(folder.toString)), imageSecret = session.snapshot)
+    session.lock()
+    val result = await(queue.submit(job))
+    assertEquals(result.images.size, 1)
+    assertEquals(result.images.head.params.img2img.get.initImage, input.toRealPath().toString)
+    assertEquals(sdfx.core.png.PngMetadata.readTexts(result.images.head.path).get("Encrypt"), Some("pixel_shuffle_3"))
+    intercept[Exception] { await(queue.submit(job.copy(id = Job.newId(), imageSecret = None))) }
+    assertEquals(sdfx.core.png.PngMetadata.readTexts(input).get("Encrypt"), Some("pixel_shuffle_3"))
+  }
+
+  test("folder script and AlwaysOn share limits and record each grid source") {
+    val folder = java.nio.file.Files.createTempDirectory(home.root, "script-folder-")
+    val image = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    val paths = Seq("a.png", "b.png").map { name =>
+      val path = folder.resolve(name)
+      sdfx.core.png.PngMetadata.write(image, path, Nil)
+      path.toRealPath().toString
+    }
+    val params = base.copy(img2img = Some(sdfx.core.model.Img2ImgParams("")))
+    val job = Job(Job.newId(), params,
+      Some(new RepeatScript -> Values(Map("n" -> "2", "grid" -> "true"))),
+      Seq(new MarkerAlwaysOn -> Values(Map("enabled" -> "true", "value" -> "folder-marker"))),
+      img2imgFolder = Some(Img2ImgFolderSpec(folder.toString)))
+    val output = await(queue.submit(job))
+    assertEquals(output.images.size, 4)
+    assertEquals(output.grids.size, 2)
+    assertEquals(output.images.map(_.params.img2img.get.initImage), paths.flatMap(p => Seq(p, p)))
+    assertEquals(output.grids.map(_.params.img2img.get.initImage), paths)
+    assert(output.images.forall(i => Infotext.parse(i.infotext).get("Marker").contains("folder-marker")))
+    output.grids.zip(paths).foreach { (grid, source) =>
+      assertEquals(Infotext.parse(sdfx.core.png.PngMetadata.readParameters(grid.path).get).get("NUI img2img source"), Some(source))
+      assertEquals(sdfx.core.png.PngMetadata.readTexts(grid.path).get("NUI img2img source"), Some(source))
+    }
+    intercept[JobLimitExceeded] { await(queue.submit(job.copy(id = Job.newId(), limits = JobLimits(maxGenerations = 3)))) }
+  }
+
+  test("folder numbered automatic grid keeps source in a standalone PNG text chunk") {
+    val folder = java.nio.file.Files.createTempDirectory(home.root, "grid-folder-")
+    val input = folder.resolve("input.png")
+    val pixels = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    sdfx.core.png.PngMetadata.write(pixels, input, Nil)
+    val params = base.copy(batchSize = 2, img2img = Some(sdfx.core.model.Img2ImgParams("")),
+      extra = Map("Grid image numbers" -> "True"))
+    val result = await(queue.submit(Job(params).copy(img2imgFolder = Some(Img2ImgFolderSpec(folder.toString)))))
+    assertEquals(result.grids.size, 1)
+    val grid = result.grids.head
+    assertEquals(grid.params.img2img.get.initImage, input.toRealPath().toString)
+    assertEquals(sdfx.core.png.PngMetadata.readTexts(grid.path).get("NUI img2img source"), Some(input.toRealPath().toString))
+  }
+
   test("script context reads scrambled generated output before saving a derived image") {
     val session = new sdfx.core.png.ImageScrambleSession
     session.unlock("script secret")

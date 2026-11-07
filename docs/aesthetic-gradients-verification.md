@@ -1,5 +1,62 @@
 # Aesthetic Gradients verification (#2)
 
+## 研究側の公開ファイルと原拡張の画面（2026-11-03 追加）
+
+対象拡張の固定 revision `2624e5dd4902cb731287b426ad483e741ece85bb` の [ss.png](https://github.com/AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients/blob/2624e5dd4902cb731287b426ad483e741ece85bb/ss.png) を一時取得し目視した（SHA-256 `4bf96115fd951f6108f9f2439b876358c7f5583b92b525e4956725bab85d279f`）。画面には weight 0.9、steps 20、learning rate 0.0001、slerp angle 0.1、補間・negative の選択、embedding 名の選択が見える。NUI の該当設定と初期値は一致する。この画面だけでは演算や PNG パラメータの形式は確認できない。原拡張のソースはコピーしていない。
+
+原拡張が参照する [研究用リポジトリの固定 revision](https://github.com/vicgalle/stable-diffusion-aesthetic-gradients/tree/30ca347d39eb7c92dd651a513cf4f795ed995708) の公開 `.pt` 8 件を `outputs/aesthetic2-source/` に一時取得し、`torch.load(..., weights_only=True, map_location="cpu")` と製品の `load_embedding` で CPU 検査した。`aivazovsky`, `cloudcore`, `flower_plant`, `gloomcore`, `glowwave` は float16 の `(1, 768)`、`fantasy` は float32 の `(1, 768)`、`laion_7plus`, `sac_8plus` は float32 の `(768,)` だった。研究 README は `(1, 768)` と説明するが、後者 2 件は実物が一次元だった。NUI は全 8 件を有限な float32 の `(768,)` として読み、ノルムは約 1 だった。対象拡張が作成したファイルではなく、生成結果や PNG 復元の互換性を立証するものではない。
+
+| ファイル | SHA-256 |
+| --- | --- |
+| aivazovsky.pt | `56b94ef535483b6cf3cfcb711b74fe6521b3c1fb48455a1f603e0401aa1e404b` |
+| cloudcore.pt | `e43033d6b8b5d3544e61a1d2d8efd21bfedddd2fbed1deef4891d1be4a22708e` |
+| fantasy.pt | `b23246edcbacc7db39032ca0c97bffb54becbc0dc456f7d14081bec50bb69de6` |
+| flower_plant.pt | `2b7fe366b35f1c4b83349ef9414ea565d725fd0ad219a9750e4113a88d91ef7f` |
+| gloomcore.pt | `c36bd2b13a2cd1ddb5251dce812e693f0d635d86b141508c4f91148ad5120af5` |
+| glowwave.pt | `99065e72453bf08440912114cf429c26312c730b41f3c42eda053656736a738e` |
+| laion_7plus.pt | `0ef2afc5fe81641ff67b7872d8d2c4c00d1d9100a5ebb887c6931f17843d7d56` |
+| sac_8plus.pt | `d3e267a606c90742c0b47c0010365c257240020cd73c1419201a30ba70d4a678` |
+
+研究リポジトリの [LICENSE](https://github.com/vicgalle/stable-diffusion-aesthetic-gradients/blob/30ca347d39eb7c92dd651a513cf4f795ed995708/LICENSE) は CreativeML Open RAIL-M だが、個々の embedding と生成元データの権利条件を今回確認できていない。ファイルは調査用であり Git や配布物に含めない。対象拡張の生成 PNG／embedding 自体の互換、研究側 embedding を使う生成と元拡張の結果比較は引き続き未確認。#2 は open のまま。
+
+### 原拡張の実物候補（追加調査）
+
+[上流 issue #18](https://github.com/AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients/issues/18) の報告者は SD1.5 の動作例として画像を掲示している。添付 `207487537-8de045dc-70e3-4c96-8576-b26b04927854.png` を一時取得したところ、SHA-256 は `73a46f46b65e45d4e933a85fb03913815f4171dbb7c746e56a09e5b7e7cbad87`、3072×2304、PNG 情報に `parameters` はなかった。表示例としては参考になるが、元拡張の生成パラメータ互換を検査できる fixture ではない。もう一つの `207481485-3b6065f7-6157-40dd-b76f-1c3f4a6e3f94.png` は初回取得が応答しなかったが、再試行で取得できた（SHA-256 `d21d63b771084e78a7d78882a64ff82fdb8580d5ffdb190203e77c9e92c361f8`、1536×1280）。こちらにも `parameters` はなかった。添付画像は個別の許諾条件が確認できないため Git や配布物に含めない。
+
+### 利用者が報告した生成設定の読込み
+
+2022 年の [Reddit 投稿](https://www.reddit.com/r/StableDiffusion/comments/yzq43d/) で、投稿者は A1111 を使ったと述べ、Aesthetic LR、weight、steps、embedding、slerp、空の text、negative、angle を含む設定テキストを提示している。これは利用者の報告であり、出力 PNG の bytes や、その時の拡張 revision を確認したものではない。投稿の個人に関する prompt は使用せず、設定部分を小さな合成 PNG に入れて MCP `InspectGenerationMetadata` へ渡す回帰テストを追加した。空の text を含む各値が型付き candidate に復元され、対象の各キーが未適用欄に残らないことを確認。`mcp/testOnly *InspectGenerationMetadataSuite` は 33/33、exit 0。元の PNG や embedding の内容、画像の再現性の証明ではない。
+
+### 研究 embedding の実生成（2026-11-03）
+
+`aivazovsky.pt` を実行ごとの許可済み出力フォルダに複製し SHA-256 一致を確認して、公式 MCP SDK の stdio から実 SD1.5 `animekawa_v10` と SDXL `waiIllustriousSDXL_v170` をそれぞれ実行した。512×512、seed 173、Euler 12 steps、weight 0.3・aesthetic steps 5。両方で基準画像と適用画像が異なり、PNG の embedding hash が原本と一致し、その設定からの再生成は RGB 一致した。元と適用後の両画像を目視し、SD1.5・SDXL とも青いティーポットと背景の違いを確認した。結果は `outputs/aesthetic2-real-{sd15,sdxl}/receipt.json`、実行用スクリプトは `scripts/dev/check_aesthetic_external_fixture.py`。fixture は取得元と同一の hash で利用し、配布しない。
+
+初回は fixture が MCP の許可フォルダ外にあったため安全に拒否された。上記成功は許可フォルダ内へ複製した後の結果で、外部パスを自動的に許可したわけではない。対象拡張からの実物とその生成結果との比較は未実施であり、研究側ファイルを NUI で利用できることの検証に限る。使用 JAR SHA-256 は `1409bf5bd330615d6e323770adf2ec99175e703395bc55f16ab06e83ab8d67c2`。
+
+## 元拡張の実物との互換性について
+
+2026-11-03 に GitHub の tree メタデータを確認したところ、対象拡張の固定 revision `2624e5dd4902cb731287b426ad483e741ece85bb` には `.pt` ファイルがなく、PNG は `ss.png` のみだった。公開 release もない。したがって、この調査では拡張が出力した embedding や生成パラメータ入り PNG の正規 fixture を確保できていない。
+
+拡張 README が参照する研究用リポジトリ [vicgalle/stable-diffusion-aesthetic-gradients](https://github.com/vicgalle/stable-diffusion-aesthetic-gradients/tree/30ca347d39eb7c92dd651a513cf4f795ed995708) には `.pt` が8件あり、README は埋め込みの形状を `1×768` と説明している。ただし、これらが対象の A1111 拡張から出力されたファイルだという証拠はなく、個々の埋め込みや元データの利用条件も今回の資料からは確定していない。この初期調査ではダウンロードしていなかった。その後の一時取得と NUI による検証は上記の追加節に記す。元拡張のコードは読んでいない。
+
+> 現在の状態: GUI・MCP で作成でき、実 GUI・配布版 MCP の SD1.5／SDXL、配布版 dry-run の Windows chooser を検証済み。配布版 GUI でも chooser から両モデル生成まで一続きで確認した。元拡張の PNG／embedding との互換性などは未検証で、issue #2 は open。操作方法は [日本語ガイド](aesthetic-embeddings.md) を参照。以下の追試は時系列の記録で、各段階での未検証事項は後の追試で解消したものを含む。
+
+> 2026-11-03 の初期状態: SD1.5 と SDXL の実モデルを公式 MCP SDK から使い、作成・一覧・適用・既定フォルダからの PNG 再生成を確認。当時、GUI の実モデル、別フォルダ・同名ファイル、配布版の検証は未完了だった。
+
+> 追加の作業ツリー検証: embedding の内容を SHA-256 で識別する復元、登録フォルダの別プロセス間ロック、出力先変更後の MCP 検査、未発見・曖昧な場合の拒否は、CPU テストと fake worker を使う実画面テストで確認した。Python 25 件、Scala core 4 件・plugin 6 件・engine 40 件・MCP 75 件が成功（`outputs/codex-aesthetic-provenance-final3.log`、`outputs/codex-aesthetic-replay-review-fixes.log`）。これらの変更後の実モデルと配布版は未検証。旧 PNG は hash がないため、名前が一意でも元ファイルの内容は保証できない。
+
+> 同日の追試: hash 対応後の JAR SHA-256 `0ebd75e16d0335ba93aef48ed89637aa34e88379c2b64385ab955d66f31d4946` を使い、公式 MCP SDK の stdio 経由で実 SD1.5・SDXL の embedding 作成、生成、PNG 内の hash とファイル内容の照合、PNG からの再生成を確認した。両モデルとも画像を目視し、再生成の RGB は一致した（`outputs/aesthetic-hash-sd15/receipt.json`、`outputs/aesthetic-hash-sdxl/receipt.json`）。これはソース作業ツリーの JAR による確認で、Windows ZIP 展開版や GUI の実モデル確認ではない。
+
+> 配布候補 ZIP の追試: SHA-256 `65129737d33a63f117d431f14240eae701aee7013bcfceaa2044bc812eae6fbb` の ZIP を展開し、同梱 JAR が上記と一致し、配布物 338 ファイルの照合で欠落・差分がないことを確認した。展開した `SDNUI.exe` と同梱 JVM を公式 MCP SDK から使い、SD1.5・SDXL で作成・生成・hash 照合・RGB 一致の再生成を確認、画像を目視した（`outputs/aesthetic-package-sd15/receipt.json`、`outputs/aesthetic-package-sdxl/receipt.json`）。エンジンの Python は既存の smoke venv を使った。GUI からの実モデル操作は未検証。
+
+> GUI 追試: 実 MainWindow から SD1.5・SDXL の参照画像による作成・適用・生成を実行し、PNG の hash と embedding の一致、適用前後の画像の変化を確認した（`outputs/aesthetic-real-gui-sd15/receipt.json`、`outputs/aesthetic-real-gui-sdxl/receipt.json`）。両モデルの画像を目視した。参照画像は実画面のリストへ投入し、OS のファイル選択ダイアログは手操作していない。sbt から起動した MainWindow の検証であり、配布 EXE の GUI 経路は未検証。
+
+> 全体回帰: JDK 21 の `sbt test` は exit 0（集計は 183、38、335、42、250 件、うち1件 skip；`outputs/aesthetic-full-scala.log`）。Torch 環境の Python 全体は CPU 指定で 2,962 pass・2 skip、exit 0（`outputs/aesthetic-full-python-cpu-correct.log`）。初回の 33 件失敗は、Windows で空の `CUDA_VISIBLE_DEVICES` が GPU を隠さず tiny CPU モデルと不一致になった31件と、子プロセスに worktree の `PYTHONPATH` がなかった2件。`CUDA_VISIBLE_DEVICES=-1` とこの worktree の `python` を `PYTHONPATH` に設定して対象4ファイル133件も再実行し、すべて成功した。
+
+## 以前の実装と検証の記録
+
+以下は上記の追加実装より前の記録です。当時の未対応事項や未検証事項を現在の状態と混同しないでください。
+
 Source: AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients `2624e5dd4902cb731287b426ad483e741ece85bb` (ledger index 8, target `aesthetic_gradients`). The repository has no licence file (GitHub reports none), so it is recorded in `PINNED_UNLICENSED` (`scripts/third_party.py`) with no file under `licenses/`. Only its README was read; that README is a stub that points to the original method, "Personalizing Text-to-Image Generation via Aesthetic Gradients" (Gallego, 2022). The feature is re-implemented from that documented method (`python/sdfx/aesthetic_gradients.py`, `plugins/src/main/scala/sdfx/plugins/AestheticGradientsPlugin.scala`); no upstream code was read or copied.
 
 ## Behaviour
@@ -75,3 +132,17 @@ Success (the GPU was shared with a 18 GB job of another user, so `model_offload`
 - The GUI form (the JavaFX controls render from the plugin's control list like every other plugin; not opened here).
 - Compatibility with PNGs and `.pt` files written by the original extension: the key names and the file layout follow the documented method and the original embeddings' (1, 768) shape, not a byte-level check.
 - SD 2.x (rejected by design), negpip and Embedding Merge text paths (bypassed), ADetailer passes (skipped), Characteristic Guidance / Neutral Prompt style multi-branch encoders.
+
+## Windows packaged GUI chooser check (2026-11-03)
+
+A local test ZIP was built from main product jar SHA-256 `36dcbd696365bcbf7bd9d56359948f78bd236d824a1d382c0844632e46cc6271` (main `0f9ff4a`; `7cc6322` changes handoff only). ZIP SHA-256: `c65d1f924ec7b54f57037e31c7868bcfd3672c45d63980051dd5e1fa69cc8241`. The extracted `SDNUI.exe` was launched with an isolated home in dry-run mode.
+
+Using computer-use clicks and text input in the actual Windows file chooser, two synthetic PNGs were added in separate operations; cancelling a subsequent chooser preserved both. In a later single chooser operation, two additional PNG filenames were entered together in quotes and opened; the GUI accessibility tree showed all four paths. This checks chooser-to-list wiring, including multiple files in one operation and cancellation. It does not check physical Ctrl-click, real embedding creation, a model, or GPU generation through this packaged GUI. The earlier historical unverified notes above refer to their own original test run. Original extension `.pt` and PNG compatibility remains unverified without an authorized authentic fixture.
+
+## Packaged GUI chooser to real generation (2026-11-03)
+
+The same extracted test ZIP and product jar identified in the preceding section were launched with an isolated home, external smoke Python, and the extracted package's Python source on `PYTHONPATH`; RTX 3090, torch 2.7.1+cu128, diffusers 0.33.1, fp16 and model offload. Using computer-use simulated pointer clicks, text entry and Return, the Windows chooser selected the synthetic red-circle PNG `reference-one.png`; the GUI Create action produced `package-chooser-style.pt` from one image, and Use in generation was clicked. Its SHA-256 was `f2fe030a612acc989f5a267b8c708fee6f4c2abf71d914328395d2906e7c0a86`. These are automated desktop interactions, not physical mouse/keyboard input.
+
+With prompt `a blue ceramic teapot on a wooden table, soft daylight`, seed 173, 12 DPM++ 2M Karras steps, CFG 7, default aesthetic weight 0.9, aesthetic steps 20 and LR 0.0001, both generations completed. `animekawa_v10` (SD1.5, 512x512) PNG SHA-256: `a03e1ae604804217219232939f5c0a7b7ab7d039ee5ce0204dbfd9cfc7f299e2`; `waiIllustriousSDXL_v170` (768x768) PNG SHA-256: `706a9a8284dc90d0c35d10812d512b0da1c7098ac867e37c5f320c882431caee`. Both PNG metadata records contain the actual embedding SHA above. Images were visually inspected: SD1.5 showed an industrial interior rather than the requested teapot; SDXL showed teapots on a vivid red table, with strong colour shifts. No baseline image was generated, so this is an end-to-end wiring smoke, not a controlled effect or quality comparison.
+
+The initial setup omitted the isolated home's `python` working directory, causing engine startup to fail; creating that directory allowed the engine to start. The checkpoint list remained empty after refresh in that initial session and appeared after restarting the app. The cause of that empty list was not established. The shared GPU lock was held for the test and released after app shutdown. Original extension file compatibility remains unverified.

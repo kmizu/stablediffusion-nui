@@ -31,6 +31,53 @@ object PluginForm:
           tp.getStyleClass.add("plugin-subsection")
           v.getChildren.add(tp)
     }
+    form.plugin match
+      case p: sdfx.plugins.CreaPromptPlugin =>
+        // A Script form is mounted only while that script is selected.
+        Option(v.lookup("#plugin-creaprompt-preset")).foreach { n =>
+          val combo = n.asInstanceOf[ComboBox[String]]
+          combo.setOnShowing { _ =>
+            p.presetNames.filterNot(combo.getItems.contains).foreach(combo.getItems.add)
+          }
+        }
+        val active = new Label("CreaPrompt: Active")
+        active.setId("creaprompt-active")
+        val preview = new Label()
+        preview.setId("creaprompt-preview")
+        preview.setWrapText(true)
+        def updatePreview(): Unit =
+          try
+            val value = p.manualPreview(form.values)
+            preview.setText(if value.isEmpty then "Prompt preview: (no manual picks)" else "Prompt preview: " + value)
+          catch case e: IllegalArgumentException => preview.setText("Prompt preview: " + e.getMessage)
+        form.props.values.foreach(_.addListener((_, _, _) => updatePreview()))
+        updatePreview()
+        val name = new TextField()
+        name.setId("creaprompt-preset-name")
+        name.setPromptText("Preset name")
+        val save = new Button("Save category preset")
+        save.setId("creaprompt-save-preset")
+        val status = new Label()
+        status.setId("creaprompt-preset-status")
+        status.setWrapText(true)
+        save.setOnAction { _ =>
+          try
+            val saved = p.savePreset(form.values, name.getText)
+            val preset = v.lookup("#plugin-creaprompt-preset").asInstanceOf[ComboBox[String]]
+            val savedName = saved.getFileName.toString.stripSuffix(".config")
+            if preset != null then
+              if !preset.getItems.contains(savedName) then preset.getItems.add(savedName)
+              preset.setValue(savedName)
+            status.setText("Saved preset " + savedName)
+          catch case scala.util.control.NonFatal(e) => status.setText("Could not save preset: " + Option(e.getMessage).getOrElse(e.getClass.getSimpleName))
+        }
+        // Keep the summary and save action visible above the long per-category controls.
+        val insertion = if form.plugin.description.nonEmpty then 1 else 0
+        v.getChildren.add(insertion, active)
+        v.getChildren.add(insertion + 1, preview)
+        v.getChildren.add(insertion + 2, new javafx.scene.layout.HBox(6, name, save))
+        v.getChildren.add(insertion + 3, status)
+      case _ => ()
     if form.plugin.promptActions.nonEmpty then
       val actions = new javafx.scene.layout.FlowPane(8, 8)
       form.plugin.promptActions.foreach { action =>
@@ -92,9 +139,18 @@ object PluginForm:
 
   private def control(ctx: UiContext, c: Control, widget: Widget, p: StringProperty, pluginId: String): Node = (c, widget) match
     case (s: Control.Slider, _) =>
-      W.doubleSlider(doubleProp(p, s.defaultValue), s.min, s.max, s.step)
+      val row = W.doubleSlider(doubleProp(p, s.defaultValue), s.min, s.max, s.step)
+      row.getChildren.forEach { case spinner: Spinner[?] => W.setNumericOwner(spinner, p); case _ => () }
+      row
     case (i: Control.IntField, _) =>
-      if i.max - i.min <= 4096 then W.intSlider(intProp(p, i.defaultValue), i.min, i.max) else W.intSpinner(intProp(p, i.defaultValue), i.min, i.max)
+      if i.max - i.min <= 4096 then
+        val row = W.intSlider(intProp(p, i.defaultValue), i.min, i.max)
+        row.getChildren.forEach { case spinner: Spinner[?] => W.setNumericOwner(spinner, p); case _ => () }
+        row
+      else
+        val spinner = W.intSpinner(intProp(p, i.defaultValue), i.min, i.max)
+        W.setNumericOwner(spinner, p)
+        spinner
     case (ch: Control.Choice, _) if ch.previewResources.nonEmpty =>
       PreviewChoice.render(ch, p)
     case (ch: Control.Choice, _) =>

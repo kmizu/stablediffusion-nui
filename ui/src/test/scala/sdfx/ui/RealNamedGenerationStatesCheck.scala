@@ -10,11 +10,14 @@ import javafx.stage.{Stage, Window}
 import javax.imageio.ImageIO
 import scala.jdk.CollectionConverters.*
 import sdfx.core.config.{AppHome, Settings}
-import sdfx.core.presets.{PresetJson, PresetLimits}
+import sdfx.core.presets.{FieldKey, PresetAtom, PresetError, PresetJson, PresetLimits, PresetRecord}
 import sdfx.core.protocol.ModelEntry
+import sdfx.core.plugins.api.ChoiceSource
 import sdfx.engine.{AppServices, CatalogSnapshot}
 import sdfx.plugins.StandardPlugins
 import sdfx.ui.vm.{Mode, UiState}
+import sdfx.ui.view.W
+import sdfx.ui.presets.GenerationHistoryStore
 
 /** Root-run offline acceptance of the real MainWindow and named-state buttons/dialogs.
   * No engine startup, inference, model download or clipboard access. Arg: output directory.
@@ -77,6 +80,7 @@ object RealNamedGenerationStatesCheck:
         val created = new MainWindow(new Stage(), services, UiState(), CliOptions(), _ => ())
         created.show()
         created.catalogVM.snapshot.set(CatalogSnapshot(checkpoints = Seq(ModelEntry("fixture-model", "offline-model", "sd15"))))
+        created.catalogVM.choices(ChoiceSource.Upscalers).setAll("R-ESRGAN 4x+", "Lanczos")
         created.select(mode)
         created.openGenerationStates(mode)
         created
@@ -104,7 +108,7 @@ object RealNamedGenerationStatesCheck:
         !node[Button]("generation-states-save").isDisabled &&
           node[ListView[String]]("generation-states-list").getItems.contains(name)
       }}
-    def confirmButton(id: String): Unit =
+    def answerButton(id: String, answer: ButtonType): Unit =
       val task = new FutureTask[Unit](new Callable[Unit]:
         def call(): Unit = node[Button](id).fire())
       Platform.runLater(task)
@@ -116,9 +120,16 @@ object RealNamedGenerationStatesCheck:
         val pane = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene))
           .map(_.getRoot).collectFirst { case dialog: DialogPane => dialog }
           .getOrElse(sys.error("Expected real confirmation dialog; status: " + node[TextArea]("generation-states-status").getText))
-        pane.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+        if id == "generation-history-clear" then
+          require(Option(pane.getContentText).exists(_.contains("earlier version")))
+          require(ImageIO.write(SwingFXUtils.fromFXImage(pane.getScene.snapshot(null), null), "png", output.resolve("history-clear-confirmation.png").toFile))
+        if id == "generation-history-export" then
+          require(Option(pane.getContentText).exists(text => text.contains("private data") && text.contains("not included")))
+          require(ImageIO.write(SwingFXUtils.fromFXImage(pane.getScene.snapshot(null), null), "png", output.resolve("state-original-export-confirmation.png").toFile))
+        pane.lookupButton(answer).asInstanceOf[Button].fire()
       }
       task.get(30, TimeUnit.SECONDS)
+    def confirmButton(id: String): Unit = answerButton(id, ButtonType.OK)
 
     try
       open()
@@ -175,6 +186,114 @@ object RealNamedGenerationStatesCheck:
       }
       screenshot("named-states-missing-model")
       checked("missing checkpoint visibly blocks Restore without partial form mutation")
+      // A single field must remain usable even when another saved resource is missing.
+      fx {
+        val picker = node[ComboBox[String]]("generation-states-field")
+        require(picker.getItems.contains("generation.prompt"))
+        picker.setValue("generation.prompt")
+        val scene = window.stage.getScene
+        val height = scene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]]
+        val steps = scene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]]
+        height.getEditor.setText("1024")
+        steps.getEditor.setText("invalid draft")
+      }
+      fx {
+        node[ComboBox[String]]("generation-states-field").setValue("model.checkpoint")
+        node[Button]("generation-states-restore-field").fire()
+        require(node[TextArea]("generation-states-status").getText.contains("model.checkpoint"))
+        require(window.stage.getScene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "1024")
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+        node[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      screenshot("named-states-single-field")
+      answerButton("generation-states-restore-field", ButtonType.CANCEL)
+      fx {
+        require(window.vms(mode).prompt.get == "must remain untouched")
+        require(window.stage.getScene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "1024")
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+      }
+      confirmButton("generation-states-restore-field")
+      fx {
+        require(window.vms(mode).prompt.get == "named state native roundtrip 日本語")
+        require(window.vms(mode).width.get == 896, "single-field restore changed another field")
+        require(window.vms(mode).height.get == 512, "single-field restore committed an unrelated numeric draft")
+        val scene = window.stage.getScene
+        require(scene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "1024")
+        require(scene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+      }
+      checked("single-field Restore ignores unrelated missing checkpoint and preserves other settings")
+      fx {
+        window.vms(mode).prompt.set("category draft test")
+        Seq("sampling", "model", "controlnet", "scripts", "other").foreach(c =>
+          node[CheckBox]("generation-states-cat-" + c).setSelected(false))
+      }
+      confirmButton("generation-states-restore")
+      fx {
+        require(window.vms(mode).prompt.get == "named state native roundtrip 日本語")
+        require(window.stage.getScene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "1024")
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+        Seq("sampling", "model", "controlnet", "scripts", "other").foreach(c =>
+          node[CheckBox]("generation-states-cat-" + c).setSelected(true))
+      }
+      checked("category Restore preserves drafts outside the selected categories")
+      fx { node[ComboBox[String]]("generation-states-field").setValue("generation.height") }
+      confirmButton("generation-states-restore-field")
+      fx {
+        val height = window.stage.getScene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]]
+        require(window.vms(mode).height.get == 512 && height.getEditor.getText == "512",
+          "restoring an unchanged numeric field must replace its selected draft")
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+      }
+      checked("single-field Restore replaces the selected numeric draft without touching other drafts")
+      fx {
+        window.panels(mode).sections(s"${mode.key}.plugin.freeu").setExpanded(true)
+        val row = window.panels(mode).content.lookup("#plugin-freeu-b1")
+        require(row != null, "FreeU input missing")
+        val spinner = row.lookup(".spinner").asInstanceOf[Spinner[java.lang.Double]]
+        require(spinner != null, "FreeU numeric editor missing")
+        spinner.getEditor.setText("1.8")
+        node[ComboBox[String]]("generation-states-field").setValue("plugin.freeu.b1")
+      }
+      confirmButton("generation-states-restore-field")
+      fx {
+        val spinner = window.panels(mode).content.lookup("#plugin-freeu-b1").lookup(".spinner").asInstanceOf[Spinner[java.lang.Double]]
+        require(spinner.getEditor.getText.toDouble == 1.37, s"selected plugin draft did not reset: text=${spinner.getEditor.getText}, value=${spinner.getValue}, owner=${W.numericOwner(spinner)}, prop=${window.plugins(mode).form("freeu").get.prop("b1").get.get}, status=${node[TextArea]("generation-states-status").getText}")
+        require(window.plugins(mode).form("freeu").get.prop("b1").get.get.toDouble == 1.37)
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "invalid draft")
+        val clip = window.stage.getScene.getRoot.lookupAll(".spinner").asScala.collectFirst {
+          case s: Spinner[?] if W.numericOwner(s).exists(_ eq window.model.clipSkip) => s
+        }.getOrElse(sys.error("shared clip-skip spinner missing"))
+        clip.getEditor.setText("3")
+        node[ComboBox[String]]("generation-states-field").setValue("model.clipSkip")
+      }
+      confirmButton("generation-states-restore-field")
+      fx {
+        val clip = window.stage.getScene.getRoot.lookupAll(".spinner").asScala.collectFirst {
+          case s: Spinner[?] if W.numericOwner(s).exists(_ eq window.model.clipSkip) => s
+        }.get
+        require(window.model.clipSkip.get == 2 && clip.getEditor.getText == "2", "shared clip skip draft did not reset")
+      }
+      checked("single-field Restore synchronizes selected plugin and shared numeric drafts")
+      var detachedScriptSpinner: Spinner[Integer] = null
+      fx {
+        window.plugins(mode).selectedScript.set("scramble_prompts")
+        val row = window.panels(mode).content.lookup("#plugin-scramble_prompts-count")
+        require(row != null, "script numeric control missing")
+        detachedScriptSpinner = row.lookup(".spinner").asInstanceOf[Spinner[Integer]]
+        detachedScriptSpinner.getEditor.setText("9")
+        window.plugins(mode).selectedScript.set("")
+        node[ComboBox[String]]("generation-states-field").setValue("plugin.scramble_prompts.count")
+      }
+      confirmButton("generation-states-restore-field")
+      fx { require(detachedScriptSpinner.getEditor.getText == "8", "detached script draft did not reset") }
+      checked("single-field Restore synchronizes a detached script editor")
+      fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(1)
+        require(node[ComboBox[String]]("generation-states-field").getValue == null,
+          "field selection from the previous record remains on an empty history")
+        require(node[Button]("generation-states-restore-field").isDisabled)
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(0)
+      }
       close()
       open()
       select("native roundtrip")
@@ -197,6 +316,308 @@ object RealNamedGenerationStatesCheck:
       require(deleted.collections.flatMap(_.presets).isEmpty)
       noWork()
       checked("actual Delete confirmation removes the state from visible list and disk")
+      fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        node[TextField]("generation-states-name").setText("saved without generation")
+        window.vms(mode).prompt.set("current favourite prompt")
+      }
+      eventually("favourite capture ready") { fx(!node[Button]("generation-favourites-capture").isDisabled) }
+      val editor = fx(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor)
+      val oldDraft = fx(editor.getText)
+      val heightEditor = fx(window.stage.getScene.lookup("#generation-height-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor)
+      val oldHeight = fx(window.vms(mode).height.get)
+      val oldHeightDraft = fx(heightEditor.getText)
+      fx { heightEditor.setText("768"); editor.setText("invalid draft"); node[Button]("generation-favourites-capture").fire() }
+      fx {
+        require(node[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty)
+        require(node[TextArea]("generation-states-status").getText.nonEmpty)
+        require(window.vms(mode).height.get == oldHeight, "invalid numeric draft committed another editor")
+        heightEditor.setText(oldHeightDraft)
+        editor.setText(oldDraft)
+        node[Button]("generation-favourites-capture").fire()
+        window.openGenerationStates(Mode.Txt2Img)
+        window.openGenerationStates(mode)
+      }
+      eventually("current favourite saved") { fx {
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.name == "saved without generation")
+      }}
+      val historyFile = home.configDir.resolve("generation-history/library-v1.json")
+      val captured = PresetJson.readNative(Files.readAllBytes(historyFile), PresetLimits(maxCollections = 6)).toOption.get
+      require(captured.collections.find(_.id == "favourites-img2img").exists(_.presets.exists(_.name == "saved without generation")))
+      require(!captured.collections.find(_.id == "favourites-txt2img").exists(_.presets.exists(_.name == "saved without generation")))
+      noWork()
+      fx {
+        require(node[ListView[PresetRecord]]("generation-history-list").getItems.isEmpty)
+        node[ListView[PresetRecord]]("generation-favourites-list").getSelectionModel.clearAndSelect(0)
+        window.vms(mode).prompt.set("changed after favourite save")
+        node[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmButton("generation-states-restore-field")
+      fx { require(window.vms(mode).prompt.get == "current favourite prompt") }
+      screenshot("favourite-current-saved")
+      fx {
+        node[TextField]("generation-states-name").setText("saved without generation")
+        editor.setText("22")
+        node[Button]("generation-favourites-capture").fire()
+      }
+      eventually("duplicate favourite rejected") { fx {
+        node[TextArea]("generation-states-status").getText.contains("already has that name") &&
+          node[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 1
+      }}
+      fx { require(window.vms(mode).steps.get == 22, "valid numeric draft was not committed before duplicate save failure") }
+      confirmButton("generation-favourites-delete")
+      eventually("captured favourite deleted") { fx(node[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty) }
+      noWork()
+      checked("save current settings directly to favourites without generation and restore")
+      val fixtureHistory = new GenerationHistoryStore(home.configDir.resolve("generation-history"), 50, thunk => thunk())
+      def historyRecord(prompt: String): Unit =
+        val latch = new CountDownLatch(1)
+        var result: Either[PresetError, Option[PresetRecord]] = null
+        fixtureHistory.record(mode, Map(FieldKey(Vector("generation", "prompt")) -> PresetAtom.Text(prompt)), r => {
+          result = r; latch.countDown()
+        })
+        require(latch.await(20, TimeUnit.SECONDS) && result.isRight && result.toOption.get.nonEmpty)
+      historyRecord("first favourite")
+      historyRecord("second favourite")
+      fixtureHistory.close()
+      fx { window.openGenerationStates(mode); node[TabPane]("generation-states-tabs").getSelectionModel.select(1) }
+      eventually("two history entries") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 2) }
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-history-list")
+        list.getSelectionModel.clearAndSelect(0)
+        window.openGenerationStates(Mode.Txt2Img)
+        require(list.getItems.isEmpty && list.getSelectionModel.getSelectedItems.isEmpty, "old mode history remains actionable")
+        require(node[Button]("generation-history-delete").isDisabled, "history actions active while loading")
+        window.openGenerationStates(mode)
+      }
+      eventually("history reload after mode switch") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 2) }
+      checked("mode switch clears old history before asynchronous reload")
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-history-list")
+        list.getSelectionModel.clearAndSelect(0)
+        node[TextField]("generation-history-search").setText("FIRST")
+        require(list.getItems.size == 1 && list.getItems.get(0).fields.values.exists(_ == PresetAtom.Text("first favourite")))
+        require(list.getSelectionModel.getSelectedItems.isEmpty, "filtered-out selection must not remain actionable")
+      }
+      screenshot("named-states-history-search")
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-history-list")
+        node[TextField]("generation-history-search").clear()
+        require(list.getItems.size == 2)
+      }
+      checked("history search filters prompt and clears hidden selection")
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-history-list")
+        list.getSelectionModel.clearAndSelect(0); list.getSelectionModel.select(1)
+        node[Button]("generation-history-favourite").fire()
+      }
+      eventually("favourites stored") { fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 2
+      }}
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-favourites-list")
+        list.getSelectionModel.clearAndSelect(0)
+        node[TextField]("generation-favourites-search").setText("FIRST, favourite")
+        require(list.getItems.size == 1 && list.getSelectionModel.getSelectedItems.isEmpty)
+        node[TextField]("generation-favourites-search").clear()
+        require(list.getItems.size == 2)
+      }
+      checked("favourites search requires all terms and clears hidden selection")
+      fx { node[ListView[PresetRecord]]("generation-favourites-list").getSelectionModel.clearAndSelect(0) }
+      val renameTask = new FutureTask[Unit](new Callable[Unit]:
+        def call(): Unit = node[Button]("generation-favourites-rename").fire())
+      Platform.runLater(renameTask)
+      eventually("rename dialog") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane]) || renameTask.isDone
+      }}
+      fx {
+        val dialog = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene))
+          .map(_.getRoot).collectFirst { case d: DialogPane => d }.get
+        dialog.lookup(".text-field").asInstanceOf[TextField].setText("favourite renamed")
+        dialog.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      renameTask.get(30, TimeUnit.SECONDS)
+      eventually("renamed in favourites and history") { fx {
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.name == "favourite renamed") &&
+          node[ListView[PresetRecord]]("generation-history-list").getItems.asScala.exists(_.name == "favourite renamed")
+      }}
+      checked("history and favourite names change together")
+      fx {
+        node[TextField]("generation-favourites-search").setText("favourite renamed")
+        val list = node[ListView[PresetRecord]]("generation-favourites-list")
+        require(list.getItems.size == 1)
+        list.getSelectionModel.clearAndSelect(0)
+      }
+      val filteredRename = new FutureTask[Unit](new Callable[Unit]:
+        def call(): Unit = node[Button]("generation-favourites-rename").fire())
+      Platform.runLater(filteredRename)
+      eventually("filtered rename dialog") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane]) || filteredRename.isDone
+      }}
+      fx {
+        val dialog = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene))
+          .map(_.getRoot).collectFirst { case d: DialogPane => d }.get
+        dialog.lookup(".text-field").asInstanceOf[TextField].setText("new title")
+        dialog.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      filteredRename.get(30, TimeUnit.SECONDS)
+      eventually("renamed entry hidden by filter") { fx {
+        val list = node[ListView[PresetRecord]]("generation-favourites-list")
+        list.getItems.isEmpty && list.getSelectionModel.getSelectedItems.isEmpty &&
+          node[TextArea]("generation-states-status").getText.contains("renamed")
+      }}
+      screenshot("named-states-rename-filtered")
+      fx { node[TextField]("generation-favourites-search").clear() }
+      eventually("renamed favourite visible again") { fx {
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.name == "new title")
+      }}
+      checked("renaming an entry out of the filter clears selection")
+      fx {
+        val list = node[ListView[PresetRecord]]("generation-favourites-list")
+        list.getSelectionModel.clearAndSelect(0)
+        node[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmButton("generation-states-restore-field")
+      fx { require(window.vms(mode).prompt.get == "second favourite") }
+      checked("multiple history entries become favourites and a favourite setting restores")
+      screenshot("named-states-favourites")
+      fx {
+        val favourites = node[ListView[PresetRecord]]("generation-favourites-list")
+        favourites.getSelectionModel.clearAndSelect(0); favourites.getSelectionModel.select(1)
+        node[Button]("generation-favourites-toggle").fire()
+      }
+      eventually("both favourites removed") { fx(node[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty) }
+      fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(1)
+        val entries = node[ListView[PresetRecord]]("generation-history-list")
+        require(entries.getItems.size == 2)
+        entries.getSelectionModel.clearAndSelect(1)
+        node[Button]("generation-history-favourite").fire()
+      }
+      eventually("one favourited") { fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 1
+      }}
+      fx { node[TabPane]("generation-states-tabs").getSelectionModel.select(1) }
+      confirmButton("generation-history-clear")
+      eventually("clear retains named and favourite") { fx {
+        val entries = node[ListView[PresetRecord]]("generation-history-list")
+        entries.getItems.size == 2 && entries.getItems.asScala.exists(_.name == "new title") &&
+          node[TextArea]("generation-states-status").getText.contains("Cleared unnamed") &&
+          !node[Button]("generation-history-clear").isDisabled
+      }}
+      fx {
+        val entries = node[ListView[PresetRecord]]("generation-history-list")
+        entries.getSelectionModel.clearAndSelect(0); entries.getSelectionModel.select(1)
+      }
+      confirmButton("generation-history-delete")
+      eventually("delete removes both groups") { fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        node[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty
+      }}
+      checked("multi-remove, clear and explicit delete respect favourite membership")
+      val upstream = output.resolve("synthetic-state-manager-history.txt")
+      val previewImage = new java.awt.image.BufferedImage(32, 16, java.awt.image.BufferedImage.TYPE_INT_RGB)
+      val previewGraphics = previewImage.createGraphics()
+      previewGraphics.setColor(java.awt.Color.RED); previewGraphics.fillRect(0, 0, 32, 16); previewGraphics.dispose()
+      val previewBytes = new java.io.ByteArrayOutputStream()
+      require(ImageIO.write(previewImage, "png", previewBytes))
+      val previewUri = "data:image/png;base64," + java.util.Base64.getEncoder.encodeToString(previewBytes.toByteArray)
+      val upstreamJson = s"""{"defaults":{"d":{"img2img/Prompt":"original default","img2img/Denoising strength":0.75,"img2img/Unrecognized setting":"keep"}},"entries":{"1700000000123":{"saveVersion":"2.0","type":"img2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"img2img/Prompt":"imported prompt","img2img/Denoising strength":0.35},"preview":"$previewUri"}}}"""
+      val gzip = new java.util.zip.GZIPOutputStream(Files.newOutputStream(upstream))
+      gzip.write(upstreamJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)); gzip.close()
+      def previewImport(answer: ButtonType): Unit =
+        fx {
+          window.ctx.chooseStateManagerImport = () => Some(upstream)
+          node[TabPane]("generation-states-tabs").getSelectionModel.select(1)
+          node[Button]("generation-history-import").fire()
+        }
+        eventually("import preview") { fx {
+          Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane])
+        }}
+        fx {
+          val pane = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene)).map(_.getRoot)
+            .collectFirst { case p: DialogPane => p }.get
+          require(pane.lookup("#state-manager-import-summary").asInstanceOf[TextArea].getText.contains("img2img/Unrecognized setting"), "preview did not warn about the unknown setting")
+          require(ImageIO.write(SwingFXUtils.fromFXImage(pane.getScene.snapshot(null), null), "png", output.resolve("state-manager-import-preview.png").toFile))
+          pane.lookupButton(answer).asInstanceOf[Button].fire()
+        }
+      previewImport(ButtonType.CANCEL)
+      fx { require(node[ListView[PresetRecord]]("generation-history-list").getItems.isEmpty, "cancel imported history") }
+      previewImport(ButtonType.OK)
+      eventually("imported history") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 1) }
+      eventually("imported thumbnail") { fx {
+        val item = node[ListView[PresetRecord]]("generation-history-list").getItems.get(0)
+        Files.isRegularFile(home.configDir.resolve("generation-history/thumbs").resolve(item.id.toString + ".png")) &&
+          node[TextArea]("generation-states-status").getText.contains("thumbnails saved: 1")
+      }}
+      screenshot("state-manager-import-thumbnail")
+      fx {
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        val list = node[ListView[PresetRecord]]("generation-favourites-list")
+        require(list.getItems.size == 1)
+        require(list.getItems.get(0).source.get.originalFields.text.contains("Unrecognized setting"))
+        list.getSelectionModel.clearAndSelect(0)
+        node[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmButton("generation-states-restore-field")
+      fx { require(window.vms(mode).prompt.get == "imported prompt") }
+      fx {
+        window.vms(mode).prompt.set("changed before imported restore")
+        window.vms(mode).denoise.set(0.9)
+        window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.setText("unrelated bad draft")
+      }
+      confirmButton("generation-states-restore")
+      fx {
+        require(window.vms(mode).prompt.get == "imported prompt")
+        require(math.abs(window.vms(mode).denoise.get - 0.35) < 1e-9, "imported denoising strength was not restored")
+        require(window.stage.getScene.lookup("#generation-steps-spinner-img2img").asInstanceOf[Spinner[Integer]].getEditor.getText == "unrelated bad draft")
+      }
+      previewImport(ButtonType.OK)
+      eventually("second import completed") { fx {
+        !node[Button]("generation-history-import").isDisabled && node[TextArea]("generation-states-status").getText.contains("Imported")
+      }}
+      fx {
+        require(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 1, "repeat import duplicated history")
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        require(node[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 1, "repeat import duplicated favourites")
+      }
+      checked("State Manager gzip import previews unknown settings, preserves provenance and restores a favourite")
+      val actualUpstreamFixture = Paths.get("core/src/test/resources/fixtures/state-manager-v2-upstream-stubbed.gz").toAbsolutePath
+      fx {
+        window.openGenerationStates(Mode.Txt2Img)
+        window.ctx.chooseStateManagerImport = () => Some(actualUpstreamFixture)
+        node[TabPane]("generation-states-tabs").getSelectionModel.select(1)
+      }
+      eventually("upstream import ready") { fx(!node[Button]("generation-history-import").isDisabled) }
+      fx { node[Button]("generation-history-import").fire() }
+      eventually("upstream fixture preview") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane])
+      }}
+      fx {
+        val pane = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene)).map(_.getRoot)
+          .collectFirst { case p: DialogPane => p }.get
+        require(pane.lookup("#state-manager-import-summary").asInstanceOf[TextArea].getText.contains("txt2img/Unknown extension"))
+        pane.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      eventually("upstream fixture imported") { fx(node[ListView[PresetRecord]]("generation-history-list").getItems.size == 1) }
+      fx {
+        node[ListView[PresetRecord]]("generation-history-list").getSelectionModel.clearAndSelect(0)
+        node[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmButton("generation-states-restore-field")
+      fx { require(window.vms(Mode.Txt2Img).prompt.get == "actual upstream saved prompt") }
+      screenshot("upstream-stubbed-fixture-import")
+      val exported = output.resolve("upstream-original-export.gz")
+      fx { window.ctx.chooseStateManagerExport = () => Some(exported) }
+      confirmButton("generation-history-export")
+      eventually("upstream original exported") { Files.isRegularFile(exported) }
+      val roundTrip = sdfx.core.presets.StateManagerV2.decode(Files.readAllBytes(exported)).toOption.get
+      require(roundTrip.size == 1 && roundTrip.head.mapped(FieldKey(Vector("generation", "prompt"))) == PresetAtom.Text("actual upstream saved prompt"))
+      require(roundTrip.head.unmapped.contains("txt2img/Unknown extension"))
+      checked("exported imported upstream original to gzip")
+      checked("actual upstream JavaScript fixture imports and restores prompt with simulated A1111 dependencies")
       Files.writeString(output.resolve("named-states-native-report.json"), ujson.write(ujson.Obj(
         "status" -> "passed", "home" -> home.root.toString, "library" -> library.toString,
         "checks" -> ujson.Arr.from(checks), "screenshots" -> ujson.Arr.from(screenshots)), indent = 2))

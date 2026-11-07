@@ -4,7 +4,7 @@ import munit.FunSuite
 import sdfx.core.model.*
 import sdfx.core.payload.SubmittedPayloadContext
 import sdfx.core.plugins.api.*
-import sdfx.engine.{CaptureOptions, Job, JobLimits}
+import sdfx.engine.{CaptureOptions, Img2ImgFolderSpec, Job, JobLimits}
 import scala.collection.immutable.ListMap
 
 class FrozenJobEvidenceSuite extends FunSuite:
@@ -35,12 +35,12 @@ class FrozenJobEvidenceSuite extends FunSuite:
     alwaysOn = Seq(marker -> Values(Map("evidence" -> "retained")), marker2 -> Values(Map("other" -> "2"))),
     origin = "api", limits = JobLimits(4096, 12, 20, 12345678L),
     submittedContext = Some(SubmittedPayloadContext("source", Some("img2img"), Some(" {\"x\": 1}\r\n"), Some(true))),
-    captureOptions = Some(CaptureOptions(false)))
+    captureOptions = Some(CaptureOptions(false)), img2imgFolder = Some(Img2ImgFolderSpec("images", Seq("allowed"))))
 
   private def fields(p: Product): Set[String] = p.productElementNames.toSet
   test("schema guards detect added or removed product fields") {
     val j = fixture; val p = j.params
-    assertEquals(fields(j), Set("id", "params", "script", "alwaysOn", "origin", "limits", "submittedContext", "captureOptions", "wdBatch", "imageSecret", "editorPreview"))
+    assertEquals(fields(j), Set("id", "params", "script", "alwaysOn", "origin", "limits", "submittedContext", "captureOptions", "wdBatch", "imageSecret", "editorPreview", "img2imgFolder"))
     assertEquals(fields(p), Set("prompt", "negativePrompt", "seed", "subseed", "subseedStrength", "samplerName", "scheduler", "steps", "cfgScale", "width", "height", "batchSize", "nIter", "clipSkip", "eta", "hires", "img2img", "loras", "controlnet", "hooks", "styles", "checkpoint", "vae", "extra"))
     assertEquals(fields(p.hires), Set("enabled", "scale", "upscaler", "secondPassSteps", "resizeX", "resizeY", "denoisingStrength", "samplerName", "scheduler", "prompt", "negativePrompt", "cfgScale"))
     assertEquals(fields(p.img2img.get), Set("initImage", "mask", "denoisingStrength", "resizeMode", "maskBlur", "inpaintingFill", "inpaintFullRes", "inpaintFullResPadding", "inpaintingMaskInvert"))
@@ -49,6 +49,7 @@ class FrozenJobEvidenceSuite extends FunSuite:
     assertEquals(fields(j.limits), Set("maxSide", "maxImagesPerGeneration", "maxGenerations", "maxPixelsPerGeneration"))
     assertEquals(fields(j.submittedContext.get), Set("origin", "sourceMode", "configurationJson", "uiVariationEnabled"))
     assertEquals(fields(j.captureOptions.get), Set("includeImageContents"))
+    assertEquals(fields(j.img2imgFolder.get), Set("path", "allowedRoots"))
     assertEquals(fields(j.script.get._2), Set("map"))
   }
 
@@ -72,7 +73,7 @@ class FrozenJobEvidenceSuite extends FunSuite:
   test("snapshot records complete values and raw context without engine payload projection") {
     val evidence = FrozenJobEvidence.freeze(fixture)
     val json = ujson.read(evidence.snapshotJson)
-    assertEquals(json.obj.keySet.toSet, Set("id", "params", "script", "alwaysOn", "origin", "limits", "submittedContext", "captureOptions"))
+    assertEquals(json.obj.keySet.toSet, Set("id", "params", "script", "alwaysOn", "origin", "limits", "submittedContext", "captureOptions", "img2imgFolder"))
     assertEquals(json("id").str, "job-001")
     assertEquals(json("params")("prompt").str, "raw\r\nprompt")
     assertEquals(json("params")("hooks")("freeu")("nested")(1), ujson.Null)
@@ -82,6 +83,8 @@ class FrozenJobEvidenceSuite extends FunSuite:
     assertEquals(json("alwaysOn").arr.map(_("pluginId").str).toSeq, Seq("marker", "marker"))
     assertEquals(json("submittedContext")("configurationJson").str, " {\"x\": 1}\r\n")
     assertEquals(json("captureOptions")("includeImageContents").bool, false)
+    assertEquals(json("img2imgFolder")("path").str, "images")
+    assertEquals(json("img2imgFolder")("allowedRoots")(0).str, "allowed")
     assertEquals(json("params")("seed").num.toLong, 123456789L)
   }
 
@@ -98,7 +101,10 @@ class FrozenJobEvidenceSuite extends FunSuite:
       "context sourceMode" -> j.copy(submittedContext = j.submittedContext.map(_.copy(sourceMode = None))),
       "context raw configuration" -> j.copy(submittedContext = j.submittedContext.map(_.copy(configurationJson = Some("{\"x\":1}")))),
       "context variation" -> j.copy(submittedContext = j.submittedContext.map(_.copy(uiVariationEnabled = Some(false)))),
-      "capture absent" -> j.copy(captureOptions = None), "capture value" -> j.copy(captureOptions = Some(CaptureOptions(true)))
+      "capture absent" -> j.copy(captureOptions = None), "capture value" -> j.copy(captureOptions = Some(CaptureOptions(true))),
+      "folder absent" -> j.copy(img2imgFolder = None),
+      "folder path" -> j.copy(img2imgFolder = Some(Img2ImgFolderSpec("other", Seq("allowed")))),
+      "folder roots" -> j.copy(img2imgFolder = Some(Img2ImgFolderSpec("images", Seq("other"))))
     ) ++ Seq[(String, GenerationParams)](
       "prompt" -> p.copy(prompt = "other"), "negativePrompt" -> p.copy(negativePrompt = "other"), "seed" -> p.copy(seed = 124),
       "subseed" -> p.copy(subseed = 123), "subseedStrength" -> p.copy(subseedStrength = 0.4), "samplerName" -> p.copy(samplerName = "other"),

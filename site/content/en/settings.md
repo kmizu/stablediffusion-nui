@@ -97,8 +97,12 @@ Settings are stored in `config/settings.json`. The file is created on the first 
 | `output_dir` | `outputs` | Output folder (relative paths are relative to the app folder) |
 | `python_exe` | `null` | Python for the engine. Empty uses `python/.venv`, then the system Python |
 | `dtype` | `fp16` | `fp16` / `bf16` / `fp32` |
-| `vram_mode` | `gpu` | VRAM mode |
+| `vram_mode` | `gpu` | VRAM mode: `gpu`, `model_offload`, `sequential_offload`, or `auto` (picks one from the free VRAM when the model loads) |
 | `vae_tiling` | `false` | Tile the VAE decode of large images |
+| `vae_slicing` | `false` | Decode a batch one image at a time (lower peak VRAM for batch > 1, identical pixels) |
+| `vae_auto` | `true` | Slice or tile the VAE decode automatically, only when it would not fit the free VRAM |
+| `vae_fp16` | `false` | Decode SDXL-style (force-upcast) VAEs in fp16, falling back to fp32 on non-finite output |
+| `fp8_storage` | `false` | Keep the U-Net weights in float8 and upcast per layer (GPU VRAM mode only) |
 | `preview_every` / `preview_method` | `2` / `approx` | Live preview interval (0 = off) / `approx` or `taesd` |
 | `last_model` / `last_vae` | `null` | The model and VAE used last |
 | `mcp_http_enabled` / `mcp_http_port` / `mcp_token` | `false` / `7861` / `null` | The MCP HTTP server built into the GUI |

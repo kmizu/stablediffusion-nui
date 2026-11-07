@@ -14,8 +14,11 @@ from __future__ import annotations
 import csv
 import gc
 import hashlib
+import json
 import os
+import posixpath
 import threading
+import types
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -24,6 +27,7 @@ from .protocol import EngineError, INVALID_PARAMS, UNSUPPORTED
 DATA_DIR = Path(__file__).resolve().parent / "data" / "clip_interrogator"
 DEFAULT_CLIP = "ViT-L-14/openai"
 CONTEXT_LENGTH = 77
+OPENCLIP_VERSION = "2.32.0"
 
 CAPTION_MODELS = {
     "blip-base": "Salesforce/blip-image-captioning-base",
@@ -65,6 +69,152 @@ def clip_repo(name: str) -> str:
     if name in CLIP_MODELS.values() or (name and os.path.isdir(name)):
         return name
     raise EngineError(INVALID_PARAMS, f"unsupported CLIP model '{name}'; choose one of: " + ", ".join(CLIP_MODELS))
+
+
+def openclip_pretrained() -> list[tuple[str, str]]:
+    """Installed OpenCLIP model registry; an absent optional dependency leaves existing models usable."""
+    try:
+        import open_clip
+        if getattr(open_clip, "__version__", None) != OPENCLIP_VERSION:
+            return []
+        return list(open_clip.list_pretrained())
+    except Exception:
+        return []
+
+
+def openclip_status() -> dict:
+    try:
+        import open_clip
+    except ModuleNotFoundError as e:
+        return {"state": "missing" if e.name == "open_clip" else "load-error", "expected_version": OPENCLIP_VERSION}
+    except Exception:
+        return {"state": "load-error", "expected_version": OPENCLIP_VERSION}
+    version = str(getattr(open_clip, "__version__", "unknown"))
+    state = "available" if version == OPENCLIP_VERSION else "incompatible-version"
+    if state == "available":
+        try:
+            open_clip.list_pretrained()
+        except Exception:
+            state = "load-error"
+    return {"state": state, "version": version, "expected_version": OPENCLIP_VERSION}
+
+
+def clip_backend_choice(name: str) -> tuple[str, str, Optional[str]]:
+    if name in CLIP_MODELS or name in CLIP_MODELS.values() or (name and os.path.isdir(name)):
+        return "transformers", clip_repo(name), None
+    choices = openclip_pretrained()
+    for architecture, weights in choices:
+        if name == f"{architecture}/{weights}":
+            return "openclip", architecture, weights
+    raise EngineError(INVALID_PARAMS, f"unsupported CLIP model '{name}'; install or repair open_clip_torch=={OPENCLIP_VERSION} to use its registered models")
+
+
+def openclip_offline_requested() -> bool:
+    return any(os.environ.get(k, "").strip().upper() in ("1", "ON", "YES", "TRUE") for k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"))
+
+
+def check_openclip_offline(config: dict, architecture: str = "", model_config: Optional[dict] = None) -> None:
+    offline = openclip_offline_requested()
+    if offline and config.get("url") and not config.get("hf_hub"):
+        raise EngineError(UNSUPPORTED, "OpenCLIP URL-only weights cannot be used in offline mode")
+    if offline and "siglip" in architecture.lower() and not (model_config or {}).get("text_cfg", {}).get("hf_tokenizer_name"):
+        raise EngineError(UNSUPPORTED, "OpenCLIP SigLIP tokenizer may download outside the HF cache in offline mode")
+
+
+def require_openclip_hub(config: dict, hub_available: bool) -> None:
+    if not config.get("hf_hub") or not hub_available:
+        raise EngineError(UNSUPPORTED, "OpenCLIP requires a Hugging Face Hub weight reference and the huggingface_hub package; direct URL fallback is disabled")
+
+
+def openclip_hub_download(pretrained_api, config: dict, cache_dir=None):
+    """Use the Hub downloader directly; never invoke OpenCLIP's partial-file URL fallback."""
+    from huggingface_hub.utils import EntryNotFoundError, LocalEntryNotFoundError
+    require_openclip_hub(config, pretrained_api.has_hf_hub())
+    repo_id, filename = posixpath.split(config["hf_hub"])
+    if not repo_id or "/" not in repo_id:
+        raise EngineError(UNSUPPORTED, "Invalid OpenCLIP Hugging Face Hub weight reference")
+    name = filename or "open_clip_pytorch_model.bin"
+    offline = openclip_offline_requested()
+    safe = "open_clip_model.safetensors" if name == "open_clip_pytorch_model.bin" else (
+        name[:-4] + ".safetensors" if name.endswith((".bin", ".pth")) else None)
+    if safe:
+        try:
+            return pretrained_api.hf_hub_download(repo_id, filename=safe, cache_dir=cache_dir, local_files_only=offline)
+        except LocalEntryNotFoundError:
+            if not offline:
+                raise
+        except EntryNotFoundError:
+            pass
+    return pretrained_api.hf_hub_download(repo_id, filename=name, cache_dir=cache_dir, local_files_only=offline)
+
+
+def openclip_card_snapshot() -> tuple[str, dict]:
+    """Versioned labels from public model cards; not a permission or a current-license guarantee."""
+    try:
+        path = DATA_DIR / "openclip_registry_licenses.json"
+        if path.stat().st_size > 262144:
+            return "unknown", {}
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if raw.get("openclip_version") != OPENCLIP_VERSION or not isinstance(raw.get("models"), dict):
+            return "unknown", {}
+        return str(raw.get("observed") or "unknown"), raw["models"]
+    except (OSError, ValueError, TypeError):
+        return "unknown", {}
+
+
+def clip_cache_dir(kind: str, requested: Optional[str]) -> Optional[str]:
+    # Existing cache metadata fingerprints labels only, not loaded weights or preprocessing.
+    # Do not read or write those caches for an OpenCLIP backend until its actual inputs are bound.
+    return None if kind == "openclip" else requested
+
+
+def openclip_safe_state_dict(checkpoint_path, device="cpu", weights_only=True):
+    """OpenCLIP 2.32-compatible state-dict loader without unsafe torch.load retry.
+
+    State-dict normalization follows mlfoundations/open_clip factory.py at bf5d49c (MIT;
+    see licenses/mlfoundations__open_clip.txt). JIT checkpoint fallback is not enabled.
+    """
+    import torch
+    if str(checkpoint_path).endswith(".safetensors"):
+        from safetensors.torch import load_file
+        checkpoint = load_file(checkpoint_path, device=device)
+    else:
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
+    state = checkpoint["state_dict"] if isinstance(checkpoint, dict) and "state_dict" in checkpoint else checkpoint
+    if not isinstance(state, dict):
+        raise EngineError(UNSUPPORTED, "OpenCLIP checkpoint is not a state dictionary")
+    if state and next(iter(state)).startswith("module."):
+        state = {key[7:]: value for key, value in state.items()}
+    return state
+
+
+def openclip_create_safely(factory, architecture: str, weights: str, precision: str, device: str, force_quick_gelu: bool = False, hub_download=None):
+    """Bind a safe loader in private copies of the 2.32 factory functions, not shared module globals."""
+    names = ("create_model_and_transforms", "create_model", "load_checkpoint")
+    if any(not isinstance(getattr(factory, name, None), types.FunctionType) for name in names):
+        raise EngineError(UNSUPPORTED, "OpenCLIP factory API is incompatible with the safe loader")
+    if architecture.startswith("hf-hub:"):
+        raise EngineError(UNSUPPORTED, "OpenCLIP Hub aliases must be selected through the registered model name")
+    if not (factory.create_model_and_transforms.__globals__ is factory.create_model.__globals__ is factory.load_checkpoint.__globals__):
+        raise EngineError(UNSUPPORTED, "OpenCLIP factory globals are incompatible with the safe loader")
+    if any(name not in fn.__code__.co_names for fn, name in (
+        (factory.create_model_and_transforms, "create_model"), (factory.create_model, "load_checkpoint"),
+        (factory.load_checkpoint, "load_state_dict"),
+    )):
+        raise EngineError(UNSUPPORTED, "OpenCLIP factory call chain is incompatible with the safe loader")
+    namespace = dict(factory.create_model_and_transforms.__globals__)
+    if not callable(hub_download):
+        raise EngineError(UNSUPPORTED, "OpenCLIP safe Hub downloader is unavailable")
+    namespace["load_state_dict"] = openclip_safe_state_dict
+    namespace["download_pretrained"] = hub_download
+    def clone(function):
+        result = types.FunctionType(function.__code__, namespace, function.__name__, function.__defaults__, function.__closure__)
+        result.__kwdefaults__ = function.__kwdefaults__
+        return result
+    namespace["load_checkpoint"] = clone(factory.load_checkpoint)
+    namespace["create_model"] = clone(factory.create_model)
+    build = clone(factory.create_model_and_transforms)
+    return build(architecture, pretrained=weights, precision=precision, device=device, force_quick_gelu=force_quick_gelu)
 
 
 def load_list(filename: str, data_dir: Path = DATA_DIR) -> list[str]:
@@ -118,6 +268,52 @@ class HfClip:
     def at_max_len(self, text: str) -> bool:
         """True when the text fills the whole context window (upstream: last token slot is not padding)."""
         return len(self.tokenizer(text, truncation=False)["input_ids"]) >= self.context
+
+
+class OpenClip:
+    """Optional OpenCLIP model backend; models and tokenizers follow that package's registry."""
+    def __init__(self, architecture: str, weights: str, device: str):
+        import torch
+        import open_clip
+        if getattr(open_clip, "__version__", None) != OPENCLIP_VERSION:
+            raise EngineError(UNSUPPORTED, f"OpenCLIP {OPENCLIP_VERSION} is required for safe checkpoint loading")
+        self.torch, self.device = torch, device
+        self.dtype = torch.float16 if device.startswith("cuda") else torch.float32
+        precision = "fp16" if device.startswith("cuda") else "fp32"
+        pretrained_config = open_clip.get_pretrained_cfg(architecture, weights)
+        check_openclip_offline(pretrained_config, architecture, open_clip.get_model_config(architecture))
+        require_openclip_hub(pretrained_config, open_clip.pretrained.has_hf_hub())
+        # Use private factory function globals, leaving other threads' OpenCLIP loader untouched.
+        self.model, _, self.preprocess = openclip_create_safely(open_clip.factory, architecture, weights, precision, device,
+                                                                force_quick_gelu=bool(pretrained_config.get("quick_gelu", False)),
+                                                                hub_download=lambda cfg, cache_dir=None: openclip_hub_download(open_clip.pretrained, cfg, cache_dir))
+        self.model.eval()
+        self.tokenizer = open_clip.get_tokenizer(architecture)
+        self.context = int(getattr(self.tokenizer, "context_length", CONTEXT_LENGTH) or CONTEXT_LENGTH)
+
+    def to(self, device: str):
+        self.model.to(device)
+        self.device = device
+
+    def encode_text(self, texts: list[str]):
+        with self.torch.no_grad():
+            result = self.model.encode_text(self.tokenizer(texts).to(self.device))
+        return result / result.norm(dim=-1, keepdim=True)
+
+    def encode_image(self, image):
+        pixels = self.preprocess(image.convert("RGB")).unsqueeze(0).to(self.device, self.dtype)
+        with self.torch.no_grad():
+            result = self.model.encode_image(pixels)
+        return result / result.norm(dim=-1, keepdim=True)
+
+    def at_max_len(self, text: str) -> bool:
+        if hasattr(self.tokenizer, "encode"):
+            return len(self.tokenizer.encode(text)) + 2 >= self.context
+        inner = getattr(self.tokenizer, "tokenizer", None)
+        if inner is not None:
+            clean = getattr(self.tokenizer, "clean_fn", lambda x: x)
+            return len(inner(clean(text), truncation=False)["input_ids"]) >= self.context
+        raise EngineError(UNSUPPORTED, "OpenCLIP tokenizer cannot report untruncated length")
 
 
 class HfCaptioner:
@@ -498,14 +694,15 @@ def _get(params: dict, device: str, check, factory: Optional[Callable] = None, n
     else:
         low = low_vram(device)
         try:
-            clip = HfClip(clip_repo(clip_name), device)
+            kind, source, weights = clip_backend_choice(clip_name)
+            clip = HfClip(source, device) if kind == "transformers" else OpenClip(source, weights, device)
             captioner = HfCaptioner(caption_name, device, int(params.get("caption_max_length", 32))) if caption_name != "none" else None
         except ImportError as e:
             raise EngineError(UNSUPPORTED, f"CLIP Interrogator needs transformers, torch and safetensors: {e}")
         except OSError as e:
             raise EngineError(INVALID_PARAMS, f"cannot load model: {e}")
         import torch
-        ci = Interrogator(clip, torch, device, clip_name, captioner, cache_dir,
+        ci = Interrogator(clip, torch, device, clip_name, captioner, clip_cache_dir(kind, cache_dir),
                           chunk_size=1024 if low else 2048, flavor_intermediate_count=1024 if low else 2048,
                           offload=low, check=check)
     with _lock:
@@ -514,9 +711,39 @@ def _get(params: dict, device: str, check, factory: Optional[Callable] = None, n
 
 
 def models_info(device: str = "cpu") -> dict:
-    return {"clip_models": list(CLIP_MODELS), "caption_models": list(CAPTION_MODELS), "default_clip_model": DEFAULT_CLIP,
+    names = list(CLIP_MODELS)
+    registry = openclip_pretrained()
+    names.extend(f"{model}/{tag}" for model, tag in registry if f"{model}/{tag}" not in names)
+    info = {}
+    snapshot_date, cards = openclip_card_snapshot()
+    if registry:
+        try:
+            import open_clip
+        except ImportError:
+            open_clip = None
+        for model, tag in registry:
+            name = f"{model}/{tag}"
+            if name in CLIP_MODELS:
+                continue  # those names use the existing transformers backend
+            try:
+                source = str(open_clip.get_pretrained_cfg(model, tag).get("hf_hub") or "") if open_clip else ""
+            except Exception:
+                source = ""
+            verification = {"convnext_base_w/laion2b_s13b_b82k": "previous-gui-and-mcp",
+                            "RN50/yfcc15m": "previous-engine-local-weights"}.get(name, "not-tested")
+            card = cards.get(name, {})
+            repo = posixpath.split(source)[0]
+            if not isinstance(card, dict) or card.get("repo") != repo:
+                card = {}
+            info[name] = {"source": source, "verification": verification, "card_license": card.get("license") or "unknown",
+                          "card_revision": card.get("revision") or "unknown"}
+    status = openclip_status()
+    status["registry_entries"] = len(registry)
+    status["card_snapshot_date"] = snapshot_date
+    return {"clip_models": names, "caption_models": list(CAPTION_MODELS), "default_clip_model": DEFAULT_CLIP,
             "default_caption_model": "blip-base" if low_vram(device) else "blip-large", "modes": list(MODES),
-            "batch_output_modes": list(BATCH_OUTPUT_MODES), "low_vram": low_vram(device),
+            "batch_output_modes": list(BATCH_OUTPUT_MODES), "low_vram": low_vram(device), "openclip_status": status,
+            "openclip_model_info": info,
             "loaded": _session["key"][0] if _session["key"] else None}
 
 

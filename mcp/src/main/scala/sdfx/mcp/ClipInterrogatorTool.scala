@@ -14,7 +14,8 @@ final class ClipInterrogatorTool(services: AppServices, policy: PathPolicy, base
   def description = "Work out a prompt for an existing image with CLIP (after pharmapsychotic's CLIP Interrogator). " +
     "operation=prompt returns a prompt for `image` (an allowed local path, base64 or data URI) in mode best (slowest, highest similarity), fast, classic, negative (a negative prompt) or caption; " +
     "analyze returns the top 5 medium / artist / movement / trending / flavor labels with scores; batch writes .txt files (or batch.txt / batch.csv) for every .png/.jpg/.jpeg in an allowed `folder` and never overwrites unless overwrite=true; " +
-    "models lists the choices; unload frees the models (they are also freed after each call unless keep_loaded=true). " +
+    "models lists choices, optional OpenCLIP dependency status and model-card source/verification metadata; model-card licence labels are dated snapshots, so check current terms. " +
+    "unload frees the models (they are also freed after each call unless keep_loaded=true). " +
     "The first use downloads the CLIP and caption models from Hugging Face."
   override def idempotent = true
   def inputSchema = Schema.obj(Seq(

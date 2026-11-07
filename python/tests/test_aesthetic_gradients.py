@@ -206,6 +206,16 @@ def test_encode_prompt_cache_and_determinism(tmp_path, monkeypatch):
     assert torch.allclose(ag.encode_prompt(engine, pipe, "a red fox", gp, c, plain), first, atol=1e-6)
 
 
+def test_expected_embedding_fingerprint_rejects_file_changed_after_replay(tmp_path, monkeypatch):
+    engine, pipe, gp, plain = encode_setup(tmp_path, monkeypatch)
+    path = ag.resolve_embedding("style")
+    _, digest = ag.embedding_snapshot(path)
+    c = ag.normalize({"embedding": str(path), "embedding_sha256": digest, "steps": 0})
+    torch.save(torch.ones(768), path)
+    with pytest.raises(EngineError, match="fingerprint"):
+        ag.encode_prompt(engine, pipe, "a red fox", gp, c, plain)
+
+
 def test_slerp_target_uses_text(tmp_path, monkeypatch):
     engine, pipe, gp, plain = encode_setup(tmp_path, monkeypatch)
     plainc = ag.normalize({"embedding": "style", "weight": 1.0, "steps": 2, "lr": 1e-3})

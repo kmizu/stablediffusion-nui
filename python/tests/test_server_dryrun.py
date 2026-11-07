@@ -333,3 +333,18 @@ def test_upscale_preprocess_unload(eng, tmp_path):
     assert os.path.isfile(res["result"]["path"])
     res, _ = eng.call("unload")
     assert res["result"] == {}
+
+
+def test_loaded_model_reports_vae_path_and_clears_it_on_checkpoint_switch(eng, tmp_path):
+    eng.next()
+    first = write_ckpt(tmp_path / "first.safetensors")
+    second = write_ckpt(tmp_path / "second.safetensors")
+    vae = tmp_path / "vae.safetensors"
+    vae.write_bytes(b"vae fixture")
+    loaded, _ = eng.call("load_model", {"path": first})
+    assert loaded["result"]["vae_path"] is None
+    loaded, _ = eng.call("set_vae", {"path": str(vae)})
+    assert loaded["result"]["vae_path"] == str(vae)
+    loaded, _ = eng.call("load_model", {"path": second})
+    assert loaded["result"]["vae_path"] is None
+    assert eng.close() == 0

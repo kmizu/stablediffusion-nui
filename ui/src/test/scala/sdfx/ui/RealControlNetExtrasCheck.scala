@@ -202,6 +202,21 @@ object RealControlNetExtrasCheck:
       val names2 = Files.list(out).iterator.asScala.map(_.getFileName.toString).toSeq.sorted
       require(names2 == Seq("a-canny-1.png", "a-canny.png", "b-canny-1.png", "b-canny.png", "c-canny-1.png", "c-canny.png"), names2.toString)
       report("batch_rerun") = names2.mkString(", ")
+      // Exercise the selected-file action with the real list and button. The OS chooser is not automated.
+      val chosenOut = output.resolve("out-selected")
+      Files.createDirectories(chosenOut)
+      fx {
+        val list = node[ListView[Path]]("extras-cn-selected-list")
+        list.getItems.setAll(folder.resolve("b.png"), folder.resolve("d.png"), folder.resolve("a.png"))
+        node[TextField]("extras-cn-output-dir").setText(chosenOut.toString)
+        button("extras-cn-run-selected").fire()
+      }
+      eventually("selected batch finished")(fx(label("extras-cn-status").contains("written to")))
+      val selectedStatus = label("extras-cn-status")
+      require(selectedStatus.startsWith("2 of 3 written") && selectedStatus.contains("d.png"), selectedStatus)
+      val chosenNames = scala.util.Using.resource(Files.list(chosenOut))(_.iterator.asScala.map(_.getFileName.toString).toSeq.sorted)
+      require(chosenNames == Seq("a-canny.png", "b-canny.png"), chosenNames.toString)
+      report("selected_batch") = ujson.Obj("status" -> selectedStatus, "files" -> chosenNames.mkString(", "), "chooser" -> "not automated")
       scrollTo("extras-cn-status")
       shot("cn-3-batch")
 
@@ -225,7 +240,9 @@ object RealControlNetExtrasCheck:
         node[TextField]("extras-cn-output-dir").setText(bigOut.toString)
         button("extras-cn-batch").fire()
       }
-      eventually("batch started")(fx(label("extras-cn-status").startsWith("1 / 60") || label("extras-cn-status").startsWith("2 / 60") || label("extras-cn-status").startsWith("3 / 60")))
+      eventually("batch started") {
+        fx(!button("extras-cn-cancel").isDisabled) && scala.util.Using.resource(Files.list(bigOut))(_.findAny().isPresent)
+      }
       fx(button("extras-cn-cancel").fire())
       eventually("cancelled")(fx(label("extras-cn-status").contains("cancelled")))
       val written = Files.list(bigOut).count()

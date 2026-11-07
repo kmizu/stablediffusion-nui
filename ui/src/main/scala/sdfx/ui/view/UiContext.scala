@@ -1,7 +1,7 @@
 package sdfx.ui.view
 
 import javafx.collections.{FXCollections, ObservableList}
-import javafx.stage.Stage
+import javafx.stage.{FileChooser, Stage}
 import sdfx.core.config.AtomicFiles
 import sdfx.core.model.{ExtendedStyle, GenerationParams, PromptStyle, StyleLibrary, Styles}
 import sdfx.engine.AppServices
@@ -12,6 +12,15 @@ import scala.util.control.NonFatal
 
 /** Shared services and callbacks for the views. */
 final class UiContext(val services: AppServices, val catalog: CatalogVM, val stage: Stage):
+  var chooseStateManagerImport: () => Option[Path] = () =>
+    val chooser = new FileChooser()
+    chooser.setTitle("Import State Manager V2 history")
+    Option(chooser.showOpenDialog(stage)).map(_.toPath)
+  var chooseStateManagerExport: () => Option[Path] = () =>
+    val chooser = new FileChooser()
+    chooser.setTitle("Export original State Manager V2 entries")
+    chooser.setInitialFileName("history-export.gz")
+    Option(chooser.showSaveDialog(stage)).map(_.toPath)
   val toaster = new Toaster
   lazy val imageCopyReads = new sdfx.ui.vm.ImageReadGate[ImageFiles.DisplayImage](services.imageScrambleSession,
     run => sdfx.ui.Fx.run(run()), (path, secret) => ImageFiles.readForDisplay(path, secret))(using sdfx.ui.Fx.bg)
@@ -59,6 +68,7 @@ final class UiContext(val services: AppServices, val catalog: CatalogVM, val sta
   /** Commits the named mode's existing numeric editor drafts before preset capture/apply. */
   var commitPresetEditors: Mode => Either[String, Unit] =
     _ => Left("Preset destination editors are not attached")
+  var resetPresetEditorDrafts: (Mode, Set[AnyRef]) => Unit = (_, _) => ()
   var applyPromptStyle: PromptStyle => Unit = _ => ()
   var applyExtendedStyle: ExtendedStyle => Unit = _ => ()
   /** Held through the entire model/VAE load and form commit; direct callbacks must share the same guard. */

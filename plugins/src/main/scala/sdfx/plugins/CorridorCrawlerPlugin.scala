@@ -26,6 +26,9 @@ object CorridorCrawlerPlugin:
   val BuiltInPrefab = "Brick corridor (built in)"
   val CustomPrefab = "Custom image"
   val Prefabs: Seq[String] = Seq(BuiltInPrefab, CustomPrefab)
+  val Stretch = "Stretch"
+  val PreserveAspect = "Preserve aspect"
+  val Placements: Seq[String] = Seq(Stretch, PreserveAspect)
   val MinWindow = 16
 
   /** Window rectangle in canvas pixels. */
@@ -37,7 +40,7 @@ object CorridorCrawlerPlugin:
   /** Validated control values. Out-of-range values are rejected, not clamped. */
   final case class Settings(steps: Int, prefab: String, prefabImage: String, widthPct: Double, heightPct: Double,
       xPct: Double, yPct: Double, maskShrink: Int, makeGrid: Boolean, animate: Boolean, framesPerStep: Int,
-      frameMs: Int, animSize: Int):
+      frameMs: Int, animSize: Int, placement: String):
     /** Window in pixels. The defaults give 254x254 at (127,81) on 512x512, the source's thumbnail box. */
     def window(width: Int, height: Int): Rect =
       val r = Rect(math.round(width * xPct / 100).toInt, math.round(height * yPct / 100).toInt,
@@ -77,6 +80,9 @@ object CorridorCrawlerPlugin:
       val prefab = v.str("prefab", BuiltInPrefab)
       if !Prefabs.contains(prefab) then
         throw new IllegalArgumentException(s"Corridor Crawler: prefab must be one of ${Prefabs.mkString(", ")} (got '$prefab')")
+      val placement = v.str("placement", Stretch)
+      if !Placements.contains(placement) then
+        throw new IllegalArgumentException(s"Corridor Crawler: placement must be one of ${Placements.mkString(", ")} (got '$placement')")
       val image = v.str("prefab_image").trim
       if prefab == CustomPrefab && image.isEmpty then
         throw new IllegalArgumentException("Corridor Crawler: choose a prefab image for the custom prefab")
@@ -86,7 +92,48 @@ object CorridorCrawlerPlugin:
         xPct = number(v, "window_x", 24.8, 0, 90), yPct = number(v, "window_y", 15.8, 0, 90),
         maskShrink = integer(v, "mask_shrink", 0, 0, 64), makeGrid = flag(v, "make_grid", true),
         animate = flag(v, "animation", false), framesPerStep = integer(v, "frames_per_step", 20, 0, 120),
-        frameMs = integer(v, "frame_ms", 50, 10, 1000), animSize = integer(v, "animation_size", 256, 64, 1024))
+        frameMs = integer(v, "frame_ms", 50, 10, 1000), animSize = integer(v, "animation_size", 256, 64, 1024),
+        placement = placement)
+
+  /** Versioned, path-free settings; image inputs must be explicitly supplied again. */
+  val ReplayKey = "Corridor Crawler settings"
+  private val ReplayKeys = Set("steps", "prefab", "window_width", "window_height", "window_x", "window_y",
+    "placement", "mask_shrink", "make_grid", "animation", "frames_per_step", "frame_ms", "animation_size")
+
+  def replayValue(s: Settings): String = ujson.Obj(
+    "version" -> 1, "steps" -> s.steps, "prefab" -> s.prefab,
+    "window_width" -> s.widthPct, "window_height" -> s.heightPct, "window_x" -> s.xPct, "window_y" -> s.yPct,
+    "placement" -> s.placement, "mask_shrink" -> s.maskShrink, "make_grid" -> s.makeGrid,
+    "animation" -> s.animate, "frames_per_step" -> s.framesPerStep, "frame_ms" -> s.frameMs,
+    "animation_size" -> s.animSize).render()
+
+  def replay(fields: Map[String, String]): Option[Values] =
+    fields.get(ReplayKey).filter(_.length <= 4096).flatMap { text =>
+      scala.util.Try {
+        val obj = ujson.read(text).obj
+        require(obj.keySet == ReplayKeys + "version")
+        require(obj("version") == ujson.Num(1))
+        val numeric = Set("steps", "window_width", "window_height", "window_x", "window_y", "mask_shrink",
+          "frames_per_step", "frame_ms", "animation_size")
+        val bools = Set("make_grid", "animation")
+        val entries = ReplayKeys.toSeq.map { key =>
+          val value = obj(key)
+          val str = if numeric(key) then value match
+            case ujson.Num(d) if d.isFinite => Values.fmt(d)
+            case _ => throw new IllegalArgumentException("invalid number")
+          else if bools(key) then value match
+            case ujson.Bool(b) => b.toString
+            case _ => throw new IllegalArgumentException("invalid boolean")
+          else value match
+            case ujson.Str(s) => s
+            case _ => throw new IllegalArgumentException("invalid text")
+          key -> str
+        }.toMap
+        val result = Values(entries.updated("prefab_image", ""))
+        Settings.parse(if result.str("prefab") == CustomPrefab then Values(result.map.updated("prefab_image", "required")) else result)
+        result
+      }.toOption
+    }
 
   // ------------------------------------------------------------------------------------------- images
 
@@ -161,6 +208,17 @@ object CorridorCrawlerPlugin:
       g.draw(new java.awt.geom.Line2D.Double(lerp(x0, wx0), lerp(y1, wy1), lerp(x1, wx1), lerp(y1, wy1)))
     g.dispose()
     out
+
+  /** Fit the previous image in the upper left; never enlarge in preserve-aspect mode. */
+  def placementRect(previous: BufferedImage, win: Rect, placement: String): Rect =
+    placementRect(previous.getWidth, previous.getHeight, win, placement)
+
+  private def placementRect(width: Int, height: Int, win: Rect, placement: String): Rect =
+    if placement == Stretch then win
+    else
+      val scale = math.min(1.0, math.min(win.w.toDouble / width, win.h.toDouble / height))
+      Rect(win.x, win.y, math.max(1, math.min(win.w, math.round(width * scale).toInt)),
+        math.max(1, math.min(win.h, math.round(height * scale).toInt)))
 
   /** The prefab with `previous` pasted (stretched) into the window. */
   def composite(prefab: BufferedImage, previous: BufferedImage, win: Rect): BufferedImage =
@@ -241,42 +299,124 @@ object CorridorCrawlerPlugin:
     else
       newestFirst.sliding(2).flatMap(pair => zoomFrames(pair(0), pair(1), win, frames, size)).toSeq :+ scaled(steps.head, size)
 
+  /** Letterbox a crop to the fixed GIF canvas without stretching either source axis. */
+  private def fittedFrame(img: BufferedImage, x: Int, y: Int, width: Int, height: Int, tw: Int, th: Int): BufferedImage =
+    val out = rgb(tw, th)
+    val g = out.createGraphics()
+    smooth(g)
+    val scale = math.min(tw.toDouble / width, th.toDouble / height)
+    val dw = math.max(1, math.round(width * scale).toInt)
+    val dh = math.max(1, math.round(height * scale).toInt)
+    val dx = (tw - dw) / 2; val dy = (th - dh) / 2
+    g.drawImage(img, dx, dy, dx + dw, dy + dh, x, y, x + width, y + height, null)
+    g.dispose()
+    out
+
+  /** Aspect-safe zoom uses each step's actual pasted rectangle and fixed-size letterboxed frames. */
+  def aspectWalk(steps: Seq[BufferedImage], windows: Seq[Rect], frames: Int, size: Int): Seq[BufferedImage] =
+    require(steps.nonEmpty && windows.size == steps.size - 1)
+    val (tw, th) = fitSize(steps.last.getWidth, steps.last.getHeight, size)
+    def fitted(img: BufferedImage) = fittedFrame(img, 0, 0, img.getWidth, img.getHeight, tw, th)
+    if frames == 0 then steps.reverse.map(fitted)
+    else
+      val transitions = steps.reverse.sliding(2).zip(windows.reverse).flatMap { (pair, win) =>
+        val newer = pair(0); val older = pair(1)
+        val canvas = composite(newer, older, win)
+        (0 until frames).map { i =>
+          val t = i.toDouble / frames
+          val x = lerpInt(0, win.x, t); val y = lerpInt(0, win.y, t)
+          val x1 = lerpInt(newer.getWidth, win.x1, t); val y1 = lerpInt(newer.getHeight, win.y1, t)
+          fittedFrame(canvas, x, y, math.max(1, x1 - x), math.max(1, y1 - y), tw, th)
+        }
+      }.toSeq
+      transitions :+ fitted(steps.head)
+
+  /** Prefer atomic publication; fall back to exclusive creation when hard links are unavailable. */
+  private[plugins] def publishGif(temp: Path, out: Path,
+      link: (Path, Path) => Unit = (target, source) => { Files.createLink(target, source); () },
+      open: Path => java.io.OutputStream = path => Files.newOutputStream(path, java.nio.file.StandardOpenOption.CREATE_NEW, java.nio.file.StandardOpenOption.WRITE)): Unit =
+    try link(out, temp)
+    catch
+      case exists: java.nio.file.FileAlreadyExistsException => throw exists
+      case scala.util.control.NonFatal(_) =>
+        val dest = open(out)
+        try Files.copy(temp, dest)
+        catch
+          case error: Throwable =>
+            try dest.close() catch case close: Throwable => error.addSuppressed(close)
+            if scala.util.control.NonFatal(error) then
+              throw new java.io.IOException(s"GIF copy failed; an incomplete file may remain at $out", error)
+            else throw error
+        try dest.close() catch
+          case scala.util.control.NonFatal(error) =>
+            throw new java.io.IOException(s"GIF copy failed; an incomplete file may remain at $out", error)
+
   /** Looping GIF with a fixed frame delay (the GIF clock has a 10 ms resolution). */
   def writeGif(frames: Seq[BufferedImage], delayMs: Int, out: Path): Unit =
     require(frames.nonEmpty, "no frames")
-    val writer = ImageIO.getImageWritersByFormatName("gif").next()
-    val ios = ImageIO.createImageOutputStream(out.toFile)
+    // Publish only a fully written file and never replace a pre-existing destination.
+    val parent = out.toAbsolutePath.normalize().getParent
+    val temp = Files.createTempFile(parent, ".corridor-gif-", ".tmp")
+    var stream: java.io.OutputStream = null
+    var failure: Throwable = null
+    var published = false
     try
-      writer.setOutput(ios)
-      writer.prepareWriteSequence(null)
-      frames.zipWithIndex.foreach { (frame, i) =>
-        val param = writer.getDefaultWriteParam
-        val meta = writer.getDefaultImageMetadata(ImageTypeSpecifier.createFromRenderedImage(frame), param)
-        val format = meta.getNativeMetadataFormatName
-        val root = meta.getAsTree(format).asInstanceOf[IIOMetadataNode]
-        def child(name: String): IIOMetadataNode =
-          val existing = (0 until root.getLength).map(root.item).collectFirst { case n: IIOMetadataNode if n.getNodeName == name => n }
-          existing.getOrElse { val n = new IIOMetadataNode(name); root.appendChild(n); n }
-        val gce = child("GraphicControlExtension")
-        gce.setAttribute("disposalMethod", "none")
-        gce.setAttribute("userInputFlag", "FALSE")
-        gce.setAttribute("transparentColorFlag", "FALSE")
-        gce.setAttribute("delayTime", math.max(1, delayMs / 10).toString)
-        gce.setAttribute("transparentColorIndex", "0")
-        if i == 0 then
-          val apps = child("ApplicationExtensions")
-          val app = new IIOMetadataNode("ApplicationExtension")
-          app.setAttribute("applicationID", "NETSCAPE")
-          app.setAttribute("authenticationCode", "2.0")
-          app.setUserObject(Array[Byte](1, 0, 0)) // loop forever
-          apps.appendChild(app)
-        meta.setFromTree(format, root)
-        writer.writeToSequence(new IIOImage(frame, null, meta), param)
-      }
-      writer.endWriteSequence()
+      stream = Files.newOutputStream(temp, java.nio.file.StandardOpenOption.WRITE)
+      val writer = ImageIO.getImageWritersByFormatName("gif").next()
+      val ios = try ImageIO.createImageOutputStream(stream) catch
+        case error: Throwable =>
+          writer.dispose()
+          throw error
+      if ios == null then
+        writer.dispose()
+        throw new java.io.IOException("Cannot create GIF output stream")
+      try
+        writer.setOutput(ios)
+        writer.prepareWriteSequence(null)
+        frames.zipWithIndex.foreach { (frame, i) =>
+          val param = writer.getDefaultWriteParam
+          val meta = writer.getDefaultImageMetadata(ImageTypeSpecifier.createFromRenderedImage(frame), param)
+          val format = meta.getNativeMetadataFormatName
+          val root = meta.getAsTree(format).asInstanceOf[IIOMetadataNode]
+          def child(name: String): IIOMetadataNode =
+            val existing = (0 until root.getLength).map(root.item).collectFirst { case n: IIOMetadataNode if n.getNodeName == name => n }
+            existing.getOrElse { val n = new IIOMetadataNode(name); root.appendChild(n); n }
+          val gce = child("GraphicControlExtension")
+          gce.setAttribute("disposalMethod", "none")
+          gce.setAttribute("userInputFlag", "FALSE")
+          gce.setAttribute("transparentColorFlag", "FALSE")
+          gce.setAttribute("delayTime", math.max(1, delayMs / 10).toString)
+          gce.setAttribute("transparentColorIndex", "0")
+          if i == 0 then
+            val apps = child("ApplicationExtensions")
+            val app = new IIOMetadataNode("ApplicationExtension")
+            app.setAttribute("applicationID", "NETSCAPE")
+            app.setAttribute("authenticationCode", "2.0")
+            app.setUserObject(Array[Byte](1, 0, 0)) // loop forever
+            apps.appendChild(app)
+          meta.setFromTree(format, root)
+          writer.writeToSequence(new IIOImage(frame, null, meta), param)
+        }
+        writer.endWriteSequence()
+      finally
+        try ios.close() finally writer.dispose()
+      stream.close()
+      stream = null
+      publishGif(temp, out.toAbsolutePath.normalize())
+      published = true
+    catch
+      case error: Throwable =>
+        failure = error
+        throw error
     finally
-      ios.close()
-      writer.dispose()
+      var cleanupError: Throwable = null
+      try if stream != null then stream.close() catch case e: Throwable => cleanupError = e
+      try Files.deleteIfExists(temp) catch
+        case e: Throwable =>
+          if cleanupError == null then cleanupError = e else cleanupError.addSuppressed(e)
+      if cleanupError != null then
+        if failure != null then failure.addSuppressed(cleanupError)
+        else if !published then throw cleanupError
 
 /** "Corridor Crawler Outpainting": img2img Script. */
 class CorridorCrawlerPlugin extends Plugin:
@@ -303,10 +443,12 @@ class CorridorCrawlerPlugin extends Plugin:
     Slider("window_height", "Window height", 10, 90, 0.1, 49.6),
     Slider("window_x", "Window left", 0, 90, 0.1, 24.8),
     Slider("window_y", "Window top", 0, 90, 0.1, 15.8),
+    Choice("placement", "Previous image placement", Placements, Stretch),
     IntField("mask_shrink", "Shrink the kept area (px)", 0, 64, 0),
     Section("output", "Output", expanded = true),
     Check("make_grid", "Make a grid of all steps", true),
     Check("animation", "Save a zoom-in GIF"),
+    Note("animation_help", "Existing GIF files are never overwritten. If GIF saving fails, generated images and an incomplete GIF may remain."),
     IntField("frames_per_step", "Frames per step (0 = slideshow)", 0, 120, 20),
     IntField("frame_ms", "Milliseconds per frame", 10, 1000, 50),
     IntField("animation_size", "Animation size (longest side)", 64, 1024, 256)
@@ -326,42 +468,53 @@ class CorridorCrawlerPlugin extends Plugin:
     val w = p0.width
     val h = p0.height
     val win = s.window(w, h)
-    val keep = s.protectedRect(win)
     val prefab =
       if s.prefab == BuiltInPrefab then brickCorridor(w, h, win)
       else
         val path = java.nio.file.Paths.get(s.prefabImage)
         if !Files.isRegularFile(path) then fail(s"prefab image not found: ${s.prefabImage}")
         fit(Support.readImage(ctx, path), w, h)
-    val start = fit(Support.readImage(ctx, i0.initImage), w, h)
+    val input = Support.readImage(ctx, i0.initImage)
+    val start = if s.placement == Stretch then fit(input, w, h) else input
+    // Validate both the first image and later generated canvas-sized images before any generation.
+    s.protectedRect(placementRect(start, win, s.placement))
+    if s.steps > 1 then s.protectedRect(placementRect(w, h, win, s.placement))
     val seed = Support.fixSeed(p0.seed)
     val prefabName = if s.prefab == BuiltInPrefab then "Brick corridor" else Path.of(s.prefabImage).getFileName.toString
     val extra0 = p0.extra ++ Seq("Corridor Crawler steps" -> s.steps.toString, "Corridor Crawler prefab" -> prefabName,
-      "Corridor Crawler window" -> win.text) ++ (if s.maskShrink > 0 then Seq("Corridor Crawler mask shrink" -> s.maskShrink.toString) else Nil)
-    val maskFile = Support.writeTemp(ctx, mask(w, h, keep))
+      "Corridor Crawler window" -> win.text, "Corridor Crawler placement" -> s.placement, ReplayKey -> replayValue(s)) ++ (if s.maskShrink > 0 then Seq("Corridor Crawler mask shrink" -> s.maskShrink.toString) else Nil)
     val outputs = ArrayBuffer[OutputImage]()
     val images = ArrayBuffer[BufferedImage](start) // oldest first, the start image included
-    try
-      var previous = start
-      var running = true
-      var i = 0
-      while running && i < s.steps do
-        val initFile = Support.writeTemp(ctx, composite(prefab, previous, win))
-        try
-          val p = p0.copy(seed = seed, batchSize = 1, nIter = 1, width = w, height = h,
-            extra = extra0.updated("Corridor Crawler step", s"${i + 1}/${s.steps}"),
+    val placedWindows = ArrayBuffer[Rect]()
+    var previous = start
+    var running = true
+    var i = 0
+    while running && i < s.steps do
+      val placed = placementRect(previous, win, s.placement)
+      val keep = s.protectedRect(placed)
+      val initFile = Support.writeTemp(ctx, composite(prefab, previous, placed))
+      val maskFile = try Support.writeTemp(ctx, mask(w, h, keep)) catch
+        case e: Throwable =>
+          Support.deleteQuietly(initFile)
+          throw e
+      try
+        val p = p0.copy(seed = seed, batchSize = 1, nIter = 1, width = w, height = h,
+            extra = extra0.updated("Corridor Crawler step", s"${i + 1}/${s.steps}")
+              .updated("Corridor Crawler image window", placed.text),
             img2img = Some(i0.copy(initImage = initFile.toString, mask = Some(maskFile.toString), resizeMode = 0,
               inpaintFullRes = false, inpaintingMaskInvert = false)))
-          ctx.status(s"$name: step ${i + 1}/${s.steps}", i, s.steps)
-          Support.step(ctx)(ctx.generate(p)).flatMap(_.headOption) match
-            case None => running = false
-            case Some(o) =>
-              outputs += o
-              previous = ctx.readImage(o.path)
-              images += previous
-        finally Support.deleteQuietly(initFile)
-        i += 1
-    finally Support.deleteQuietly(maskFile)
+        ctx.status(s"$name: step ${i + 1}/${s.steps}", i, s.steps)
+        Support.step(ctx)(ctx.generate(p)).flatMap(_.headOption) match
+          case None => running = false
+          case Some(o) =>
+            outputs += o
+            previous = ctx.readImage(o.path)
+            images += previous
+            placedWindows += placed
+      finally
+        Support.deleteQuietly(initFile)
+        Support.deleteQuietly(maskFile)
+      i += 1
     if outputs.size < s.steps then ctx.log(s"$name interrupted after ${outputs.size} of ${s.steps} step(s)")
     val grids =
       if s.makeGrid && outputs.size > 1 then
@@ -371,7 +524,8 @@ class CorridorCrawlerPlugin extends Plugin:
           Support.infotext(gp, outputs.head.seed)))
       else Nil
     if s.animate && outputs.size == s.steps then
-      val frames = walk(images.toSeq, win, s.framesPerStep, s.animSize)
+      val frames = if s.placement == Stretch then walk(images.toSeq, win, s.framesPerStep, s.animSize)
+        else aspectWalk(images.toSeq, placedWindows.toSeq, s.framesPerStep, s.animSize)
       val last = outputs.last
       val gif = last.path.resolveSibling(last.path.getFileName.toString.stripSuffix(".png") + "-corridor.gif")
       writeGif(frames, s.frameMs, gif)

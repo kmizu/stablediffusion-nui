@@ -51,7 +51,7 @@
 "index": 8,
 "name": "Aesthetic Gradients",
 "url": "https://github.com/AUTOMATIC1111/stable-diffusion-webui-aesthetic-gradients.git",
-"status": "done:aesthetic_gradients"
+"status": "todo:aesthetic_gradients"
 },
 {
 "index": 9,
@@ -249,7 +249,7 @@
 "index": 41,
 "name": "Booru tag autocompletion",
 "url": "https://github.com/DominikDoom/a1111-sd-webui-tagcomplete.git",
-"status": "done:core:tag-autocomplete"
+"status": "todo:core:tag-autocomplete"
 },
 {
 "index": 42,
@@ -591,7 +591,7 @@
 "index": 98,
 "name": "Clip Interrogator",
 "url": "https://github.com/pharmapsychotic/clip-interrogator-ext.git",
-"status": "done:core:clip_interrogator"
+"status": "todo:core:clip_interrogator"
 },
 {
 "index": 99,
@@ -657,7 +657,7 @@
 "index": 109,
 "name": "Panorama Viewer",
 "url": "https://github.com/GeorgLegato/sd-webui-panorama-viewer.git",
-"status": "done:core:panorama-viewer"
+"status": "todo:core:panorama-viewer"
 },
 {
 "index": 110,
@@ -897,7 +897,7 @@
 "index": 149,
 "name": "sd-webui-prompt-all-in-one",
 "url": "https://github.com/Physton/sd-webui-prompt-all-in-one",
-"status": "done:core:prompt-tools"
+"status": "todo:core:prompt-tools"
 },
 {
 "index": 150,
@@ -1677,7 +1677,7 @@
 "index": 279,
 "name": "sd-webui-creaprompt",
 "url": "https://github.com/tritant/sd-webui-creaprompt.git",
-"status": "todo:creaprompt"
+"status": "done:creaprompt"
 },
 {
 "index": 280,

@@ -52,7 +52,9 @@ case class TagCompleteSettings(translationCsv: Option[String] = None, translatio
     maxResults: Int = 12, replaceUnderscores: Boolean = true, escapeParens: Boolean = true,
     appendComma: Boolean = false, searchByAlias: Boolean = true, onlyShowAlias: Boolean = false,
     wildcards: Boolean = true, extraNetworks: Boolean = true, chants: Boolean = true,
-    loraTriggerWords: Boolean = true, extraNetworkPreview: Boolean = true) derives RW
+    loraTriggerWords: Boolean = true, extraNetworkPreview: Boolean = true,
+    categoryColorMap: String = "", wildcardPathMode: String = "first-difference", completionDelayMs: Int = 0,
+    showWikiLinks: Boolean = false, showTranslationPreview: Boolean = false) derives RW
 
 /** Interface language. `pack` is a language pack id (empty = English, no translation); see sdfx.core.i18n. */
 case class LocalizationPreferences(pack: String = "", fallbackPack: String = "", style: String = "Translation only",
@@ -65,6 +67,10 @@ case class Settings(
     dtype: String = "fp16",
     vramMode: String = "gpu",
     vaeTiling: Boolean = false,
+    vaeSlicing: Boolean = false,
+    fp8Storage: Boolean = false,
+    vaeAuto: Boolean = true,
+    vaeFp16: Boolean = false,
     previewEvery: Int = 2,
     previewMethod: String = "approx",
     lastModel: Option[String] = None,
@@ -95,6 +101,7 @@ case class Settings(
     tagComplete: TagCompleteSettings = TagCompleteSettings(),
     hiresFixTweaks: HiresFixTweaksPreferences = HiresFixTweaksPreferences(),
     localization: LocalizationPreferences = LocalizationPreferences(),
+    panoramaFfmpegExe: Option[String] = None,
     scalaTorchClasspath: Option[String] = None,
     scalaTorchModel: Option[String] = None,
     scalaTorchScheduler: Option[String] = None,

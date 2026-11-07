@@ -53,7 +53,7 @@ object McpMain:
     val allowed: Seq[Path] = PathPolicy.fromEnv() ++ opts.allowDirs.filterNot(PathPolicy.isNetworkPath).map(d => Paths.get(d).toAbsolutePath.normalize())
     log(s"[mcp] home=${home.root} dryRun=${opts.dryRun}${if allowed.nonEmpty then s" allowedDirs=${allowed.mkString(";")}" else ""}")
 
-    lazy val services: AppServices = new AppServices(home, settings, opts.dryRun, StandardPlugins.all(() => services.registry.xyzAxes),
+    lazy val services: AppServices = new AppServices(home, settings, opts.dryRun, StandardPlugins.all(() => services.registry.xyzAxes, home),
       initialRecovery = loaded.recovery)
     services.addLogListener(log)
     val started = services.startAsync()

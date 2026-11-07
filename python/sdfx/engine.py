@@ -25,13 +25,14 @@ import diffusers  # noqa: F401
 from . import controlnet as cn_mod
 from . import hires as hires_mod
 from . import hooks as hooks_mod
-from . import adapters, animatediff, extras, inpaint, lora_blocks, models, preview, prompt, prompt_schedule, schedulers, sonar, upscalers
+from . import adapters, animatediff, extras, inpaint, lora_blocks, models, perf, preview, prompt, prompt_schedule, schedulers, sonar, upscalers
 from . import weight_gradient, save_intermediate, latent_upscale, steps_animation
 from . import aesthetic_gradients, clip_io, negpip
 from . import neutral_prompt, neutral_runtime, prompt_fusion
 from .clora import runtime as composable_lora
 from . import extensions as ext_mod
 from .base import LATENT_UPSCALERS, BaseEngine
+from .vae_memory import vae_scope
 from .images import Image, load_mask, load_rgb, next_output_path, resize_image, save_png
 from .params import GenerationParams, GenerationRequest, center_crop_box, hires_steps, img2img_steps, resolve_seed
 from .protocol import (INTERRUPTED, INVALID_PARAMS, MODEL_LOAD_FAILED, NO_MODEL, UNSUPPORTED, EngineError,
@@ -178,6 +179,7 @@ class Engine(BaseEngine):
         self.ext_cache: dict = {}
         self.ip_state = adapters.IPAdapterState()
         self.parked = False
+        self._owns_shared_cache = True
 
     # -- info ---------------------------------------------------------------
     def hello(self) -> dict:
@@ -224,7 +226,7 @@ class Engine(BaseEngine):
             f.append("taesd")
         f += ["apg", "mahiro", "rescale_cfg", "model_sampling", "kohya_hrfix", "multidiffusion", "latent_modifier",
               "soft_inpainting", "neveroom", "reference", "revision", "ip_adapter", "controllllite", "fooocus_inpaint",
-              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "clip_io", "compile"]
+              "img2imgalt", "semantic_guidance", "agent_attention", "cd_tuner", "characteristic_guidance", "incantations", "sonar", "llul", "aesthetic_gradients", "caption", "ldsr", "adetailer", "batch_face_swap", "weight_gradient", "negpip", "neutral_prompt", "tokenizer", "prompt_fusion", "save_intermediate", "latent_upscale", "composable_lora", "loopback_scaler", "animatediff", "clip_io", "compile", "deepcache"]
         f += list(ext_mod.sampling_ext.HOOKS)
         if hasattr(diffusers, "StableDiffusionSAGPipeline"):
             f.append("sag")
@@ -296,7 +298,8 @@ class Engine(BaseEngine):
         self.model = None
         self.vae_info = None
         self.taesd = preview.TaesdPreviewer()
-        upscalers.unload_models()
+        if getattr(self, "_owns_shared_cache", True):
+            upscalers.unload_models()
         gc.collect()
         if self.cuda:
             torch.cuda.empty_cache()
@@ -364,6 +367,8 @@ class Engine(BaseEngine):
     def load_model(self, params: dict, ctx: JobContext) -> dict:
         t0 = time.monotonic()
         req = self.parse_load(params)
+        if req.fp8_storage and not self.cuda:
+            raise EngineError(UNSUPPORTED, "fp8_storage needs a CUDA device")
         kind = models.detect_kind(req.path)
         if kind == "unknown" and not req.path.lower().endswith(".safetensors"):
             kind = _ckpt_kind_from_torch(req.path)
@@ -372,8 +377,26 @@ class Engine(BaseEngine):
             ctx.warn("could not detect the model type; assuming SD1.5")
         if kind not in PIPELINE_CLASSES:
             raise EngineError(MODEL_LOAD_FAILED, f"unsupported model architecture ({kind}): {os.path.basename(req.path)}")
+        requested_mode = req.vram_mode
+        reason = "requested"
+        if req.vram_mode == "auto" and req.fp8_storage:
+            # Preserve the current pipeline if auto cannot safely choose the only
+            # mode supported by fp8. Its memory may become available after unload,
+            # but cannot be counted reliably while the live pipeline still owns it.
+            mode, reason = self._auto_vram_mode(req, kind)
+            if mode != "gpu":
+                raise EngineError(UNSUPPORTED, "fp8_storage needs the 'gpu' VRAM mode; "
+                                  "auto cannot confirm it with the current free VRAM. "
+                                  "Unload the current model and retry auto, or explicitly request gpu mode.")
+            req.vram_mode = mode
+            ctx.log("info", f"VRAM mode auto -> {mode} ({reason}; before unloading current model)")
         self._free()
+        self.vram_requested = requested_mode
+        if req.vram_mode == "auto":
+            req.vram_mode, reason = self._auto_vram_mode(req, kind)
+            ctx.log("info", f"VRAM mode auto -> {req.vram_mode} ({reason})")
         self.load_opts = req
+        self.vram_reason = reason
         self.dtype = DTYPES[req.dtype] if self.cuda else torch.float32
         flags = {}
         if req.path.lower().endswith(".safetensors"):
@@ -397,12 +420,16 @@ class Engine(BaseEngine):
         self.base_sched_config = dict(pipe.scheduler.config)
         self.pipe = pipe
         self.orig_vae = pipe.vae
-        if req.vae_tiling:
-            pipe.vae.enable_tiling()
+        perf.apply_vae(pipe.vae, req)
         if req.vae_path:
             self._swap_vae(req.vae_path, ctx)
         try:
             self._place(pipe)
+            if self.cuda:
+                perf.apply_unet(pipe, req, self.dtype)
+        except EngineError:
+            self._free()
+            raise
         except Exception as e:
             self._free()
             raise EngineError(MODEL_LOAD_FAILED, f"failed to move model to device: {e}", traceback.format_exc())
@@ -410,11 +437,21 @@ class Engine(BaseEngine):
                       "hash": models.short_hash(req.path), "model_token": uuid.uuid4().hex}
         return self._loaded(int((time.monotonic() - t0) * 1000))
 
+    def _auto_vram_mode(self, req, kind: str) -> tuple[str, str]:
+        if not self.cuda:
+            return "gpu", "no CUDA device"
+        from .vae_memory import free_bytes
+        free_mb = free_bytes() / 2**20
+        return perf.resolve_vram_mode("auto", weights_mb=perf.checkpoint_weights_mb(req.path) * (2.0 if req.dtype == "fp32" else 1.0),
+                                      free_mb=free_mb, kind=kind)
+
     def _loaded(self, ms: int = 0) -> dict:
         m = dict(self.model)
         m["loaded_ms"] = ms
+        m["optimizations"] = perf.describe(self.load_opts, getattr(self, "vram_reason", ""))
         m["vae_name"] = self.vae_info["vae_name"] if self.vae_info else None
         m["vae_hash"] = self.vae_info["vae_hash"] if self.vae_info else None
+        m["vae_path"] = self.vae_info["path"] if self.vae_info else None
         return m
 
     def _load_vae_module(self, path: str):
@@ -446,8 +483,7 @@ class Engine(BaseEngine):
                 raise
             except Exception as e:
                 raise EngineError(MODEL_LOAD_FAILED, f"failed to load VAE {os.path.basename(path)}: {e}", traceback.format_exc())
-            if self.load_opts.vae_tiling:
-                vae.enable_tiling()
+            perf.apply_vae(vae, self.load_opts)
             self.vae_info = {"vae_name": models.model_name(path), "vae_hash": models.path_hash(path), "path": path}
         else:
             vae = self.orig_vae
@@ -1407,6 +1443,10 @@ class Engine(BaseEngine):
                 from . import compile_accel
                 compile_accel.install(self, pipe, gp, ctx, cleanups, controlnet=bool(cn_models), pass_=pass_,
                                       shape=(w, h, len(seeds)))
+            if hooks_mod.hook_config(gp.hooks, "deepcache", {}) is not None:
+                from . import deepcache
+                deepcache.install(self, pipe, gp, ctx, cleanups, controlnet=bool(cn_models), neutral=bool(neutral_plan),
+                                  pass_=pass_)
             if pag:
                 # Capture after IP load/unload: restoring pre-install processors would discard IP weights while
                 # IPAdapterState still considers them loaded. Also restore native PAG changes on failure.
@@ -1514,7 +1554,7 @@ class Engine(BaseEngine):
                     noise = [resized_noise(tuple(shape[1:]), seed, sub, variation,
                         resize_width, resize_height, draw_noise, slerp) for seed, sub in zip(seeds, subseeds)]
                     return torch.stack(noise).to(device=device, dtype=dtype)
-            with torch.inference_mode(), recovery, prepare_noise(pipe, noise_factory), conditioning_scope(pipe, None if latent_source is not None else conditioning_weight):
+            with torch.inference_mode(), recovery, vae_scope(self, getattr(pipe, "vae", None), w, h, len(seeds), ctx), prepare_noise(pipe, noise_factory), conditioning_scope(pipe, None if latent_source is not None else conditioning_weight):
                 if xplan.photomaker:
                     from .embedding_editor_generation import invoke_pipeline
                     from .photomaker_adapters import id_encoder_scope
@@ -1585,6 +1625,7 @@ class Engine(BaseEngine):
         self._cd_tuner_job = None
         self._incantations_job = None
         self._vae_recovery = []
+        self._aesthetic_digests = set()
         try:
             fields = params.get('params', {}) if isinstance(params, dict) else {}
             if not isinstance(fields, dict):
@@ -1596,6 +1637,9 @@ class Engine(BaseEngine):
                     result = self._generate_recorded(prepared, ctx, mode)
             if self._vae_recovery:
                 result['vae_recovery'] = self._vae_recovery
+            if self._aesthetic_digests:
+                aesthetic_gradients.add_provenance(result, self._aesthetic_digests, ctx.warn)
+                result['warnings'] = list(ctx.warnings)
             if self._composable_job is not None:
                 self._composable_job.finish(result, params.get("output_dir", ""))
             if params.get('system_info_fields'):
@@ -1619,6 +1663,7 @@ class Engine(BaseEngine):
                 self._embedding_merge_ctx = None
                 self._cd_tuner_job = None
                 self._incantations_job = None
+                self._aesthetic_digests = None
 
     def _generate_recorded(self, params: dict, ctx: JobContext, mode: str) -> dict:
         if getattr(self, "_embedding_reload_error", None):
@@ -1627,6 +1672,7 @@ class Engine(BaseEngine):
         hardware_started = time.perf_counter()
         req = self.parse_generation(params, mode, ctx)
         gp = req.params
+        ctx.face_checkpoint_hashes = {}
         from . import nsfw_checker
         nsfw_cfg = nsfw_checker.job_config(gp.hooks, ctx)
         from . import aesthetic_score
@@ -1636,7 +1682,9 @@ class Engine(BaseEngine):
         face_swap_cfg = hooks_mod.hook_config(gp.hooks, "batch_face_swap", {})
         if face_swap_cfg is not None:  # reject bad settings before the first image, not after it
             from . import batch_face_swap
-            batch_face_swap.normalize(face_swap_cfg)
+            face_checkpoint = batch_face_swap.normalize(face_swap_cfg)["checkpoint"]
+            if face_checkpoint and not os.path.isfile(face_checkpoint):
+                raise EngineError(INVALID_PARAMS, f"Batch Face Swap: checkpoint not found: {face_checkpoint}")
         from . import img2img_hires_fix
         refine_config = hooks_mod.hook_config(gp.hooks, 'img2img_hires_fix', {})
         refine_config = img2img_hires_fix.normalize(refine_config) if refine_config is not None else None
@@ -1825,7 +1873,7 @@ class Engine(BaseEngine):
                 if bfs is not None:
                     from . import batch_face_swap
                     images = self._adetailer(pass_gp, req, ctx, batch_face_swap.to_adetailer(bfs), images,
-                                             item_seeds, first, total, pag)
+                                             item_seeds, first, total, pag, batch_face_swap.normalize(bfs)["checkpoint"], bfs)
                 return images
             if hr_plan is None and refine_config is None and (keyword_plan is None or not detail):
                 if detail:
@@ -1859,6 +1907,9 @@ class Engine(BaseEngine):
                 path = next_output_path(req.output_dir, str(base_seeds[j]))
                 image_result = {"path": path, "seed": base_seeds[j], "subseed": base_subs[j],
                                 "width": im.width, "height": im.height}
+                face_hash = ctx.face_checkpoint_hashes.get(idx0 + j)
+                if face_hash:
+                    image_result.setdefault("infotext_fields", []).append(["Face checkpoint hash", face_hash])
                 if keyword_plan is not None:
                     image_result['effective_prompt'] = keyword_plan['replay_prompts'][it * bs + j]
                     image_result['model_keyword_source_prompt'] = keyword_plan['prompts'][it * bs + j]
@@ -1874,7 +1925,10 @@ class Engine(BaseEngine):
                     image_result['hardware_info'] = record(hardware_profile, hardware_timer.next_image(), req.hardware_info.remark)
                 if aesthetic_cfg is not None:
                     # Aesthetic score: the final image as it is saved (after censoring and any upscale).
-                    image_result.update(aesthetic_score.score_final(im, aesthetic_cfg, ctx, gp, seed, self.model["hash"]))
+                    score = aesthetic_score.score_final(im, aesthetic_cfg, ctx, gp, seed, self.model["hash"])
+                    score_fields = score.pop("infotext_fields", [])
+                    image_result.update(score)
+                    image_result.setdefault("infotext_fields", []).extend(score_fields)
                 if getattr(self, '_benchmark_no_save', False):
                     if getattr(self, '_vram_capture_sample', False) and getattr(self, '_vram_sample', None) is None:
                         self._vram_sample = im.copy()
@@ -2083,7 +2137,30 @@ class Engine(BaseEngine):
                              "revision", "ip_adapter", "controllllite", "photomaker", "img2imgalt", "soft_inpainting",
                              "agent_attention", "incantations", "sonar", "llul", "aesthetic_gradients", "batch_face_swap")
 
-    def _adetailer(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag):
+    def _adetailer(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag, checkpoint="", face_config=None):
+        from contextlib import ExitStack
+        if checkpoint and self.model and self.model.get("path"):
+            try:
+                if os.path.samefile(checkpoint, self.model["path"]):
+                    checkpoint = ""
+            except OSError:
+                pass
+        with ExitStack() as stack:
+            worker = None
+            def face_engine(sub):
+                nonlocal worker
+                from . import batch_face_swap
+                if not checkpoint:
+                    batch_face_swap.verify_checkpoint_hash((face_config or {}).get("checkpoint_hash", ""), self.model)
+                    return self
+                if worker is None:
+                    worker = stack.enter_context(batch_face_swap.face_engine_scope(self, checkpoint, ctx, Engine))
+                    batch_face_swap.verify_checkpoint_hash((face_config or {}).get("checkpoint_hash", ""), worker.model)
+                    batch_face_swap.prepare_face_engine(worker, sub, req, ctx, face_config or {})
+                return worker
+            return self._adetailer_impl(gp, req, ctx, cfg, imgs, seeds, idx0, total, pag, face_engine, face_config)
+
+    def _adetailer_impl(self, gp, req, ctx, cfg, imgs, seeds, idx0, total, pag, face_engine, face_config):
         """ADetailer: detect, then inpaint every detection of every unit (in unit order) at full resolution."""
         import dataclasses
 
@@ -2105,16 +2182,20 @@ class Engine(BaseEngine):
                         masks = adm.unit_masks(im, {**u, 'model': resolved}, dev, cfg.get("model_dirs"))
                         if resolved != 'opencv_face':
                             from .resource_hashes import record_file
-                            record_file(ctx.resource_hashes, 'adetailer', resolved, ctx.warn, adm.loaded_snapshot(resolved))
+                            resource = adm.loaded_snapshot(resolved)
+                            resource_path = str(resource.path) if resolved == 'mediapipe_face' and resource else resolved
+                            record_file(ctx.resource_hashes, 'adetailer', resource_path, ctx.warn, resource)
                     else:
                         masks = adm.unit_masks(im, u, dev, cfg.get("model_dirs"))
                 except ImportError as e:
-                    raise EngineError(UNSUPPORTED, f"ADetailer model '{u['model']}' needs the ultralytics package: {e}")
+                    package = 'mediapipe' if u['model'] == 'mediapipe_face' else 'ultralytics'
+                    raise EngineError(UNSUPPORTED, f"ADetailer model '{u['model']}' needs the {package} package: {e}")
                 except FileNotFoundError as e:
                     raise EngineError(INVALID_PARAMS, str(e))
                 if not masks:
                     log.info("ADetailer unit %d: nothing detected", ui + 1)
                     continue
+                worker = face_engine(sub)
                 pos = adm.unit_prompts(u["prompt"], gp.prompt, len(masks))
                 neg = adm.unit_prompts(u["negative_prompt"], gp.negative_prompt, len(masks))
                 if u["use_inpaint_width_height"]:
@@ -2129,13 +2210,21 @@ class Engine(BaseEngine):
                     ctx.check_interrupt()
                     job = inpaint.prepare(im, m, w, h, 0, int(u["mask_blur"]), 1, bool(u["inpaint_only_masked"]),
                                           int(u["inpaint_padding"]), False, seed)
-                    emb = self._adjust_embeds(sub, self._encode_scheduled(pos[k], neg[k], sub, 1, steps,
+                    emb = worker._adjust_embeds(sub, worker._encode_scheduled(pos[k], neg[k], sub, 1, steps,
                                                                          gradient_total=actual), ctx)
-                    res, _ = self._run("inpaint", sub, req, ctx, sampler=sampler, schedule=gp.scheduler,
+                    res, _ = worker._run("inpaint", sub, req, ctx, sampler=sampler, schedule=gp.scheduler,
                                        cfg_scale=cfg_scale, embeds=emb, steps=n, w=w, h=h, seeds=[seed],
                                        pass_="adetailer", image_idx=idx0 + j, images_total=total, image=[job.image],
                                        mask=[job.mask], strength=strength, expected_steps=actual, pag=pag,
                                        hook_seed=seed, conditioning_denoise=float(u['denoising_strength']))
+                    if face_config and face_config.get("checkpoint"):
+                        face_hash = (getattr(worker, "model", None) or {}).get("hash")
+                        if face_hash:
+                            ctx.face_checkpoint_hashes[idx0 + j] = face_hash
+                            resources = getattr(ctx, "resource_hashes", None)
+                            if resources is not None:
+                                name = os.path.basename(face_config["checkpoint"])
+                                resources[f"face_model:{name}"] = face_hash
                     redrawn = res[0]
                     if u["color_correction"]:
                         redrawn = adm.match_colors(redrawn, job.image)
@@ -2229,7 +2318,8 @@ class Engine(BaseEngine):
         pipe = self.pipe
         vae = pipe.vae
         recovery = catch_decode(self, vae, recovery_dir, ctx) if ctx is not None and recovery_dir else nullcontext()
-        with torch.inference_mode(), recovery:
+        with torch.inference_mode(), recovery, vae_scope(self, vae, int(latents.shape[-1]) * 8, int(latents.shape[-2]) * 8,
+                                                         int(latents.shape[0]), ctx):
             original_dtype = vae.dtype
             needs_upcast = original_dtype == torch.float16 and getattr(vae.config, "force_upcast", False)
             try:

@@ -4,7 +4,7 @@ import javafx.beans.property.{SimpleBooleanProperty, SimpleDoubleProperty, Simpl
 import javafx.collections.FXCollections
 import javafx.scene.control.*
 import javafx.scene.layout.VBox
-import javafx.stage.DirectoryChooser
+import javafx.stage.{DirectoryChooser, FileChooser}
 import sdfx.core.model.PreprocessorControls
 import sdfx.core.plugins.api.ChoiceSource
 import sdfx.ui.Fx
@@ -118,11 +118,43 @@ final class ControlNetExtrasCard(ctx: UiContext, source: () => Option[Path], sho
 
   private val runBatch: Button = W.button("▶ Run on folder", "Process every image in the input folder") { startBatch() }
   runBatch.setId("extras-cn-batch")
+  private val selectedFiles = FXCollections.observableArrayList[Path]()
+  private val selectedList = new ListView[Path](selectedFiles)
+  selectedList.setId("extras-cn-selected-list"); selectedList.setPrefHeight(90)
+  private val selectedStatus = W.label("No files selected", "hint")
+  selectedStatus.setId("extras-cn-selected-status")
+  selectedFiles.addListener((_: javafx.collections.ListChangeListener.Change[? <: Path]) =>
+    selectedStatus.setText(s"${selectedFiles.size} files selected"))
+  private val chooseFiles = W.button("Choose images…", "Choose the images to preprocess") {
+    val chooser = new FileChooser()
+    chooser.setTitle("Choose images")
+    chooser.getExtensionFilters.add(new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp"))
+    Option(chooser.showOpenMultipleDialog(run.getScene.getWindow)).foreach { files =>
+      selectedFiles.setAll(files.asScala.map(_.toPath).asJava)
+    }
+  }
+  chooseFiles.setId("extras-cn-choose-files")
+  private val runSelected = W.button("▶ Run on selected images", "Process the chosen images") {
+    val out = Option(outputDir.get).map(_.trim).filter(_.nonEmpty).map(Paths.get(_))
+    if selectedFiles.isEmpty then ctx.info("Choose images first")
+    else out match
+      case None => ctx.info("Choose the output folder")
+      case Some(o) => runFiles(selectedFiles.asScala.toVector, o)
+  }
+  runSelected.setId("extras-cn-run-selected")
+  private val removeSelected = W.button("Remove selected", "Remove the highlighted image from the list") {
+    val p = selectedList.getSelectionModel.getSelectedItem
+    if p != null then selectedFiles.remove(p)
+  }
+  removeSelected.setId("extras-cn-remove-selected")
   private val cancelBatch: Button = W.button("Cancel", "Stop after the image being processed")(cancel.set(true))
   cancelBatch.setId("extras-cn-cancel")
   cancelBatch.disableProperty.bind(busy.not)
   run.disableProperty.bind(busy)
   runBatch.disableProperty.bind(busy)
+  runSelected.disableProperty.bind(busy)
+  chooseFiles.disableProperty.bind(busy)
+  removeSelected.disableProperty.bind(busy)
 
   private def startBatch(): Unit =
     val in = Option(inputDir.get).map(_.trim).filter(_.nonEmpty).map(Paths.get(_))
@@ -135,35 +167,37 @@ final class ControlNetExtrasCard(ctx: UiContext, source: () => Option[Path], sho
       case (Some(i), Some(o)) =>
         val files = listImages(i)
         if files.isEmpty then ctx.info("No images in the input folder")
-        else
-          val session = ctx.services.imageScrambleSession.state
-          val chosen = module.get
-          val (a, res, pp) = (args, processorRes, pixelPerfectOn)
-          cancel.set(false)
-          setBusy(true)
-          status.setText(s"0 / ${files.size}")
-          Fx.async {
-            var done = 0
-            var failed = Vector.empty[String]
-            val iterator = files.iterator
-            while iterator.hasNext && !cancel.get do
-              val f = iterator.next()
-              try ctx.services.generator.preprocessExtras(f, chosen, a, res, pp, Some(o), session.secret)
-              catch case e: Exception => failed :+= s"${f.getFileName}: ${Fx.message(e).linesIterator.nextOption().getOrElse("").take(120)}"
-              done += 1
-              val (d, n) = (done, failed.size)
-              Fx.run(status.setText(s"$d / ${files.size}" + (if n > 0 then s" ($n failed)" else "")))
-            BatchOutcome(done, files.size, failed, cancel.get)
-          } { r =>
-            setBusy(false)
-            val text = s"${r.done - r.failed.size} of ${r.total} written to $o" + (if r.cancelled then " (cancelled)" else "") +
-              (if r.failed.nonEmpty then s"; ${r.failed.size} failed, first: ${r.failed.head}" else "")
-            status.setText(text)
-            if r.failed.isEmpty then ctx.success(text) else ctx.error(text)
-          } { e =>
-            setBusy(false)
-            ctx.error(s"Batch failed: ${Fx.message(e)}")
-          }
+        else runFiles(files, o)
+
+  private def runFiles(files: Seq[Path], o: Path): Unit =
+    val session = ctx.services.imageScrambleSession.state
+    val chosen = module.get
+    val (a, res, pp) = (args, processorRes, pixelPerfectOn)
+    val cleanupWarnings = new java.util.concurrent.atomic.AtomicInteger(0)
+    val firstCleanupWarning = new java.util.concurrent.atomic.AtomicReference[String]()
+    cancel.set(false)
+    setBusy(true)
+    status.setText(s"0 / ${files.size}")
+    Fx.async {
+      runItems(files, cancel)(f => {
+        if session.revision != ctx.services.imageScrambleSession.state.revision then
+          cancel.set(true)
+          throw new IllegalStateException("Image protection session changed")
+        val staged = ctx.services.generator.preprocessExtras(f, chosen, a, res, pp, None, session.secret)
+        try publishStaged(staged, f, chosen, o, ctx.services.imageScrambleSession, session.revision,
+          warn = message => { cleanupWarnings.incrementAndGet(); firstCleanupWarning.compareAndSet(null, message); Fx.run(ctx.error(message)) })
+        catch
+          case e: SessionChanged => cancel.set(true); throw e
+      }, (d, n) => Fx.run(status.setText(s"$d / ${files.size}" + (if n > 0 then s" ($n failed)" else ""))))
+    } { r =>
+      setBusy(false)
+      val text = batchStatus(r, o, cleanupWarnings.get(), Option(firstCleanupWarning.get()))
+      status.setText(text)
+      if r.failed.isEmpty && cleanupWarnings.get() == 0 then ctx.success(text) else ctx.error(text)
+    } { e =>
+      setBusy(false)
+      ctx.error(s"Batch failed: ${Fx.message(e)}")
+    }
 
   // ---- send to ControlNet ----------------------------------------------------------------------------------------
   private def sendControlNet(mode: Mode): Unit =
@@ -209,6 +243,7 @@ final class ControlNetExtrasCard(ctx: UiContext, source: () => Option[Path], sho
       W.hbox(6, W.hgrow(inField), W.button("…", "Choose the input folder")(pick(inputDir, "Input folder"))),
       W.hbox(6, W.hgrow(outField), W.button("…", "Choose the output folder")(pick(outputDir, "Output folder"))),
       W.hbox(8, runBatch, cancelBatch),
+      W.label("Selected images", "card-title"), W.hbox(8, chooseFiles, removeSelected, runSelected), selectedStatus, selectedList,
       status,
       W.hbox(6, sendTxt, sendImg, W.label("unit"), unitSpinner))
     card.setId("extras-cn-card")
@@ -216,6 +251,62 @@ final class ControlNetExtrasCard(ctx: UiContext, source: () => Option[Path], sho
 
 object ControlNetExtrasCard:
   final case class BatchOutcome(done: Int, total: Int, failed: Vector[String], cancelled: Boolean)
+  def batchStatus(r: BatchOutcome, output: Path, warnings: Int, firstWarning: Option[String]): String =
+    s"${r.done - r.failed.size} of ${r.total} written to $output" + (if r.cancelled then " (cancelled)" else "") +
+      (if r.failed.nonEmpty then s"; ${r.failed.size} failed, first: ${r.failed.head}" else "") +
+      (if warnings > 0 then s"; $warnings temporary file cleanup warning(s), first: ${firstWarning.getOrElse("")}" else "")
+  final class SessionChanged extends IllegalStateException("Image protection session changed")
+
+  /** Commit the job-owned staging file while session changes are excluded; never delete a published path. */
+  def publishStaged(staged: Path, input: Path, module: String, output: Path,
+      session: sdfx.core.png.ImageScrambleSession, revision: Long,
+      transfer: (Path, Path) => Unit = (from, to) => { Files.copy(from, to, java.nio.file.StandardCopyOption.REPLACE_EXISTING); () },
+      cleanup: Path => Unit = p => { Files.deleteIfExists(p); () }, warn: String => Unit = _ => ()): Path =
+    def clean(path: Path, primary: Throwable): Unit =
+      try cleanup(path)
+      catch case scala.util.control.NonFatal(e) =>
+        if primary != null then primary.addSuppressed(e)
+        warn(s"Could not remove temporary file $path: ${Fx.message(e)}")
+    var primary: Throwable = null
+    try
+      session.synchronized {
+        if session.state.revision != revision then throw new SessionChanged
+        Files.createDirectories(output)
+        val localStage = Files.createTempFile(output, ".sdfx-cn-", ".tmp")
+        var moved = false
+        var localFailure: Throwable = null
+        try
+          transfer(staged, localStage)
+          val stem = Option(input.getFileName).map(_.toString).getOrElse("image").replaceAll("""\.[^.]*$""", "")
+          var n = 0
+          def target = output.resolve(if n == 0 then s"$stem-$module.png" else s"$stem-$module-$n.png")
+          while Files.exists(target) do n += 1
+          val result = Files.move(localStage, target)
+          moved = true
+          result
+        catch
+          case scala.util.control.NonFatal(e) =>
+            localFailure = e
+            throw e
+        finally if !moved then clean(localStage, localFailure)
+      }
+    catch
+      case scala.util.control.NonFatal(e) =>
+        primary = e
+        throw e
+    finally clean(staged, primary)
+
+  def runItems(files: Seq[Path], cancel: AtomicBoolean)(process: Path => Unit, progress: (Int, Int) => Unit): BatchOutcome =
+    var done = 0
+    var failed = Vector.empty[String]
+    val iterator = files.iterator
+    while iterator.hasNext && !cancel.get do
+      val f = iterator.next()
+      try process(f)
+      catch case e: Exception => failed :+= s"${f.getFileName}: ${Fx.message(e).linesIterator.nextOption().getOrElse("").take(120)}"
+      done += 1
+      progress(done, failed.size)
+    BatchOutcome(done, files.size, failed, cancel.get)
 
   /** Images directly inside `dir`, sorted by name. */
   def listImages(dir: Path): Seq[Path] =

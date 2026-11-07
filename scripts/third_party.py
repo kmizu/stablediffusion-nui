@@ -21,7 +21,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # (repo, how it is used, what)
 BASE = [
+    ("Inzaniak/sd-webui-workflow", "reimplemented", "Unlicensed behavior reference cb68fa94ee232bb33cee7dfcfd586e4c57d77c3b; phase settings independently reimplemented from README and the author's public workflow guide only; no upstream code copied. Mask, overlay and effects are not yet implemented."),
+    ("mlfoundations/open_clip", "optional dependency and adapted loader", "OpenCLIP 2.32.0 for CLIP Interrogator; state-dict normalization adapted from factory.py at bf5d49c with unsafe torch.load retry removed. Optional user-installed dependency; model weights are downloaded separately, not bundled. Model licences vary by pretrained weight."),
+    ("huggingface/pytorch-image-models", "optional dependency", "timm 1.0.15, used by optional OpenCLIP ConvNeXt and other image encoders; user installed, not bundled"),
+    ("rspeer/python-ftfy", "optional dependency", "ftfy 6.3.1, optional OpenCLIP text preprocessing; user installed, not bundled"),
+    ("jquast/wcwidth", "optional dependency", "wcwidth 0.2.13, dependency of optional ftfy; user installed, not bundled"),
     ("pharmapsychotic/clip-interrogator", "data and behavior reference", "MIT library at bc07ce62c179d3aab3053a623d96a071101d11cb; its artists.txt, flavors.txt, mediums.txt, movements.txt and negative.txt label lists are bundled unchanged in python/sdfx/data/clip_interrogator (82,438 / 1,804,274 / 1,606 / 2,683 / 418 bytes), and its best / fast / classic / negative / caption algorithms and embedding-cache layout are re-implemented as the `clip_interrogator` engine request, Interrogator tab and MCP tool. CLIP runs through transformers' CLIPModel on the Hugging Face conversions of the OpenAI (openai/clip-vit-large-patch14 and siblings; model cards state no licence) and LAION (laion/CLIP-ViT-H-14-laion2B-s32B-b79K, bigG, g, L, B; MIT) weights; captions use Salesforce/blip-image-captioning-large and -base (BSD-3-Clause), microsoft/git-large-coco (MIT) and Salesforce/blip2-opt-2.7b and blip2-flan-t5-xl (MIT). None of the models is bundled; they are downloaded from Hugging Face on first use"),
+    ("tritant/sd-webui-creaprompt", "data and behavior reference", "MIT source 31fe03143206399c704cee7939de9dbf80c9a84e; its csv word lists (42 categories), collection.txt (801 prompts) and 11 .config presets are bundled in plugins/src/main/resources/creaprompt unchanged apart from LF line endings (661,951 bytes in the upstream CRLF form, with the upstream LICENSE; the lists carry contributions credited in its README: Franck Demongin, Philippe Joye, Francis Malapris, Franck Cal, StudioD Uzes, Neo Drole De Gueule, Light Vision AI, Adel AI, Thomas Buyle, Laurent Vishnou, Antoine Drugeot), and the options of its script are re-implemented as the `creaprompt` script; no script code copied"),
     ("Malisius/booru2prompt", "reimplemented", "Unlicensed behavior reference 4bd88839a6454428d098c7ad6672cc0989dd6a60; only its README was used (post link / id selection, search, extra tag choices, underscore and comma options), re-implemented in the `booru_prompt` script; no upstream code was read or copied"),
     ("antis0007/sd-webui-gelbooru-prompt", "reimplemented", "Pinned GPL-3.0 source b0128f931a8306a8f1a030c515792e3128b97f04; only its README was used (tags of a saved Gelbooru image from its md5 file name), re-implemented as post references in the `booru_prompt` script; no upstream code copied"),
     ("nochnoe/sd-webui-e621-prompt", "reimplemented", "Pinned MIT source 74ce0a50d788abfa42d67b0614f7195d3f71294c; only its README was used (e621 link / id / md5, tag categories with prefixes, underscores, exclude and append tags), re-implemented in the `booru_prompt` script; no upstream code copied"),
@@ -221,6 +227,7 @@ BASE = [
     ("onnx/onnx", "dependency", "Optional local WD v3 model structure inspection"),
     ("microsoft/onnxruntime", "dependency", "WD14 tagger and optional local WD v3 batch inference"),
     ("ultralytics/ultralytics", "dependency", "YOLO detectors for ADetailer (optional Python package)"),
+    ("google-ai-edge/mediapipe", "dependency", "Optional MediaPipe Tasks face detector for Batch Face Swap; BlazeFace short-range v1 is downloaded on first use from Google and verified by size and SHA-256. Its model card states Apache-2.0; neither model nor package is bundled."),
     ("danielgatis/rembg", "dependency", "background removal models (optional Python package)"),
     ("FFmpeg/FFmpeg", "dependency", "Optional external ffmpeg executable for Save Intermediate, Steps Animation and AnimateDiff (MP4 / WEBM) video export; "
      "no FFmpeg binary is bundled or installed by this app. Upstream LICENSE.md explains build-dependent licensing: "
@@ -257,8 +264,14 @@ BASE = [
 # Keep these source-pinned original LICENSE bytes; do not normalize newlines.
 # (commit, license path, SHA-256, SPDX)
 PINNED_LICENSES = {
+    "google-ai-edge/mediapipe": ("f9967ed5df2009941084393d99abcbdd0e1c0bcd", "LICENSE", "8707eef0533987efc5b155d64761eeb6e20793f50b9bd1a68dad1cf4719d0ed8", "Apache-2.0"),
+    "mlfoundations/open_clip": ("bf5d49c112c82c738f7b34bde6e154760a711790", "LICENSE", "4a5b4f13ea4792a8211a69f32d2b460b6d520e57cd23c6301e707c76a6e97a55", "MIT"),
+    "huggingface/pytorch-image-models": ("e44f14d7d2f557b9f3add82ee4f1ed2beefbb30d", "LICENSE", "71b111620fa32c17a80ccd6db2da759d31a591e497d8b5f382174f59d1b59d49", "Apache-2.0"),
+    "rspeer/python-ftfy": ("5340af6746ff655a9cd7cb2b50c2fd0b35bb91d3", "LICENSE.txt", "a0bfc5020bc2e1e820551a0625c70c95faa898c15e737100ff4880aa10197857", "Apache-2.0"),
+    "jquast/wcwidth": ("36a625179ed2675287fe6b61c2ad319406449e60", "LICENSE", "70b98a95a2144eb70af8017fa8c6d95ce247e40867436e8bc649e137fe13d21a", "MIT"),
     "pharmapsychotic/clip-interrogator": ("bc07ce62c179d3aab3053a623d96a071101d11cb", "LICENSE", "7e1e37e5be417bda424b5c834169653b31353f1d10640c7f1dd62bf56a5c677b", "MIT"),
     "pharmapsychotic/clip-interrogator-ext": ("0f1a4591f82b93859a1b854afb79494f39384662", "LICENSE", "882ca262c9f5da6be4f93fb52394b8a7525d41b68594afa8e7ef5de2bed2a6f4", "MIT"),
+    "tritant/sd-webui-creaprompt": ("31fe03143206399c704cee7939de9dbf80c9a84e", "LICENSE", "24117be216b3220c64f30b68a96160a73247a3b371086d1d273807b4634ae0fa", "MIT"),
     "antis0007/sd-webui-gelbooru-prompt": ("b0128f931a8306a8f1a030c515792e3128b97f04", "LICENSE", "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986", "GPL-3.0"),
     "nochnoe/sd-webui-e621-prompt": ("74ce0a50d788abfa42d67b0614f7195d3f71294c", "LICENSE", "442e98fcf4a5025b373765e15a9e41a3d1aef54b6f5413313e3e669c5f209252", "MIT"),
     "continue-revolution/sd-webui-animatediff": ("a88e88912bcbae0531caccfc50fd639f6ea83fd0", "LICENSE", "9e502ba75fd0fd30cea5497b438a4bc12f07f02bc932a7a6041fd6a18b8f46a0", "CC-BY-NC-SA-4.0"),
@@ -341,6 +354,8 @@ PINNED_LICENSES = {
 # Audited source has no license file. Do not fetch another branch or invent a license text.
 # (commit, notice label)
 PINNED_UNLICENSED = {
+    "Inzaniak/sd-webui-workflow": (
+        "cb68fa94ee232bb33cee7dfcfd586e4c57d77c3b", "no license file published at pinned source"),
     "light-and-ray/sd-webui-cn-in-extras-tab": (
         "857262300ae8b849cfa0ed2c2802e93bf160ebd0", "no license file published at pinned source"),
     "Malisius/booru2prompt": (
@@ -513,7 +528,9 @@ def main(argv=()):
                 lic = f"upstream file unavailable; archived license ([text](licenses/{fname}))"
             else:
                 lic = "no license file published"
-        rows.append(f"| [{repo}](https://github.com/{repo}) | {how} | {lic} | {what} |")
+        source_url = (f"https://huggingface.co/{repo}" if repo == "openai/clip-vit-large-patch14"
+                      else f"https://github.com/{repo}")
+        rows.append(f"| [{repo}]({source_url}) | {how} | {lic} | {what} |")
         print(f"{repo:60s} {lic.split(' ', 1)[0]}")
     md = [
         "# Third-party notices",

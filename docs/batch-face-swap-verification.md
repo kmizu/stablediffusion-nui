@@ -1,5 +1,7 @@
 # Batch Face Swap verification (#6, partial)
 
+> This is the initial partial verification record. Its “Not provided” section describes that earlier revision: separate face checkpoints, folder input and MediaPipe have since been implemented. Current evidence and limits are in [batch-face-audit-ja.md](batch-face-audit-ja.md), [batch-face-checkpoint-ja.md](batch-face-checkpoint-ja.md), [batch-face-mediapipe-wip.md](batch-face-mediapipe-wip.md) and [the folder record](superpowers/plans/2026-11-03-batch-face-folder.md). Issue #6 remains open.
+
 Source: kex0/batch-face-swap `942ebae6937d9ad7964f285a790e7721f712b9ec` (ledger index 59, target `batch_face_swap`). The repository has no licence file (GitHub reports none) and its README says the project is no longer maintained and recommends ADetailer / ReActor. Only the README was read: "Automatically detects faces and replaces them", enable it in the txt2img / img2img accordion, img2img takes one image or a folder, and "override options only affect face generation" (a different prompt, or a different model, for the faces). No upstream code was read or copied; the README documents no option names or infotext keys, so the controls and the `Batch Face Swap` infotext key are NUI's own. Recorded as `PINNED_UNLICENSED` in `scripts/third_party.py`. The detector weights come from Bingsu/adetailer (model card: Apache-2.0, pinned `53cc19de...`) and need the optional `ultralytics` package (AGPL-3.0), both recorded as dependencies.
 
 ## Behaviour

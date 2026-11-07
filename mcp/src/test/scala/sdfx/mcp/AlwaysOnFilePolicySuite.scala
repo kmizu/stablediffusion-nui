@@ -10,6 +10,28 @@ class AlwaysOnFilePolicySuite extends munit.FunSuite:
     def kind = PluginKind.AlwaysOn
     override def controls = Seq(Control.Text("head", "Head file"), Control.Text("image_encoder", "Encoder"))
 
+  test("aesthetic guidance is not an MCP input and explicit weights are preserved") {
+    val aesthetic = new sdfx.plugins.AestheticGradientsPlugin
+    val input = new AlwaysOnInputs(() => Seq(aesthetic), _ => Nil, (v, _) => v, (v, _) => v)
+    val properties = input.schema(aesthetic)("properties").obj
+    assert(!properties.contains("sdxl_weight_help"))
+    assertEquals(properties("weight")("default").num, 0.9)
+    for weight <- Seq(0.0, 0.3, 0.9) do
+      assertEquals(input.validate(aesthetic, ujson.Obj("embedding" -> "sunset", "weight" -> weight)).double("weight"), weight)
+  }
+
+  test("aesthetic embedding names and paths all go through the local file policy") {
+    val aesthetic = new sdfx.plugins.AestheticGradientsPlugin
+    var checked = Vector.empty[String]
+    val input = new AlwaysOnInputs(() => Seq(aesthetic), _ => Nil, (_, _) => "image",
+      (v, _) => { checked :+= v; if v == "aesthetic_embeddings/sunset.pt" then "resolved-file" else throw ToolError("outside roots") })
+    assertEquals(input.validate(aesthetic, ujson.Obj("embedding" -> "sunset")).str("embedding"), "resolved-file")
+    assertEquals(input.validate(aesthetic, ujson.Obj("embedding" -> "sunset.pt")).str("embedding"), "resolved-file")
+    intercept[ToolError] { input.validate(aesthetic, ujson.Obj("embedding" -> "../../secret.pt")) }
+    intercept[ToolError] { input.validate(aesthetic, ujson.Obj("embedding" -> "\\\\server\\share\\secret.pt")) }
+    assertEquals(checked, Vector("aesthetic_embeddings/sunset.pt", "aesthetic_embeddings/sunset.pt", "../../secret.pt", "\\\\server\\share\\secret.pt"))
+  }
+
   test("relative model file paths cannot bypass the file policy; HF encoder identifiers remain identifiers") {
     var checked = Vector.empty[String]
     val input = new AlwaysOnInputs(() => Seq(plugin), _ => Nil, (_, _) => "image",
@@ -33,6 +55,17 @@ class AlwaysOnFilePolicySuite extends munit.FunSuite:
       intercept[ToolError] { policy.resolveDirectory("\\\\server\\share", "encoder", root) }
     finally
       Files.deleteIfExists(nested); Files.deleteIfExists(root); Files.deleteIfExists(outside)
+  }
+
+  test("paths returned as real paths remain usable when an allowed root has a filesystem alias") {
+    val root = Files.createTempDirectory("mcp-root-alias-")
+    val file = Files.writeString(root.resolve("fixture.pt"), "fixture")
+    try
+      val policy = new PathPolicy(() => Seq(root))
+      assertEquals(policy.resolve(file.toRealPath().toString, "embedding", root), file.toRealPath())
+    finally
+      Files.deleteIfExists(file)
+      Files.deleteIfExists(root)
   }
 
   test("multiple image values keep actual newline separators") {
@@ -77,4 +110,18 @@ class AlwaysOnFilePolicySuite extends munit.FunSuite:
     intercept[ToolError] {
       populatedCatalog.parse(ujson.Obj("img2img_hires_fix" -> ujson.Obj("upscaler" -> "Missing")), Tab.Img2Img)
     }
+  }
+
+  test("Fastload loads through the verified snapshot resolver, not generic file policy") {
+    val fastload = new sdfx.plugins.ControlNetFastloadPlugin
+    var staged = Vector.empty[String]
+    val input = new AlwaysOnInputs(() => Seq(fastload), _ => Nil, (_, _) => fail("not an image"),
+      (_, _) => fail("generic file resolver must not handle Fastload"),
+      fastloadFile = Some((value, _) => { staged :+= value; "verified-snapshot.cni" }))
+    val values = input.validate(fastload, ujson.Obj("enabled" -> true, "mode" -> "load_only", "path" -> "input.cni"))
+    assertEquals(values.str("path"), "verified-snapshot.cni")
+    assertEquals(staged, Vector("input.cni"))
+    assertEquals(input.validate(fastload, ujson.Obj("enabled" -> true, "mode" -> "save_only", "path" -> "missing.cni")).str("path"), "")
+    assertEquals(input.validate(fastload, ujson.Obj("enabled" -> false, "path" -> "missing.cni")).str("path"), "")
+    assertEquals(staged, Vector("input.cni"))
   }

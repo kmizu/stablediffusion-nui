@@ -6,7 +6,7 @@ import java.util.concurrent.{Callable, ConcurrentLinkedQueue, CountDownLatch, Fu
 import javafx.application.Platform
 import javafx.embed.swing.SwingFXUtils
 import javafx.scene.Node
-import javafx.scene.control.{Button, ButtonType, CheckBox, DialogPane, ListView, TabPane, TextArea, TextField}
+import javafx.scene.control.{Button, ButtonType, CheckBox, ComboBox, DialogPane, ListView, TabPane, TextArea, TextField}
 import javafx.stage.{Stage, Window}
 import javax.imageio.ImageIO
 import scala.concurrent.duration.*
@@ -140,11 +140,35 @@ object RealGenerationHistoryCheck:
       // 1. Auto-record + thumbnail
       configure("1girl, red kimono, cherry blossoms", 7101, steps, 6.0)
       val paramsA = fx(window.vms(Mode.Txt2Img).toParams)
+      fx {
+        control[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        control[TextField]("generation-states-name").setText("saved before generation")
+      }
+      eventually("capture button ready") { fx(!control[Button]("generation-favourites-capture").isDisabled) }
+      val queuedBefore = events.asScala.count(_.isInstanceOf[JobEvent.JobQueued])
+      fx { control[Button]("generation-favourites-capture").fire() }
+      eventually("current favourite saved") { fx {
+        control[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.name == "saved before generation")
+      }}
+      require(events.asScala.count(_.isInstanceOf[JobEvent.JobQueued]) == queuedBefore, "saving favourite started generation")
+      fx {
+        val list = control[ListView[PresetRecord]]("generation-favourites-list")
+        list.getSelectionModel.clearAndSelect(0)
+        window.vms(Mode.Txt2Img).prompt.set("changed after saving")
+        control[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmFire("generation-states-restore-field")
+      require(fx(window.vms(Mode.Txt2Img).prompt.get) == paramsA.prompt)
+      confirmFire("generation-favourites-delete")
+      eventually("temporary favourite removed") { fx(control[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty) }
+      fx { control[TabPane]("generation-states-tabs").getSelectionModel.select(1) }
+      note("saved and restored current settings as a favourite without starting generation")
       val imageA = generate()
       eventually("first entry") { historyItems.size == 1 }
       val idA = historyItems.head.id
       val thumbA = home.configDir.resolve(s"generation-history/thumbs/$idA.png")
       eventually("first thumbnail") { Files.isRegularFile(thumbA) }
+      val thumbABytes = Files.readAllBytes(thumbA)
       val thumb = ImageIO.read(thumbA.toFile)
       require(thumb.getWidth <= 100 && thumb.getHeight <= 100 && math.max(thumb.getWidth, thumb.getHeight) == 100, s"thumbnail ${thumb.getWidth}x${thumb.getHeight}")
       val thumbColors = (for y <- 0 until thumb.getHeight; x <- 0 until thumb.getWidth yield thumb.getRGB(x, y)).distinct.size
@@ -158,6 +182,72 @@ object RealGenerationHistoryCheck:
       eventually("second entry") { historyItems.size == 2 }
       require(historyItems.head.fields.exists((k, v) => k.render == "generation.seed" && v.toString.contains("7102")), "newest entry must be first")
       note("second Generate recorded a second entry, newest first")
+      selectHistory(0, 1)
+      var favouriteFired = false
+      try eventually("history selection ready after thumbnail refresh") { fx {
+        val list = control[ListView[PresetRecord]]("generation-history-list")
+        val button = control[Button]("generation-history-favourite")
+        if favouriteFired then true
+        else if list.getSelectionModel.getSelectedItems.size == 2 && !button.isDisabled then
+          button.fire()
+          favouriteFired = true
+          true
+        else false
+      }}
+      catch case error: Throwable =>
+        val state = fx {
+          val list = control[ListView[PresetRecord]]("generation-history-list")
+          s"items=${list.getItems.size} selected=${list.getSelectionModel.getSelectedItems.size} disabled=${control[Button]("generation-history-favourite").isDisabled} tab=${control[TabPane]("generation-states-tabs").getSelectionModel.getSelectedIndex} status=${control[TextArea]("generation-states-status").getText}"
+        }
+        throw new IllegalStateException(state, error)
+      eventually("two favourites") { fx {
+        control[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        control[ListView[PresetRecord]]("generation-favourites-list").getItems.size == 2
+      }}
+      fx {
+        control[TextField]("generation-favourites-search").setText("girl, KIMONO")
+        val filtered = control[ListView[PresetRecord]]("generation-favourites-list")
+        require(filtered.getItems.size == 1, "favourites search should find the kimono prompt")
+        filtered.getSelectionModel.clearAndSelect(0)
+      }
+      val renameTask = new FutureTask[Unit](new Callable[Unit] {
+        def call(): Unit = control[Button]("generation-favourites-rename").fire()
+      })
+      Platform.runLater(renameTask)
+      eventually("rename dialog") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane]) || renameTask.isDone
+      }}
+      fx {
+        val dialog = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene)).map(_.getRoot)
+          .collectFirst { case pane: DialogPane => pane }.get
+        dialog.lookup(".text-field").asInstanceOf[TextField].setText("kimono favourite")
+        dialog.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      renameTask.get(30, TimeUnit.SECONDS)
+      eventually("renamed favourite ready") { fx {
+        val list = control[ListView[PresetRecord]]("generation-favourites-list")
+        list.getItems.size == 1 && list.getItems.get(0).name == "kimono favourite" &&
+          !control[Button]("generation-favourites-rename").isDisabled
+      }}
+      fx {
+        control[ComboBox[String]]("generation-states-field").setValue("generation.prompt")
+      }
+      confirmFire("generation-states-restore-field")
+      fx {
+        require(window.vms(Mode.Txt2Img).prompt.get == paramsA.prompt)
+        require(window.vms(Mode.Txt2Img).seed.get == 7102L)
+        control[TextField]("generation-favourites-search").clear()
+        control[CheckBox]("generation-history-auto").setSelected(false)
+      }
+      val imageFavourite = generate()
+      val favouriteMetadata = sdfx.core.png.PngMetadata.readParameters(imageFavourite).getOrElse("")
+      require(favouriteMetadata.contains(paramsA.prompt) && favouriteMetadata.contains("Seed: 7102"), favouriteMetadata)
+      fx {
+        window.vms(Mode.Txt2Img).prompt.set(paramsB.prompt)
+        control[CheckBox]("generation-history-auto").setSelected(true)
+        control[TabPane]("generation-states-tabs").getSelectionModel.select(1)
+      }
+      note(s"multiple favourites stored; restored a favourite prompt and generated image $imageFavourite")
       // 3. Identical state -> no duplicate
       generate()
       Thread.sleep(1500)
@@ -166,6 +256,23 @@ object RealGenerationHistoryCheck:
       // 4. Category-selective restore of the OLDER entry: prompts only
       selectHistory(1)
       eventually("older entry selected") { fx(control[ListView[PresetRecord]]("generation-history-list").getSelectionModel.getSelectedItems.size == 1) }
+      fx { control[ComboBox[String]]("generation-states-field").setValue("generation.prompt") }
+      confirmFire("generation-states-restore-field")
+      fx {
+        val vm = window.vms(Mode.Txt2Img)
+        require(vm.prompt.get == paramsA.prompt, "individual prompt not restored")
+        require(vm.seed.get == 7102L && vm.steps.get == steps + 1 && vm.cfgScale.get == 8.0,
+          "single-field restore changed other fields")
+      }
+      fx { control[CheckBox]("generation-history-auto").setSelected(false) }
+      val imageSingle = generate()
+      val singleMetadata = sdfx.core.png.PngMetadata.readParameters(imageSingle).getOrElse("")
+      require(singleMetadata.contains(paramsA.prompt) && singleMetadata.contains("Seed: 7102"), singleMetadata)
+      fx {
+        window.vms(Mode.Txt2Img).prompt.set(paramsB.prompt)
+        control[CheckBox]("generation-history-auto").setSelected(true)
+      }
+      note(s"single-field history restore changed only the selected prompt and generated image $imageSingle")
       setCategories(Set("prompts"))
       confirmFire("generation-states-restore")
       fx {
@@ -210,6 +317,109 @@ object RealGenerationHistoryCheck:
               !Files.exists(home.configDir.resolve(s"generation-history/thumbs/${ids(1)}.png")), "deleted thumbnails remain")
       note("multi-select Delete removed two entries and their thumbnails")
       screenshot("02-after-delete.png")
+      selectHistory(0)
+      eventually("history favourite toggle ready") { fx(!control[Button]("generation-history-favourite").isDisabled) }
+      fx { control[Button]("generation-history-favourite").fire() }
+      eventually("favourite removed") { fx(control[ListView[PresetRecord]]("generation-favourites-list").getItems.isEmpty) }
+      eventually("clear ready") { fx(!control[Button]("generation-history-clear").isDisabled) }
+      confirmFire("generation-history-clear")
+      eventually("named non-favourite survived clear") { fx {
+        control[TextArea]("generation-states-status").getText.contains("Cleared unnamed") &&
+          control[ListView[PresetRecord]]("generation-history-list").getItems.asScala.exists(_.name == "kimono favourite")
+      }}
+      require(Files.isRegularFile(thumbA), "named entry thumbnail was removed")
+      note("clear retained explicitly named history and thumbnail after removing favourite")
+      val upstream = run.resolve("synthetic-history.txt")
+      val previewUri = "data:image/png;base64," + java.util.Base64.getEncoder.encodeToString(thumbABytes)
+      val upstreamJson = s"""{"defaults":{"d":{"txt2img/Prompt":"source default","txt2img/Sampling method":"Euler","txt2img/Sampling steps":$steps,"txt2img/Width":$side,"txt2img/Height":$side,"customscript/seed.py/txt2img/Seed":7109,"txt2img/Unsupported":"preserved"}},"entries":{"1700000000123":{"saveVersion":"2.0","createdAt":1700000000123,"type":"txt2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"txt2img/Prompt":"1girl, red kimono, cherry blossoms"},"preview":"$previewUri"}}}"""
+      val gz = new java.util.zip.GZIPOutputStream(Files.newOutputStream(upstream))
+      gz.write(upstreamJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)); gz.close()
+      fx {
+        window.ctx.chooseStateManagerImport = () => Some(upstream)
+        control[Button]("generation-history-import").fire()
+      }
+      eventually("State Manager preview") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane])
+      }}
+      fx {
+        val pane = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene)).map(_.getRoot)
+          .collectFirst { case p: DialogPane => p }.get
+        require(pane.lookup("#state-manager-import-summary").asInstanceOf[TextArea].getText.contains("txt2img/Unsupported"))
+        pane.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      eventually("imported State Manager favourite") { fx {
+        control[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        control[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.source.exists(_.format == "state-manager-v2"))
+      }}
+      eventually("imported State Manager thumbnail") { fx {
+        val item = control[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.find(_.source.exists(_.format == "state-manager-v2")).get
+        Files.isRegularFile(home.configDir.resolve("generation-history/thumbs").resolve(item.id.toString + ".png")) &&
+          control[TextArea]("generation-states-status").getText.contains("thumbnails saved: 1")
+      }}
+      screenshot("03-imported-thumbnail.png")
+      fx {
+        val list = control[ListView[PresetRecord]]("generation-favourites-list")
+        val imported = list.getItems.asScala.find(_.source.exists(_.format == "state-manager-v2")).get
+        require(imported.source.get.originalFields.text.contains("preserved"))
+        list.getSelectionModel.clearSelection(); list.getSelectionModel.select(imported)
+        control[CheckBox]("generation-history-auto").setSelected(false)
+      }
+      val exported = run.resolve("state-original-export.gz")
+      fx { window.ctx.chooseStateManagerExport = () => Some(exported) }
+      confirmFire("generation-favourites-export")
+      eventually("original export saved") { Files.isRegularFile(exported) }
+      val exportedEntry = sdfx.core.presets.StateManagerV2.decode(Files.readAllBytes(exported)).toOption.get.head
+      require(exportedEntry.originalEntry.text.contains("preserved") || exportedEntry.originalDefaults.text.contains("preserved"))
+      note("exported imported State Manager original including unknown setting")
+      eventually("restore enabled after export") { fx(!control[Button]("generation-states-restore").isDisabled) }
+      confirmFire("generation-states-restore")
+      fx {
+        val p = window.vms(Mode.Txt2Img).toParams
+        require(p.prompt == "1girl, red kimono, cherry blossoms" && p.seed == 7109 && p.steps == steps)
+      }
+      val importedImage = generate()
+      val importedText = sdfx.core.png.PngMetadata.readParameters(importedImage).getOrElse("")
+      require(importedText.contains("1girl, red kimono, cherry blossoms") && importedText.contains("Seed: 7109"), importedText)
+      note(s"imported synthetic State Manager favourite, restored it and generated image $importedImage")
+      // Import img2img state separately; the source image is supplied explicitly because upstream state does not restore it.
+      val imgUpstream = run.resolve("synthetic-img2img-history.txt")
+      val imgJson = s"""{"defaults":{"d":{"img2img/Prompt":"source default","img2img/Sampling method":"Euler","img2img/Sampling steps":$steps,"img2img/Width":$side,"img2img/Height":$side,"img2img/Denoising strength":0.75,"customscript/seed.py/img2img/Seed":7111}},"entries":{"1700000000124":{"saveVersion":"2.0","type":"img2img","defaults":"d","groups":["history","favourites"],"quickSettings":{},"componentSettings":{"img2img/Prompt":"a blue ceramic teapot on a table","img2img/Denoising strength":0.35}}}}"""
+      val imgGz = new java.util.zip.GZIPOutputStream(Files.newOutputStream(imgUpstream))
+      imgGz.write(imgJson.getBytes(java.nio.charset.StandardCharsets.UTF_8)); imgGz.close()
+      fx {
+        window.select(Mode.Img2Img)
+        window.openGenerationStates(Mode.Img2Img)
+        window.ctx.chooseStateManagerImport = () => Some(imgUpstream)
+      }
+      eventually("img2img history ready") { fx(!control[Button]("generation-history-import").isDisabled) }
+      fx { control[Button]("generation-history-import").fire() }
+      eventually("img2img import preview") { fx {
+        Window.getWindows.asScala.exists(w => w.isShowing && w.getScene != null && w.getScene.getRoot.isInstanceOf[DialogPane])
+      }}
+      fx {
+        val pane = Window.getWindows.asScala.filter(_.isShowing).flatMap(w => Option(w.getScene)).map(_.getRoot)
+          .collectFirst { case p: DialogPane => p }.get
+        require(pane.lookup("#state-manager-import-summary").asInstanceOf[TextArea].getText.contains("generation.denoisingStrength"))
+        pane.lookupButton(ButtonType.OK).asInstanceOf[Button].fire()
+      }
+      eventually("img2img imported favourite") { fx {
+        control[TabPane]("generation-states-tabs").getSelectionModel.select(2)
+        control[ListView[PresetRecord]]("generation-favourites-list").getItems.asScala.exists(_.source.exists(_.format == "state-manager-v2"))
+      }}
+      fx {
+        val vm = window.vms(Mode.Img2Img)
+        vm.initImage.set(imageA.toString); vm.denoise.set(0.9)
+        val list = control[ListView[PresetRecord]]("generation-favourites-list")
+        list.getSelectionModel.clearSelection(); list.getSelectionModel.select(list.getItems.asScala.find(_.source.exists(_.format == "state-manager-v2")).get)
+      }
+      eventually("img2img restore ready") { fx(!control[Button]("generation-states-restore").isDisabled) }
+      confirmFire("generation-states-restore")
+      fx { require(math.abs(window.vms(Mode.Img2Img).denoise.get - 0.35) < 1e-9) }
+      val img2imgImage = generate()
+      val img2imgText = sdfx.core.png.PngMetadata.readParameters(img2imgImage).getOrElse("")
+      require(img2imgText.contains("Denoising strength: 0.35"), img2imgText)
+      screenshot("04-img2img-import.png")
+      note(s"imported and restored img2img denoising 0.35 and generated $img2imgImage")
       require(Files.isRegularFile(home.configDir.resolve("generation-history/library-v1.json")))
       Files.writeString(run.resolve("report.json"), ujson.write(ujson.Obj("status" -> "passed", "family" -> loaded.kind,
         "side" -> side, "steps" -> steps, "checks" -> ujson.Arr(notes.map(ujson.Str(_))*),

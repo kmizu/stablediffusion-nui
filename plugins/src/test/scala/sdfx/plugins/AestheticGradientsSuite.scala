@@ -9,6 +9,17 @@ class AestheticGradientsSuite extends munit.FunSuite:
   private def enabled(extra: (String, String)*) =
     Values(Values.defaults(plugin.controls).map ++ Map("enabled" -> "true", "embedding" -> "sunset") ++ extra)
 
+  test("SDXL weight guidance is visible beside weight without adding an input or changing values"):
+    val i = plugin.controls.indexWhere(_.key == "weight")
+    val note = plugin.controls(i + 1)
+    assert(note.isInstanceOf[sdfx.core.plugins.api.Control.Note])
+    assert(note.label.contains("SDXL") && note.label.contains("0.3") && note.label.contains("0.5"))
+    assert(!note.hasValue && !Values.defaults(plugin.controls).map.contains(note.key))
+    for weight <- Seq("0", "0.3", "0.9") do
+      val p = plugin.process(GenerationParams(), enabled("weight" -> weight))
+      assertEquals(p.hooks(plugin.id)("weight").num, weight.toDouble)
+      assertEquals(AestheticGradientsPlugin.replay(Map("Aesthetic embedding" -> "sunset", "Aesthetic weight" -> weight)).get.double("weight"), weight.toDouble)
+
   test("defaults write the extension's infotext keys and the engine hook"):
     assert(!plugin.isActive(Values.defaults(plugin.controls)))
     val params = plugin.process(GenerationParams(), enabled())
@@ -47,6 +58,15 @@ class AestheticGradientsSuite extends munit.FunSuite:
     assertEquals(restored.double("lr"), 0.0005)
     assertEquals(restored.double("slerp_angle"), 0.25)
     assertEquals(plugin.process(GenerationParams(prompt = "castle"), restored).hooks(plugin.id), params.hooks(plugin.id))
+
+  test("fingerprinted metadata pins the actual embedding request without recording a path"):
+    val hash = "a" * 64
+    val restored = AestheticGradientsPlugin.replay(Map("Aesthetic embedding" -> "style", "Aesthetic embedding SHA256" -> hash)).get
+    assertEquals(restored.str("embedding_sha256"), hash)
+    val params = plugin.process(GenerationParams(), restored)
+    assertEquals(params.hooks(plugin.id)("embedding_sha256").str, hash)
+    assert(!params.extra.contains("Aesthetic embedding SHA256")) // worker supplies the hash of the consumed bytes
+    assertEquals(AestheticGradientsPlugin.replay(Map("Aesthetic embedding" -> "style", "Aesthetic embedding SHA256" -> "bad")), None)
 
   test("replay disables the plugin for other PNGs and rejects malformed values"):
     assertEquals(AestheticGradientsPlugin.replay(Map.empty).get.str("enabled"), "false")

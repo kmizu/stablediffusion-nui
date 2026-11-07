@@ -94,6 +94,7 @@ final class NativePresetFields(vm: GenerationVM, plugins: PluginsVM, catalog: Ca
 
   private val fresh = new GenerationVM(vm.mode)
   private val built = Vector.newBuilder[Binding]
+  private val numericEditors = scala.collection.mutable.Map.empty[FieldKey, AnyRef]
   private val problems = Vector.newBuilder[PresetIssue]
   private var registered = 0
   private var registryOverflow = false
@@ -113,15 +114,18 @@ final class NativePresetFields(vm: GenerationVM, plugins: PluginsVM, catalog: Ca
       () => PresetAtom.Flag(current.get), a => current.set(a.asInstanceOf[PresetAtom.Flag].value)))
   private def integer(path: FieldKey, label: String, current: IntegerProperty, initial: Int,
                       lo: Int, hi: Int, multipleOf: Option[Long] = None): Unit =
+    numericEditors(path) = current
     add(Binding(path, label, PresetFieldKind.Integer, n(initial), () => Vector.empty,
       Some(BigDecimal(lo)), Some(BigDecimal(hi)),
       () => n(current.get), a => current.set(a.asInstanceOf[PresetAtom.Integer].value.toInt), multipleOf))
   private def long(path: FieldKey, label: String, current: LongProperty, initial: Long): Unit =
+    numericEditors(path) = current
     add(Binding(path, label, PresetFieldKind.Integer, PresetAtom.Integer(initial), () => Vector.empty,
       None, None,
       () => PresetAtom.Integer(current.get), a => current.set(a.asInstanceOf[PresetAtom.Integer].value)))
   private def decimal(path: FieldKey, label: String, current: DoubleProperty, initial: Double,
                       lo: Double, hi: Double): Unit =
+    numericEditors(path) = current
     add(Binding(path, label, PresetFieldKind.Decimal, d(initial), () => Vector.empty,
       Some(BigDecimal.decimal(lo)), Some(BigDecimal.decimal(hi)),
       () => d(current.get), a => current.set(a.asInstanceOf[PresetAtom.Decimal].value.toDouble)))
@@ -253,6 +257,7 @@ final class NativePresetFields(vm: GenerationVM, plugins: PluginsVM, catalog: Ca
                 case _: Control.IntField => raw.trim.toLongOption.map(PresetAtom.Integer.apply).getOrElse(t(raw))
                 case _ => t(raw)
               val default = parse(c.default)
+              if kind == PresetFieldKind.Decimal || kind == PresetFieldKind.Integer then numericEditors(path) = prop
               add(Binding(path, c.label, kind, default, opts, min, max,
                 () => parse(Option(prop.get).getOrElse("")),
                 a => prop.set(a match
@@ -287,6 +292,7 @@ final class NativePresetFields(vm: GenerationVM, plugins: PluginsVM, catalog: Ca
   pluginControls()
   private val bindings = if registryOverflow then Vector.empty else built.result()
   private val byKey = bindings.map(b => b.key -> b).toMap
+  def numericEditorOwners(keys: Set[FieldKey]): Set[AnyRef] = keys.flatMap(numericEditors.get)
   private val limitIssue = PresetIssue("registered-field-limit", "fields",
     s"Mode has more than ${limits.maxRegisteredFieldsPerMode} registered preset fields; presets are unavailable")
   private val bindingIssues = problems.result() ++ Option.when(registryOverflow)(limitIssue)

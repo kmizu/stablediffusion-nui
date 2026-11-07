@@ -1,6 +1,6 @@
 package sdfx.ui
 
-import javafx.beans.property.SimpleBooleanProperty
+import javafx.beans.property.{SimpleBooleanProperty, SimpleStringProperty}
 import java.nio.file.Files
 import sdfx.core.presets.*
 import sdfx.core.plugins.api.*
@@ -28,6 +28,27 @@ class NamedGenerationStatesSuite extends munit.FunSuite:
     val fields = new NativePresetFields(vm, plugins, catalog, new SimpleBooleanProperty(false), namedState = true)
     (vm, plugins, catalog, fields)
   private val empty = PresetLibrary(1, Vector.empty, Vector.empty)
+
+  test("single batch field preflight checks the effective enabled state and current or restored input") {
+    val vm = new GenerationVM(Mode.Img2Img)
+    val plugins = new PluginsVM(Mode.Img2Img, Seq.empty, Seq.empty, _ => Values.empty)
+    val enabled = new SimpleBooleanProperty(true)
+    val input = new SimpleStringProperty(Files.createTempDirectory("state-batch-").toString)
+    val output = new SimpleStringProperty("")
+    val fields = new NativePresetFields(vm, plugins, new CatalogVM, new SimpleBooleanProperty(false),
+      namedState = true, batchFields = Some((enabled, input, output)))
+    val record = NamedGenerationStates.capture("batch", fields).toOption.get
+    val enabledKey = FieldKey(Vector("batch", "enabled"))
+    val inputKey = FieldKey(Vector("batch", "input"))
+    enabled.set(false)
+    assert(NamedGenerationStates.preflight(record, fields, Some(Set(enabledKey))).isRight)
+    input.set("Z:/missing-batch-input")
+    assert(NamedGenerationStates.preflight(record, fields, Some(Set(enabledKey))).isLeft)
+    enabled.set(true)
+    val missing = record.copy(fields = record.fields.updated(inputKey, PresetAtom.Text("Z:/missing-batch-input")))
+    assert(NamedGenerationStates.preflight(missing, fields, Some(Set(inputKey))).isLeft)
+    assert(NamedGenerationStates.preflight(record, fields, Some(Set(inputKey))).isRight)
+  }
 
   test("full named state survives typed disk roundtrip and restores inactive plugin controls") {
     val (vm, plugins, _, fields) = fixture()

@@ -24,7 +24,8 @@ final class McpTools(
     awaitReady: FiniteDuration => Unit,
     readyTimeout: FiniteDuration = 10.minutes,
     allowedDirs: Seq[Path] = PathPolicy.fromEnv(),
-    limits: JobLimits = McpTools.StrictLimits
+    limits: JobLimits = McpTools.StrictLimits,
+    private[mcp] val vaeTimeout: FiniteDuration = 30.minutes
 ):
   import McpTools.*
 
@@ -90,7 +91,7 @@ final class McpTools(
   private final case class GenRequest(params: GenerationParams, returnImages: Boolean, maxSide: Int, temps: Seq[Path],
       alwaysOn: Seq[(Plugin, Values)])
 
-  private def parseGen(a: Args, img2img: Boolean, requirePrompt: Boolean = true): GenRequest =
+  private def parseGen(a: Args, img2img: Boolean, requirePrompt: Boolean = true, folderInput: Boolean = false): GenRequest =
     val temps = Seq.newBuilder[Path]
     try
       ensureCatalog()
@@ -160,15 +161,17 @@ final class McpTools(
         (spec, field) => { val (path, tmp) = Images.materialize(spec, field, pathPolicy, base, tempFile); tmp.foreach(temps += _); path },
         allowInitImageFallback = img2img)
       val i2i = Option.when(img2img) {
-        val (init, t1) = Images.materialize(a.reqStr("init_image"), "init_image", pathPolicy, base, tempFile)
-        t1.foreach(temps += _)
+        val init = if folderInput then "folder-input" else
+          val (path, t1) = Images.materialize(a.reqStr("init_image"), "init_image", pathPolicy, base, tempFile)
+          t1.foreach(temps += _)
+          path.toString
         val mask = a.str("mask").filter(_.trim.nonEmpty).map { m =>
           val (mp, t2) = Images.materialize(m, "mask", pathPolicy, base, tempFile)
           t2.foreach(temps += _)
           mp
         }
         Img2ImgParams(
-          initImage = init.toString,
+          initImage = init,
           mask = mask.map(_.toString),
           denoisingStrength = a.num("denoising_strength", 0, 1).getOrElse(0.75),
           resizeMode = enumOrInt(a, "resize_mode", ResizeModes),
@@ -181,7 +184,7 @@ final class McpTools(
       }
 
       val (dw, dh) = i2i match
-        case Some(i) if !a.has("width") || !a.has("height") =>
+        case Some(i) if !folderInput && (!a.has("width") || !a.has("height")) =>
           val (w, h) = Images.size(java.nio.file.Paths.get(i.initImage))
           def f8(v: Int) = math.max(64, math.min(2048, v) / 8 * 8)
           (f8(w), f8(h))
@@ -291,18 +294,37 @@ final class McpTools(
       case _ => ()
     }
 
+  private final class SavedOutputs:
+    private val images = scala.collection.mutable.ArrayBuffer.empty[OutputImage]
+    private val grids = scala.collection.mutable.ArrayBuffer.empty[OutputImage]
+    def record(image: OutputImage, grid: Boolean): Unit = synchronized {
+      if grid then grids += image else images += image
+    }
+    def result: JobOutput = synchronized { JobOutput(images.toVector, grids.toVector) }
+
   private enum Outcome:
     case Done(out: JobOutput)
     case Cancelled(partial: JobOutput)
+    case Failed(partial: JobOutput, error: String)
 
   private def runBlocking(job: Job, ctx: ToolContext, temps: Seq[Path]): Outcome =
+    var handedOff = false
     try
       if ctx.isCancelled then Outcome.Cancelled(JobOutput(Nil))
       else
         ready(ctx)
-        val remove = services.queue.addListener(progressListener(job.id, job.params, job.script.isDefined, ctx))
+        val saved = new SavedOutputs
+        val progress = progressListener(job.id, job.params, job.script.isDefined, ctx)
+        val remove = services.queue.addListener { event =>
+          event match
+            case JobEvent.ImageSaved(id, image, grid) if id == job.id => saved.record(image, grid)
+            case _ => ()
+          progress(event)
+        }
         try
           val f = submitCapped(job)
+          f.onComplete(_ => temps.foreach(Images.deleteQuietly))(scala.concurrent.ExecutionContext.parasitic)
+          handedOff = true
           ctx.onCancel { () =>
             // JobQueue.cancel misses a job between dequeue and start; retry once shortly after
             services.queue.cancelResult(job.id).foreach { outcome =>
@@ -324,11 +346,11 @@ final class McpTools(
               services.queue.cancel(job.id)
               throw e
             case NonFatal(e) =>
-              limitError(e) match
-                case Some(l) => throw ToolError(s"job limit exceeded: ${l.message}")
-                case None    => throw ToolError(s"generation failed: ${msg(e)}")
+              val error = limitError(e).map(l => s"job limit exceeded: ${l.message}").getOrElse(s"generation failed: ${msg(e)}")
+              val partial = saved.result
+              if partial.all.nonEmpty then Outcome.Failed(partial, error) else throw ToolError(error)
         finally remove()
-    finally temps.foreach(Images.deleteQuietly)
+    finally if !handedOff then temps.foreach(Images.deleteQuietly)
 
   private def imagesJson(out: JobOutput): ujson.Arr =
     ujson.Arr.from(out.grids.map(imageJson(_, grid = true)) ++ out.images.map(imageJson(_, grid = false)))
@@ -370,10 +392,11 @@ final class McpTools(
         warn += s"$omitted preview(s) omitted (inline limit ${MaxInlineBytes / 1024 / 1024} MB per response); use get_image or a smaller max_image_side"
       (imgs, warn.result())
 
-  private def outputResult(jobId: String, out: JobOutput, returnImages: Boolean, maxSide: Int, header: Option[String] = None, isError: Boolean = false): ToolResult =
+  private def outputResult(jobId: String, out: JobOutput, returnImages: Boolean, maxSide: Int, header: Option[String] = None, isError: Boolean = false, failure: Option[String] = None): ToolResult =
     val (imgs, warnings) = previews(out, returnImages, maxSide)
     val text = (header.toSeq ++ out.all.map(o => s"${o.path.toAbsolutePath}\n${o.infotext}") ++ warnings).mkString("\n\n")
     val structured = ujson.Obj("job_id" -> jobId, "images" -> imagesJson(out))
+    failure.foreach { e => structured("status") = ujson.Str("failed"); structured("error") = ujson.Str(e) }
     ToolResult(imgs :+ Content.text(if text.isEmpty then "no images were produced" else text) :+ Content.text(ujson.write(structured)), Some(structured), isError)
 
   private def generationTool(img2img: Boolean, args: ujson.Obj, ctx: ToolContext): ToolResult =
@@ -384,6 +407,8 @@ final class McpTools(
       case Outcome.Done(out) => outputResult(job.id, out, req.returnImages, req.maxSide)
       case Outcome.Cancelled(partial) =>
         outputResult(job.id, partial, req.returnImages, req.maxSide, Some(s"job ${job.id} was interrupted; ${partial.all.size} image(s) saved"), isError = true)
+      case Outcome.Failed(partial, error) =>
+        outputResult(job.id, partial, req.returnImages, req.maxSide, Some(error), isError = true, failure = Some(error))
 
   // ---- async jobs -------------------------------------------------------------------------------------------
 
@@ -395,6 +420,9 @@ final class McpTools(
     @volatile var error: Option[String] = None
     @volatile var cancelRequested = false
     val result: Promise[JobOutput] = Promise()
+    private val saved = new SavedOutputs
+    def recordSaved(image: OutputImage, grid: Boolean): Unit = saved.record(image, grid)
+    def savedOutput: JobOutput = saved.result
     def future: Future[JobOutput] = result.future
     def active: Boolean = status == "queued" || status == "running" || status == "waiting_for_engine"
     val tracker: ToolContext = new ToolContext:
@@ -442,6 +470,8 @@ final class McpTools(
           aj.output = Some(e.partial)
           aj.status = "cancelled"
         case Failure(e) =>
+          val saved = aj.savedOutput
+          if saved.all.nonEmpty then aj.output = Some(saved)
           aj.error = Some(limitError(e).map(l => s"job limit exceeded: ${l.message}").getOrElse(msg(e)))
           aj.status = "failed"
     }
@@ -454,7 +484,13 @@ final class McpTools(
         )
         if aj.cancelRequested then throw JobCancelledException(job.id, JobOutput(Nil))
         ensureCatalog()
-        val remove = services.queue.addListener(progressListener(job.id, job.params, job.script.isDefined, aj.tracker))
+        val progress = progressListener(job.id, job.params, job.script.isDefined, aj.tracker)
+        val remove = services.queue.addListener { event =>
+          event match
+            case JobEvent.ImageSaved(id, image, grid) if id == job.id => aj.recordSaved(image, grid)
+            case _ => ()
+          progress(event)
+        }
         try
           // a waiting job already holds a pending slot; an immediate one takes it now
           val f = aj.synchronized {
@@ -522,9 +558,9 @@ final class McpTools(
       case Some(out) =>
         base("images") = imagesJson(out)
         val (imgs, warnings) = previews(out, returnImages, maxSide)
-        val head = s"job $id: ${aj.status}"
+        val head = s"job $id: ${aj.status}" + aj.error.fold("")(e => s" ($e)")
         val text = (Seq(head) ++ out.all.map(o => s"${o.path.toAbsolutePath}\n${o.infotext}") ++ warnings).mkString("\n\n")
-        ToolResult(imgs :+ Content.text(text) :+ Content.text(ujson.write(base)), Some(base), isError = aj.status == "cancelled")
+        ToolResult(imgs :+ Content.text(text) :+ Content.text(ujson.write(base)), Some(base), isError = aj.status == "cancelled" || aj.status == "failed")
       case None =>
         base("images") = ujson.Arr()
         val text = aj.status match
@@ -533,6 +569,34 @@ final class McpTools(
         ToolResult(Seq(Content.text(text), Content.text(ujson.write(base))), Some(base), isError = aj.status == "failed")
 
   private def pluginInput(addTemp: Path => Unit, activeControlNet: Boolean = false): AlwaysOnInputs =
+    def fastloadFile(spec: String, field: String): String =
+      val path = pathPolicy.resolve(spec, field, outputsDir.toAbsolutePath.normalize())
+      val data = Images.readVerifiedBytes(path, pathPolicy, field)
+      val png = Array[Byte](-119, 80, 78, 71, 13, 10, 26, 10)
+      if data.length >= png.length && java.util.Arrays.equals(data.take(png.length), png) then
+        Images.rejectProtectedPng(data, field)
+      val name = path.getFileName.toString
+      val dot = name.lastIndexOf('.')
+      val suffix = if dot >= 0 && name.substring(dot).matches("\\.[A-Za-z0-9]{1,8}") then name.substring(dot) else ".data"
+      val snapshot = tempFile(suffix)
+      try
+        Files.write(snapshot, data)
+        addTemp(snapshot)
+        snapshot.toString
+      catch
+        case e: Throwable =>
+          Images.deleteQuietly(snapshot)
+          throw e
+    def aestheticName(name: String, field: String, hash: Option[String]): String =
+      val base = outputsDir.toAbsolutePath.normalize()
+      def permitted(path: Path): Boolean =
+        scala.util.Try(pathPolicy.resolveDirectory(path.toString, field, base))
+          .orElse(scala.util.Try(pathPolicy.resolve(path.toString, field, base))).isSuccess
+      val index = services.home.configDir.resolve("aesthetic-embedding-directories.json")
+      val dirs = sdfx.core.aesthetic.AestheticEmbeddingDirectories.read(index, permitted)
+        .fold(error => throw ToolError(error), identity)
+      sdfx.core.aesthetic.AestheticEmbeddingLocator.resolve(name, hash, base.resolve("aesthetic_embeddings") +: dirs, permitted)
+        .fold(error => throw ToolError(s"$field: $error"), _.toString)
     new AlwaysOnInputs(() => services.registry.enabled, src => catalog.choices(src),
       (spec, field) => {
         val (path, temporary) = Images.materialize(spec, field, pathPolicy, outputsDir.toAbsolutePath, tempFile)
@@ -542,7 +606,8 @@ final class McpTools(
       (spec, field) => (if field.endsWith(".image_encoder") then
         pathPolicy.resolveDirectory(spec, field, outputsDir.toAbsolutePath)
       else pathPolicy.resolve(spec, field, outputsDir.toAbsolutePath)).toString,
-      Some((spec, field) => pathPolicy.resolveDirectory(spec, field, outputsDir.toAbsolutePath).toString), activeControlNet)
+      Some((spec, field) => pathPolicy.resolveDirectory(spec, field, outputsDir.toAbsolutePath).toString), activeControlNet,
+      Some(aestheticName), Some(fastloadFile))
 
   // ---- scripts ---------------------------------------------------------------------------------------------
 
@@ -630,6 +695,8 @@ final class McpTools(
         case Outcome.Done(out) => outputResult(job.id, out, req.returnImages, req.maxSide, Some(s"${plugin.name}: ${out.all.size} image(s)"))
         case Outcome.Cancelled(partial) =>
           outputResult(job.id, partial, req.returnImages, req.maxSide, Some(s"job ${job.id} was interrupted; ${partial.all.size} image(s) saved"), isError = true)
+        case Outcome.Failed(partial, error) =>
+          outputResult(job.id, partial, req.returnImages, req.maxSide, Some(error), isError = true, failure = Some(error))
 
   // ---- tool definitions ------------------------------------------------------------------------------------
 
@@ -713,6 +780,18 @@ final class McpTools(
     val props = if img2img then (common.filterNot(_._1 == "hires") ++ i2i) else common
     Schema.obj(props ++ ExtendedGeneration.schema, if img2img then Seq("prompt", "init_image") else Seq("prompt"))
 
+  private val folderExcluded = Set("init_image", "mask", "mask_blur", "inpainting_fill", "inpaint_full_res",
+    "inpaint_full_res_padding", "inpainting_mask_invert")
+  private def folderSchema: ujson.Obj =
+    val schema = genSchema(true)
+    val props = schema("properties").obj
+    folderExcluded.foreach(props.remove)
+    props("image_folder") = Schema.str("Input folder within an allowed local directory; files are inspected when the job starts.")
+    props("width") = Schema.int("Output width; defaults to 512 for SD1.5 or 1024 for SDXL.", Some(64), Some(4096))
+    props("height") = Schema.int("Output height; defaults to 512 for SD1.5 or 1024 for SDXL.", Some(64), Some(4096))
+    schema("required") = ujson.Arr("prompt", "image_folder")
+    schema
+
   private val imagesOutputSchema: ujson.Obj = Schema.obj(
     Seq(
       "job_id" -> Schema.str("Queue job id."),
@@ -761,8 +840,11 @@ final class McpTools(
     o
 
   val all: Seq[McpTool] = Seq(
+    new PromptLibraryTool(services),
+    new GenerationHistoryTool(services),
+    new AestheticEmbeddingTool(services, pathPolicy, () => outputsDir, tempFile, ctx => ready(ctx)),
     new ControlNetFastloadTool(services, pathPolicy, outputsDir, ctx => ready(ctx)),
-    new InspectGenerationMetadataTool(pathPolicy, outputsDir),
+    new InspectGenerationMetadataTool(pathPolicy, () => outputsDir, Some(services.home.configDir.resolve("aesthetic-embedding-directories.json"))),
     new ModelPresetsTool(services),
     new ClipInterrogatorTool(services, pathPolicy, outputsDir, tempFile, ctx => ready(ctx)),
     new ControlNetPreprocessTool(services, pathPolicy, outputsDir.toAbsolutePath.normalize(), tempFile, ctx => ready(ctx)),
@@ -798,15 +880,40 @@ final class McpTools(
         val args = Args(a, Seq("input_paths", "operation", "representation", "approximation", "seed", "tiled", "cmyk_format", "allow_download", "approx_nn_path"))
         val names = args.strList("input_paths").getOrElse(throw ToolError("input_paths is required"))
         if names.isEmpty || names.size > 64 then throw ToolError("input_paths must contain 1 to 64 files")
-        val paths = names.map(p => pathPolicy.resolve(p, "input_paths", outputsDir.toAbsolutePath))
-        paths.foreach(p => Images.rejectProtectedPng(p, "input_paths"))
-        val weights = args.str("approx_nn_path").filter(_.nonEmpty).map(p => pathPolicy.resolve(p, "approx_nn_path", outputsDir.toAbsolutePath).toString).getOrElse("")
-        ready(ctx)
-        val result = Await.result(new VaeToolsService(services).run(paths,
-          args.str("operation").getOrElse("encode"), args.str("representation").getOrElse("L"), args.str("approximation").getOrElse("Full"),
-          outputsDir, args.long("seed", 0, 0xffffffffL).getOrElse(0L), args.bool("tiled").getOrElse(false),
-          args.str("cmyk_format").getOrElse("TIFF"), args.bool("allow_download").getOrElse(false), weights), 30.minutes)
-        ToolResult.json(result)
+        val temps = scala.collection.mutable.ArrayBuffer.empty[Path]
+        var handedOff = false
+        def snapshot(raw: String, field: String, image: Boolean): (Path, String) =
+          if ctx.isCancelled then throw ToolError("cancelled")
+          VaeInputSnapshot.capture(raw, field, image, pathPolicy, outputsDir.toAbsolutePath, suffix => {
+            val staged = tempFile(suffix)
+            temps += staged
+            staged
+          })
+        try
+          val inputs = names.map(p => snapshot(p, "input_paths", true))
+          val weights = args.str("approx_nn_path").filter(_.nonEmpty).map(p => snapshot(p, "approx_nn_path", false))
+          ready(ctx)
+          if ctx.isCancelled then throw ToolError("cancelled")
+          val handle = new VaeToolsService(services).runOwned(inputs.map(_._1),
+            args.str("operation").getOrElse("encode"), args.str("representation").getOrElse("L"), args.str("approximation").getOrElse("Full"),
+            outputsDir, args.long("seed", 0, 0xffffffffL).getOrElse(0L), args.bool("tiled").getOrElse(false),
+            args.str("cmyk_format").getOrElse("TIFF"), args.bool("allow_download").getOrElse(false), weights.map(_._1.toString).getOrElse(""),
+            inputLabels = inputs.map(_._2), approxNnLabel = weights.map(_._2).getOrElse(""))
+          val completed = handle.result.transform { result =>
+            temps.foreach(Images.deleteQuietly)
+            result
+          }(scala.concurrent.ExecutionContext.parasitic)
+          handedOff = true
+          ctx.onCancel(() => { handle.interrupt(); () })
+          try ToolResult.json(Await.result(completed, vaeTimeout))
+          catch
+            case e: InterruptedException =>
+              handle.interrupt()
+              throw e
+            case e: TimeoutException =>
+              handle.interrupt()
+              throw e
+        finally if !handedOff then temps.foreach(Images.deleteQuietly)
       }),
     tool("txt2img", "Text to image",
       "Generate image(s) from a text prompt and wait for the result. Returns downscaled previews, the saved file paths, seeds and infotext. Long jobs: consider txt2img_async.",
@@ -827,6 +934,19 @@ final class McpTools(
         checkPendingCap()
         val req = parseGen(Args(a, genKeys(true)), img2img = true)
         submitAsync(Job(Job.newId(), req.params, alwaysOn = req.alwaysOn, origin = Origin, limits = limits), "img2img", req)
+      }),
+    tool("img2img_folder_async", "Image folder to image (async)",
+      "Process each image in an allowed local folder with the same Img2Img settings and AlwaysOn extensions. Poll get_job for progress and results.",
+      folderSchema)((a, _) => {
+        checkPendingCap()
+        val args = Args(a, genKeys(true).filterNot(folderExcluded) :+ "image_folder")
+        val folder = pathPolicy.resolveDirectory(args.reqStr("image_folder"), "image_folder", outputsDir.toAbsolutePath)
+        val roots = pathPolicy.allowedRoots.flatMap(p => scala.util.Try(p.toRealPath()).toOption).filter(folder.startsWith(_))
+        if roots.isEmpty then throw ToolError("image_folder is no longer inside an allowed directory")
+        val req = parseGen(args, img2img = true, folderInput = true)
+        val spec = sdfx.engine.Img2ImgFolderSpec(folder.toString, roots.map(_.toString))
+        submitAsync(Job(Job.newId(), req.params, alwaysOn = req.alwaysOn, origin = Origin, limits = limits,
+          img2imgFolder = Some(spec)), "img2img", req)
       }),
     tool("get_job", "Get async job",
       "Status, progress (0..1) and, when finished, the images of a job started with *_async or run_script async. wait_seconds blocks until the job finishes or the time passes.",
@@ -1006,10 +1126,11 @@ final class McpTools(
         val n = p.getFileName.toString.toLowerCase
         if !Seq(".png", ".jpg", ".jpeg", ".webp").exists(n.endsWith) then throw ToolError("only .png / .jpg / .webp files can be read")
         val side = args.int("max_side", 0, MaxSide).getOrElse(1024)
-        if Images.estimateBase64(p, side) > MaxInlineBytes then throw ToolError("image too large to return inline; use a smaller max_side")
-        val e = Images.encode(p, side)
+        val data = Images.readVerifiedBytes(p, pathPolicy, "path")
+        if Images.estimateBase64(data, side) > MaxInlineBytes then throw ToolError("image too large to return inline; use a smaller max_side")
+        val e = Images.encodeBytes(data, p, side)
         if e.base64.length > MaxInlineBytes then throw ToolError(s"image too large to return inline (${e.width}x${e.height}); use a smaller max_side")
-        val info = services.gallery.item(p).flatMap(_.parameters)
+        val info = sdfx.core.png.PngMetadata.readParameters(data)
         val structured = ujson.Obj("path" -> p.toString, "infotext" -> info.map(ujson.Str(_)).getOrElse(ujson.Null))
         ToolResult(
           Seq(Content.image(e.base64, e.mimeType), Content.text(s"$p\n${info.getOrElse("(no parameters)")}"), Content.text(ujson.write(structured))),

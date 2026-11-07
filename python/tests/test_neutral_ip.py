@@ -92,6 +92,9 @@ def test_pag_failure_cleanup_keeps_ip_processors_loaded_after_extension_setup(mo
             self.unet.attn_processors["self"] = "pag"
             raise RuntimeError("interrupted pipeline")
     pipe, engine = Pipe(), Engine.__new__(Engine)
+    from sdfx.params import LoadModelRequest
+    engine.load_opts = LoadModelRequest()
+    engine.cuda = False
     engine.sdxl = False
     engine._get_pipe = lambda *a: pipe
     engine._scheduler = lambda *a: (types.SimpleNamespace(config={}), None)

@@ -1,7 +1,7 @@
 package sdfx.core.presets
 
 import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
+import java.nio.channels.{FileChannel, FileLock}
 import java.nio.file.{Files, LinkOption, Path, StandardCopyOption, StandardOpenOption}
 import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
@@ -16,6 +16,8 @@ final case class LoadedPresets(library: PresetLibrary, revision: PresetRevision)
 private[presets] trait PresetFileOps:
   def writeForced(path: Path, bytes: Array[Byte]): Unit
   def atomicReplace(from: Path, to: Path): Unit
+  def releaseLock(lock: FileLock): Unit = lock.release()
+  def closeLock(channel: FileChannel): Unit = channel.close()
 
 private[presets] object PresetFileOps:
   val nio: PresetFileOps = new PresetFileOps:
@@ -152,13 +154,20 @@ final class PresetStore private[presets] (
     fixed(lockPath, operation)
     val channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
       LinkOption.NOFOLLOW_LINKS)
+    var completed = false
     try
       val held = channel.lock()
       try
         fixed(lockPath, operation)
-        body
-      finally held.release()
-    finally channel.close()
+        val result = body
+        completed = true
+        result
+      finally
+        try fileOps.releaseLock(held)
+        catch case NonFatal(_) if completed => ()
+    finally
+      try fileOps.closeLock(channel)
+      catch case NonFatal(_) if completed => ()
 
   private def writeTemp(stem: String, bytes: Array[Byte], operation: String): Path =
     checkRoot(operation, create = false)
@@ -220,6 +229,7 @@ final class PresetStore private[presets] (
           PresetDisk.fail("conflict", "save", libraryPath, "library absent but backup exists; explicit restore required")
         old.foreach(bytes => PresetDisk.requireRight(PresetJson.readNative(bytes, limits), "save", libraryPath))
         val candidateTemp = writeTemp("library-v1", candidate, "save")
+        var installed = false
         try
           old.foreach { bytes =>
             val backupTemp = writeTemp("library-v1-backup", bytes, "save")
@@ -228,7 +238,10 @@ final class PresetStore private[presets] (
           }
           stillCurrent(old, "save")
           replace(candidateTemp, libraryPath, "save")
-        finally PresetDisk.deleteTemp(candidateTemp)
+          installed = true
+        finally
+          try PresetDisk.deleteTemp(candidateTemp)
+          catch case NonFatal(_) if installed => ()
         seenExistingLibrary = true
         LoadedPresets(next, PresetRevision(Some(PresetDisk.sha256(candidate))))
       }
@@ -243,6 +256,7 @@ final class PresetStore private[presets] (
         val backup = readBackup("restore backup")
         val recovered = PresetDisk.requireRight(PresetJson.readNative(backup, limits), "restore backup", backupPath)
         val targetTemp = writeTemp("library-v1-restore", backup, "restore backup")
+        var installed = false
         try
           current.foreach { original =>
             val timestamp = Instant.now().toString.replace(':', '-')
@@ -254,7 +268,10 @@ final class PresetStore private[presets] (
           }
           stillCurrent(current, "restore backup")
           replace(targetTemp, libraryPath, "restore backup")
-        finally PresetDisk.deleteTemp(targetTemp)
+          installed = true
+        finally
+          try PresetDisk.deleteTemp(targetTemp)
+          catch case NonFatal(_) if installed => ()
         seenExistingLibrary = true
         LoadedPresets(recovered, PresetRevision(Some(PresetDisk.sha256(backup))))
       }

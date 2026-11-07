@@ -3,7 +3,7 @@ package sdfx.ui.vm
 import java.nio.file.{Files, Path}
 import java.util.Locale
 
-case class CompletionTag(name: String, count: Long, aliases: Vector[String]):
+case class CompletionTag(name: String, count: Long, aliases: Vector[String], category: Option[Int] = None):
   def insertion: String = name.replace('_', ' ').replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 case class CompletionToken(start: Int, end: Int, query: String)
@@ -52,7 +52,7 @@ object TagCompletion:
     result.result()
 
   def parse(lines: Iterator[String]): Vector[CompletionTag] =
-    var columns = Map("name" -> 0, "count" -> 2, "aliases" -> 3)
+    var columns = Map("name" -> 0, "type" -> 1, "count" -> 2, "aliases" -> 3)
     var first = true
     val tags = lines.zipWithIndex.filter(_._1.trim.nonEmpty).flatMap { (line, index) =>
       require(index < 300000, "Tag CSV exceeds 300,000 rows")
@@ -68,7 +68,8 @@ object TagCompletion:
         def field(key: String) = columns.get(key).flatMap(fields.lift)
         val name = field("name").getOrElse("").trim
         require(name.nonEmpty && !name.exists(c => c == '\r' || c == '\n'), s"Invalid tag at row ${index + 1}")
-        Some(CompletionTag(name, field("count").flatMap(_.toLongOption).getOrElse(0L), field("aliases").toVector.flatMap(_.split(',')).map(_.trim).filter(_.nonEmpty)))
+        val category = field("category").flatMap(_.trim.toIntOption).orElse(field("type").flatMap(_.trim.toIntOption))
+        Some(CompletionTag(name, field("count").flatMap(_.toLongOption).getOrElse(0L), field("aliases").toVector.flatMap(_.split(',')).map(_.trim).filter(_.nonEmpty), category))
     }.toVector
     require(tags.nonEmpty, "Tag CSV is empty")
     tags.sortBy(t => (-t.count.max(0L), t.name)).distinctBy(_.name)

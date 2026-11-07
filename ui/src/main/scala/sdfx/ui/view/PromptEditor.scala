@@ -5,10 +5,10 @@ import javafx.collections.{FXCollections, ObservableList, ListChangeListener}
 import javafx.geometry.Pos
 import javafx.scene.control.*
 import javafx.scene.input.{KeyCode, KeyEvent}
-import javafx.scene.layout.{StackPane, VBox}
+import javafx.scene.layout.{FlowPane, StackPane, VBox}
 import sdfx.core.model.{LoraSyntax, LoraRef, PromptStyle}
 import sdfx.engine.CatalogSnapshot
-import sdfx.ui.vm.{PromptEdit, PromptInsertionTarget}
+import sdfx.ui.vm.{NegativeSuggestions, PromptEdit, PromptInsertionTarget}
 
 /** Prompt + negative prompt with token counters, Ctrl+Up/Down attention editing, LoRA picker and styles. */
 final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: StringProperty, modeKey: String,
@@ -16,10 +16,12 @@ final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: Strin
                          manualLoras: ObservableList[LoraRef] = FXCollections.observableArrayList[LoraRef]()):
   val promptArea: TextArea = area(prompt, "Prompt — what you want to see (Ctrl+Enter to generate)", 4)
   val negativeArea: TextArea = area(negative, "Negative prompt — what to avoid", 2)
+  negativeArea.setId(s"$modeKey-negative-prompt")
   private var lastFocused: TextArea = promptArea
   private val tagEditors = Seq(promptArea, negativeArea).map(a => new TagAutocomplete(a, ctx.tagDictionary))
   def isComposingInput: Boolean = tagEditors.exists(_.isComposing)
   def completionVisible: Boolean = tagEditors.exists(_.isShowing)
+  def completionPending: Boolean = tagEditors.exists(_.isPending)
   def previewVisible: Boolean = tagEditors.exists(_.previewShowing)
   def previewImage: Option[javafx.scene.image.Image] = tagEditors.find(_.previewShowing).flatMap(_.previewImage)
   /** Rows of the popup currently shown by either prompt editor (for checks). */
@@ -106,6 +108,7 @@ final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: Strin
   // ---- styles ------------------------------------------------------------------------------------------
 
   private val styleBox = new ComboBox[PromptStyle](ctx.styles)
+  styleBox.setId(s"$modeKey-style-choice")
   styleBox.setPromptText("Styles")
   styleBox.setButtonCell(styleCell())
   styleBox.setCellFactory(_ => styleCell())
@@ -150,6 +153,11 @@ final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: Strin
         if !exists || overwrite then ctx.saveStyle(PromptStyle(name.trim, prompt.get, negative.get), overwrite)
     )
 
+  private val applyStyleButton = W.iconButton("⤓", "Apply the selected style to the prompts")(applyStyle())
+  applyStyleButton.setId(s"$modeKey-apply-style")
+  private val saveStyleButton = W.iconButton("✎", "Save the current prompts as a style")(saveStyle())
+  saveStyleButton.setId(s"$modeKey-save-style")
+
   val toolbar: javafx.scene.layout.HBox = W.hbox(
     6,
     W.button("✚ LoRA", "Insert a <lora:name:1> tag at the caret (searchable list)")(loraPopup.show(loraButtonAnchor)),
@@ -157,11 +165,51 @@ final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: Strin
     W.button("Tags…", "Configure tag, wildcard, extra network and chant suggestions")(ctx.tagDictionary.configure()),
     W.spacer(),
     styleBox,
-    W.iconButton("⤓", "Apply the selected style to the prompts")(applyStyle()),
-    W.iconButton("✎", "Save the current prompts as a style")(saveStyle()),
+    applyStyleButton,
+    saveStyleButton,
     W.button("Styles…", "Edit styles, categories, extended presets and backups")(ctx.openStylesEditor())
   )
   private def loraButtonAnchor = toolbar.getChildren.get(0)
+
+  private val negativeSuggestions = W.button("Negative suggestions…", "Choose common terms to append to the negative prompt") {
+    NegativeSuggestionPicker.create(ctx.stage).showAndWait().ifPresent { selected =>
+      try
+        val suffix = NegativeSuggestions.suffix(negativeArea.getText, selected)
+        if suffix.nonEmpty then
+          val text = negativeArea.getText
+          if text.isEmpty then negativeArea.appendText(suffix)
+          else
+            // Replacing the final code point with itself plus the suffix makes this a distinct
+            // JavaFX undo operation instead of coalescing with a previous insertion.
+            val start = text.offsetByCodePoints(text.length, -1)
+            negativeArea.replaceText(start, text.length, text.substring(start) + suffix)
+          negativeArea.requestFocus()
+      catch case e: IllegalArgumentException => ctx.error(e.getMessage)
+    }
+  }
+  negativeSuggestions.setId(s"$modeKey-negative-suggestions")
+
+  private def translated(area: TextArea, id: String): FlowPane =
+    val pane = new FlowPane(5, 3)
+    pane.setId(id)
+    def refresh(): Unit =
+      val enabled = ctx.tagDictionary.config.showTranslationPreview && ctx.tagDictionary.config.translationCsv.nonEmpty
+      pane.setVisible(enabled); pane.setManaged(enabled)
+      pane.getChildren.clear()
+      if enabled then
+        val captured = area.getText
+        val hits = sdfx.ui.vm.TagTranslationPreview.find(captured, ctx.tagDictionary.translations)
+        hits.foreach { hit =>
+          val tag = captured.substring(hit.start, hit.end)
+          val button = new Button(s"${sdfx.ui.vm.TagTranslationPreview.display(hit.translation)} (${sdfx.ui.vm.TagTranslationPreview.display(tag)})")
+          button.setOnAction(_ => if area.getText == captured then { area.requestFocus(); area.selectRange(hit.start, hit.end) })
+          pane.getChildren.add(button)
+        }
+    area.textProperty.addListener((_, _, _) => refresh())
+    ctx.tagDictionary.onChange(() => refresh())
+    if ctx.tagDictionary.config.showTranslationPreview && ctx.tagDictionary.config.translationCsv.nonEmpty then ctx.tagDictionary.ensureLoaded()
+    refresh()
+    pane
 
   val view: VBox =
     val names = W.label("", "hint")
@@ -193,7 +241,7 @@ final class PromptEditor(ctx: UiContext, prompt: StringProperty, negative: Strin
       manual.setManaged(!manualLoras.isEmpty)
     manualLoras.addListener((_: ListChangeListener.Change[? <: LoraRef]) => updateManual())
     updateManual()
-    val v = new VBox(6, withCounter(promptArea), withCounter(negativeArea), toolbar, selected, manual)
+    val v = new VBox(6, withCounter(promptArea), translated(promptArea, s"$modeKey-prompt-translation"), withCounter(negativeArea), translated(negativeArea, s"$modeKey-negative-translation"), negativeSuggestions, toolbar, selected, manual)
     v.getStyleClass.add("prompt-editor")
     W.tip(promptArea, "Ctrl+Up / Ctrl+Down change the attention weight of the selection or the word under the caret")
     v

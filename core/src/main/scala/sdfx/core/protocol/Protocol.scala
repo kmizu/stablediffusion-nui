@@ -33,6 +33,7 @@ object Protocol:
     val Tokenize = "tokenize"
     val MetadataUtils = "metadata_utils"
     val ClipInterrogator = "clip_interrogator"
+    val AestheticEmbedding = "aesthetic_embedding"
     val ControlNetFastloadData = "controlnet_fastload_data"
     val EmbeddingMerge = "embedding_merge"
     val SystemInfo = "system_info"
@@ -97,8 +98,10 @@ case class MetadataUtilsRequest(operation: String = "read", path: String,
 case class MetadataUtilsResult(path: String, metadata: Map[String, String] = Map.empty,
     editable: String = "", tensorBytes: Long = 0L, tensorSha256: String = "", sourceToken: String = "") derives RW
 
-case class LoadModelRequest(path: String, dtype: String = "fp16", vramMode: String = "gpu", vaePath: Option[String] = None, vaeTiling: Boolean = false) derives RW
-case class LoadedModel(name: String, path: String, kind: String, hash: String, loadedMs: Long = 0, vaeName: Option[String] = None, vaeHash: Option[String] = None, modelToken: Option[String] = None) derives RW
+case class LoadModelRequest(path: String, dtype: String = "fp16", vramMode: String = "gpu", vaePath: Option[String] = None, vaeTiling: Boolean = false,
+    vaeSlicing: Boolean = false,
+    fp8Storage: Boolean = false, vaeAuto: Boolean = true, vaeFp16: Boolean = false) derives RW
+case class LoadedModel(name: String, path: String, kind: String, hash: String, loadedMs: Long = 0, vaeName: Option[String] = None, vaeHash: Option[String] = None, modelToken: Option[String] = None, vaePath: Option[String] = None) derives RW
 
 case class SamplerInfo(name: String, supported: Boolean = true, defaultScheduler: String = "Uniform") derives RW
 case class SamplerList(samplers: Seq[SamplerInfo], schedulers: Seq[String], upscalers: Seq[String] = Nil, preprocessors: Seq[String] = Nil) derives RW

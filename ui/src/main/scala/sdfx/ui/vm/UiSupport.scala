@@ -149,6 +149,10 @@ object SettingsMerge:
       dtype = edited.dtype,
       vramMode = edited.vramMode,
       vaeTiling = edited.vaeTiling,
+      vaeSlicing = edited.vaeSlicing,
+      fp8Storage = edited.fp8Storage,
+      vaeAuto = edited.vaeAuto,
+      vaeFp16 = edited.vaeFp16,
       previewEvery = edited.previewEvery,
       previewMethod = edited.previewMethod,
       hfOffline = edited.hfOffline,
@@ -206,7 +210,8 @@ object VramModes:
   val Modes: Seq[(String, String)] = Seq(
     "gpu" -> "GPU (fastest)",
     "model_offload" -> "Model offload (~8 GB VRAM)",
-    "sequential_offload" -> "Sequential offload (lowest VRAM)"
+    "sequential_offload" -> "Sequential offload (lowest VRAM)",
+    "auto" -> "Auto (pick from the free VRAM)"
   )
   def normalize(v: String): String = Option(v).map(_.trim.toLowerCase).getOrElse("") match
     case "medvram"                    => "model_offload"

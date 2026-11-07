@@ -42,6 +42,12 @@ class CompletionEngineSuite extends FunSuite:
     assertEquals(run(data, "__warm|").get.items.map(_.label), Vector("colors/warm"))
     assertEquals(run(data, "__col|", cfg.copy(wildcards = false)), None)
   }
+  test("wildcard common prefix includes matches beyond the displayed result limit") {
+    val many = data.copy(wildcards = Vector("colors/warm", "colors/water", "colors/cold"))
+    val result = run(many, "__col|", cfg.copy(maxResults = 2)).get
+    assertEquals(result.items.map(_.label), Vector("colors/warm", "colors/water"))
+    assertEquals(result.wildcardPrefix, Some("colors/"))
+  }
   test("extra network: mixed list, filters, long forms") {
     assertEquals(run(data, "<|").get.items.map(_.kind.title).distinct, Vector("LoRA", "embedding", "chant"))
     assertEquals(run(data, "<e:|").get.items.map(_.label), Vector("bad_hands"))
@@ -102,17 +108,37 @@ class CompletionEngineSuite extends FunSuite:
     val d = data.copy(extra = extra)
     assertEquals(run(d, "blue|").get.items.map(_.label), Vector("blue_hair", "blue_eyes", "blue_sky"))
     assertEquals(run(d, "blue|", cfg.copy(extraAfter = false)).get.items.map(_.label), Vector("blue_sky", "blue_hair", "blue_eyes"))
-    assertEquals(run(d, "mast|").get.items.head.detail, "Quality tag")
-    assertEquals(run(d, "blue_s|").get.items.head.detail, "Custom tag")
+    assertEquals(run(d, "mast|").get.items.head.detail, "Quality tag  category 0")
+    assertEquals(run(d, "blue_s|").get.items.head.detail, "Custom tag  category 0")
     assertEquals(run(d, "blue_s|").get.items.head.kind, SuggestionKind.Extra)
   }
   test("chants JSON parsing and validation") {
     val chants = CompletionEngine.parseChants("""[{"name":"A","terms":"x,y","content":"c1","color":2},{"name":"B","content":"c2"}]""")
     assertEquals(chants.map(_.name), Vector("A", "B"))
     assertEquals(chants(1).color, 0)
+    assertEquals(chants(1).colorSpecified, false)
+    assertEquals(run(data.copy(chants = chants), "<c:b|").get.items.head.category, None)
     intercept[IllegalArgumentException](CompletionEngine.parseChants("""[{"name":"A"}]"""))
     intercept[IllegalArgumentException](CompletionEngine.parseChants("[]"))
     intercept[Exception](CompletionEngine.parseChants("{"))
+  }
+  test("tag and chant suggestions carry their source category without changing insertion") {
+    val parsed = TagCompletion.parse(Iterator("name,category,count,aliases", "azure_hair,4,20,bluehair", "landscape,0,10,"))
+    val d = data.copy(tags = parsed, chants = Vector(Chant("Bright", "light", "sunlit sky", 3)))
+    val tag = run(d, "bluehair|").get.items.head
+    assert(tag.detail.contains("category 4"))
+    assertEquals(tag.insert(), "azure hair")
+    val chant = run(d, "<c:bright|").get.items.head
+    assert(chant.detail.contains("category 3"))
+    assertEquals(chant.insert(), "sunlit sky")
+    assertEquals(tag.category, Some(4))
+    assertEquals(chant.category, Some(3))
+    val extra = CompletionEngine.parseExtra(Iterator("extra_tag,1,custom,"))
+    assertEquals(run(d.copy(extra = extra), "extra|").get.items.head.category, Some(1))
+    assert(run(d.copy(extra = extra), "extra|").get.items.head.detail.contains("category 1"))
+    val malformed = TagCompletion.parse(Iterator("a,not-a-number,1,", "b,99,1,"))
+    assertEquals(malformed.find(_.name == "a").get.category, None)
+    assertEquals(malformed.find(_.name == "b").get.category, Some(99))
   }
   test("plain tags still work with weights and ignore finished network tags") {
     assertEquals(applied(data, "(blue h|:1.2), x"), "(blue hair:1.2), x")
@@ -125,7 +151,12 @@ class CompletionEngineSuite extends FunSuite:
     val old = sdfx.core.config.Settings.load(file)
     assertEquals(old.tagComplete, TagCompleteSettings())
     assertEquals(old.tagAutocompleteCsv, Some("tags.csv"))
-    val changed = old.copy(tagComplete = TagCompleteSettings(translationCsv = Some("t.csv"), maxResults = 7, appendComma = true, extraAfter = false))
+    Files.writeString(file, """{"tag_complete": {"completion_delay_ms": 350}}""")
+    val previous = sdfx.core.config.Settings.load(file)
+    assertEquals(previous.tagComplete.completionDelayMs, 350)
+    assertEquals(previous.tagComplete.showWikiLinks, false)
+    val changed = old.copy(tagComplete = TagCompleteSettings(translationCsv = Some("t.csv"), maxResults = 7, appendComma = true, extraAfter = false,
+      categoryColorMap = """{"danbooru":{"4":["red","blue"]}}""", wildcardPathMode = "next-folder", completionDelayMs = 350, showWikiLinks = true))
     sdfx.core.config.Settings.save(file, changed)
     assertEquals(sdfx.core.config.Settings.load(file).tagComplete, changed.tagComplete)
   }

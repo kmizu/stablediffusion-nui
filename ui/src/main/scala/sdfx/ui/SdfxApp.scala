@@ -62,7 +62,7 @@ final class SdfxApp extends Application:
       saveBootstrapChoice: Boolean = false): Unit =
     var svc: AppServices = null
     // the X/Y/Z plot sees the axes of every enabled plugin (built-in and external)
-    svc = new AppServices(home, loaded.settings, dryRun, StandardPlugins.all(() => if svc == null then Nil else svc.registry.xyzAxes),
+    svc = new AppServices(home, loaded.settings, dryRun, StandardPlugins.all(() => if svc == null then Nil else svc.registry.xyzAxes, home),
       initialRecovery = loaded.recovery)
     if saveBootstrapChoice then svc.updateSettings(identity)
     services = Some(svc)

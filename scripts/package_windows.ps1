@@ -154,7 +154,7 @@ if ($workerDistribution) {
 # The CLIP Interrogator label lists (python/sdfx/data/clip_interrogator/*.txt, MIT upstream lists) are plain data the engine reads at run time.
 $tracked = @(git -C $repo ls-files -- python/sdfx models licenses)
 if ($LASTEXITCODE -ne 0) { throw 'git ls-files failed; a Git checkout is required.' }
-$payload = @($tracked | Where-Object { $_ -match '^python/sdfx/.+\.py$|^python/sdfx/waifu2x_assets\.json$|^python/sdfx/data/model_keyword/(model|lora)-keyword\.txt$|^python/sdfx/data/clip_interrogator/[a-z]+\.txt$|^python/sdfx/.+/LICENSE$|^models/.+/README\.txt$|^models/nudenet/best\.onnx$|^licenses/[A-Za-z0-9_.-]+\.txt$' })
+$payload = @($tracked | Where-Object { $_ -match '^python/sdfx/.+\.py$|^python/sdfx/waifu2x_assets\.json$|^python/sdfx/data/model_keyword/(model|lora)-keyword\.txt$|^python/sdfx/data/clip_interrogator/[a-z]+\.txt$|^python/sdfx/data/clip_interrogator/openclip_registry_licenses\.json$|^python/sdfx/.+/LICENSE$|^models/.+/README\.txt$|^models/nudenet/best\.onnx$|^licenses/[A-Za-z0-9_.-]+\.txt$' })
 if (-not $NativeOnly -and -not ($payload -contains 'python/sdfx/__main__.py')) { throw 'Python source files missing from Git index.' }
 if ($NativeOnly) { $payload = @($payload | Where-Object { -not $_.StartsWith('python/') }) }
 $nudenet = 'models/nudenet/best.onnx'
@@ -169,7 +169,7 @@ foreach ($relative in $payload) {
     [IO.Directory]::CreateDirectory((Split-Path -Parent $destination)) | Out-Null
     Copy-Item -LiteralPath $source -Destination $destination
 }
- $appFiles = @('LICENSE', 'THIRD_PARTY_NOTICES.md', 'DISTRIBUTION_NOTICES.md', '.mcp.json.example', 'mcp/README.md', 'docs/mcp-generation-metadata.md', 'docs/mcp-agent-verification.md')
+$appFiles = @('LICENSE', 'THIRD_PARTY_NOTICES.md', 'DISTRIBUTION_NOTICES.md', '.mcp.json.example', 'mcp/README.md', 'docs/mcp-generation-metadata.md', 'docs/mcp-agent-verification.md', 'docs/batch-face-checkpoint-ja.md', 'docs/batch-face-audit-ja.md')
 if (-not $NativeOnly) { $appFiles += @('python/requirements.txt', 'python/requirements-torch.txt', 'python/requirements-dev.txt') }
 foreach ($relative in $appFiles) {
     $source = Join-Path $repo $relative
