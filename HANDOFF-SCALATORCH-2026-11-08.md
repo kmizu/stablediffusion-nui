@@ -77,5 +77,9 @@ NUI's selling point is zero Python dependency (scala-torch worker on the JVM). F
   (was about 7 s), 37 s in total including about 33 s of model load; SD1.5 512px 20 steps 25 s in total;
   SDXL + LoRA catCarrier_v60 + 20_cat-hinomina (0.9) 49 s in total. Images are coherent and the asynchronous run is
   pixel-identical to the synchronous one.
-- Open: CLIP and VAE are still Float32; the model load (CPU read and convert, about 30 s) is the remaining fixed cost;
-  scala-torch commits 7ca120d and 3fc51e6 are local and not pushed.
+- CLIP and the VAE also run in Float16 now (scala-torch cd23626). The VAE recomputes in Float32 when its Float16 output is
+  not finite (some SDXL VAEs overflow); that fallback did not trigger for waiIllustriousSDXL_v170 or animekawa_v10.
+  Final check with the assembled jar: SDXL 1024px 20 steps 36 s in total (27 s of it model load; the GPU is shared, so the
+  per-step figure moves between 0.11 and 0.44 s), SDXL + LoRA 47 s, SD1.5 512px 20 steps 16 s; images coherent.
+- Open: the model load (CPU read and convert, about 30 s) is the remaining fixed cost; scala-torch commits 7ca120d, 3fc51e6
+  and cd23626 are local and not pushed.
