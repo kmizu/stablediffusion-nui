@@ -41,7 +41,7 @@ lazy val pythonEngine = project.dependsOn(engine).settings(commonSettings, name 
 lazy val scalaTorchEngine = project.dependsOn(engine).settings(
   commonSettings,
   name := "sdfx-scala-torch-engine",
-  libraryDependencies += "com.github.kmizu" %% "scala-torch-models" % "0.1.0"
+  libraryDependencies += "com.github.kmizu" %% "scala-torch-models" % "0.1.2"
 )
 
 val nativeOnlyBuild = sys.env.get("SDFX_NATIVE_ONLY").exists(_.trim.equalsIgnoreCase("true"))
