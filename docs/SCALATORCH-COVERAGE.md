@@ -29,4 +29,4 @@ aesthetic_score_extras, autosized_crop, batch_checkpoints_prompts, caption, colo
 | Item | Why | Tracking |
 |---|---|---|
 | ESRGAN-class upscalers | no weights on disk to verify | #148, #152 |
-| mlsd / normal preprocessors (lineart, lineart_anime, softedge_hed = real networks since gh22; depth = Depth Anything V2 since gh20, openpose = CMU OpenPose since gh21; weights in models/annotators, OpenPose weights are non-commercial) | native code is an image-processing approximation, not a trained model (canny, invert, tile, blur are exact) | #160 |
+| normal_bae / normal_marigold preprocessors (mlsd = M-LSD since gh23; lineart, lineart_anime, softedge_hed = real networks since gh22; depth = Depth Anything V2 since gh20, openpose = CMU OpenPose since gh21; weights in models/annotators, OpenPose weights are non-commercial) | native code is an image-processing approximation, not a trained model (canny, invert, tile, blur are exact) | #162 |
