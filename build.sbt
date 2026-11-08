@@ -54,6 +54,19 @@ lazy val mcp = project
     (if (nativeOnlyBuild) Seq.empty else Seq[ClasspathDep[ProjectReference]](pythonEngine % "runtime->compile")) )*)
   .settings(commonSettings, name := "sdfx-mcp")
 
+/** Dev-only JVM client built on the official MCP Java SDK; replaces the Python scripts for acceptance runs. */
+lazy val mcpClient = project
+  .in(file("tools/mcp-client"))
+  .settings(
+    name := "sdfx-mcp-client",
+    scalaVersion := (core / scalaVersion).value,
+    libraryDependencies ++= Seq(
+      "io.modelcontextprotocol.sdk" % "mcp" % "1.1.5",
+      "com.lihaoyi" %% "upickle" % upickleV
+    ),
+    exportJars := false
+  )
+
 lazy val ui = project
   .dependsOn((Seq[ClasspathDep[ProjectReference]](core, engine, plugins, mcp, scalaTorchEngine % Runtime) ++
     (if (nativeOnlyBuild) Seq.empty else Seq[ClasspathDep[ProjectReference]](pythonEngine % Runtime)) )*)
