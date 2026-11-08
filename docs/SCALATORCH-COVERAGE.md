@@ -29,5 +29,5 @@ aesthetic_score_extras, autosized_crop, batch_checkpoints_prompts, caption, colo
 | Item | Why | Tracking |
 |---|---|---|
 | ESRGAN-class upscalers | no weights on disk to verify | #148, #152 |
-| depth / openpose / lineart / softedge / mlsd / normal preprocessors | native code is an image-processing approximation, not a trained model (canny, invert, tile, blur are exact) | #160 |
-| ControlNet depth / openpose units | need real depth/openpose control images (#160) | #160 |
+| openpose / lineart / softedge / mlsd / normal preprocessors (depth is real Depth Anything V2 since gh20) | native code is an image-processing approximation, not a trained model (canny, invert, tile, blur are exact) | #160 |
+| ControlNet openpose unit | needs a real openpose control image (#160) | #160 |
