@@ -61,3 +61,21 @@ NUI's selling point is zero Python dependency (scala-torch worker on the JVM). F
 - SDXL `catCarrier_v60` + LoRA `20_cat-hinomina` 0.9 on scala-torch: fails on 0.1.2 with "LoRA factors exceed allocation budget" (hard-coded 100M-element limit; the LoRA file is 681 MB). Fixed in scala-torch commit "Raise the LoRA allocation budget..." (limit 536870912, version 0.1.3). With the local classes it generated in 246 s; image coherent, likeness to the character not judged.
 - **0.1.3 is NOT published.** Central refused it: "your organization has reached its monthly release size limit. Grace period ended 2026-11-04. Usage resets 2026-12-01." Publish 0.1.3 on or after 2026-12-01 (signed staging is in `scala-torch/target/sona-staging`; remove stale version dirs there first, or sonaRelease re-uploads old versions and fails), then bump NUI to 0.1.3. Until then a large SDXL LoRA needs the local classpath (`SDFX_SCALATORCH_CLASSPATH_FILE`).
 - Still open: JVM MCP client (replace `mcp_gen.py` / `scripts/dev/check_mcp_client.py` with the official MCP Java SDK), FP16 activations end to end, fewer per-launch synchronisations, scala-torch `docs/PUBLISHING.md` is stale, 6 unrelated `models/test` failures (BetaAndDynThreshSuite, EulerConfigSuite, 4x missing tiny-sd-pipe fixture).
+
+## Float16 U-Net and the snapshot dependency (2026-11-08, late)
+
+- scala-torch 0.1.3 is blocked on Maven Central by the monthly release-size limit (resets 2026-12-01; a request to
+  central-support@sonatype.com is drafted but not sent). NUI therefore resolves `0.1.3-SNAPSHOT` from
+  `https://central.sonatype.com/repository/maven-snapshots/` (see `build.sbt`). Switch back to `0.1.3` once it is released.
+  Coursier caches snapshots; to pick up a republished snapshot delete
+  `%LOCALAPPDATA%\Coursier\Cache\v1\https\central.sonatype.com\repository\maven-snapshots\com\github\kmizu` and rebuild.
+- The U-Net now runs in Float16 by default (`SCALATORCH_CUDA_FP16=0` restores Float32): `__half` kernels written in CUDA C
+  (`ffm/src/main/cuda/half.cu`, compiled to `half.ptx` with `build_ptx.py` through NVRTC), cuBLAS half GEMM for linear,
+  convolution and attention, a caching device allocator, and no per-launch synchronization
+  (`SCALATORCH_CUDA_SYNC=1` re-enables it for debugging).
+- Verified through the NUI MCP with the assembled jar (RTX 3090, shared): SDXL 1024px, 20 steps, 0.22 s per U-Net step
+  (was about 7 s), 37 s in total including about 33 s of model load; SD1.5 512px 20 steps 25 s in total;
+  SDXL + LoRA catCarrier_v60 + 20_cat-hinomina (0.9) 49 s in total. Images are coherent and the asynchronous run is
+  pixel-identical to the synchronous one.
+- Open: CLIP and VAE are still Float32; the model load (CPU read and convert, about 30 s) is the remaining fixed cost;
+  scala-torch commits 7ca120d and 3fc51e6 are local and not pushed.
