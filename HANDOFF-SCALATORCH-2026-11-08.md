@@ -83,3 +83,9 @@ NUI's selling point is zero Python dependency (scala-torch worker on the JVM). F
   per-step figure moves between 0.11 and 0.44 s), SDXL + LoRA 47 s, SD1.5 512px 20 steps 16 s; images coherent.
 - Open: the model load (CPU read and convert, about 30 s) is the remaining fixed cost; scala-torch commits 7ca120d, 3fc51e6
   and cd23626 are local and not pushed.
+
+## scala-torch from GitHub (0.1.3-gh1)
+- NUI now resolves `scala-torch-models` 0.1.3-gh1 from `https://raw.githubusercontent.com/scala-ml/scala-torch/maven-repo/` (orphan branch `maven-repo` of scala-ml/scala-torch, unsigned, no javadoc jars). A fixed version, so Coursier caches it (a SNAPSHOT would re-download).
+- Verified with the assembled jar: SDXL + LoRA hinomina 1024px 20 steps, 47 s, coherent image.
+- Republish: build with a temporary `ThisBuild / version` and a file `publishTo` under `target/gh-repo`, copy it into a new commit on `maven-repo`, push. Bump the version for each change.
+- Switch back to Central `0.1.3` after the Sonatype limit resets (2026-12-01) or an exception.
