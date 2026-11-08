@@ -43,3 +43,15 @@ NUI's selling point is zero Python dependency (scala-torch worker on the JVM). F
 - Next (user asked): FP16 compute; then attention via cuBLAS strided-batched GEMM (+softmax kernel) or flash-style; transpose/broadcast_add fusion; pinned-memory weight upload. Fused attention is opt-in via `SCALATORCH_CUDA_FUSED_ATTENTION=1` + `SCALATORCH_CUDA_MULTI_QUERY_ATTENTION=1` (faster than the default path; worker should enable it). 
 - Env for 1024px SDXL: UNET_MAX_BYTES 16 GiB, VAE_MAX_BYTES 12 GiB, MAX_ATTENTION_SCORE_ELEMENTS 536870912. `patched.cp` now also lists scala-torch ffm classes + `ffm/src/main/resources`.
 - Test harness note: sbt.bat breaks on args with spaces; put `set` commands in a temporary `*.sbt` file. Release key settings go in `zz-local-pgp.sbt` (deleted after use); Central token and passphrase were copied into `~/.sbt` (never print).
+
+## Update 2026-11-08 (speed round 2, scala-torch 0.1.2)
+- SDXL waiIllustrious 1024px, 20 steps, RTX 3090 (shared): 524 s (0.1.1) -> 157 s. Image checked by eye (coherent, same composition as before).
+- What changed in scala-torch (commits after 0.1.1, released as 0.1.2):
+  - CLIP text layers run on CUDA (`ClipCuda`; the worker enables it when the U-Net device is cuda; `SCALATORCH_CLIP_DEVICE=cpu` disables). 2-step run 86 s -> 56 s. New kernels `gelu_erf`, `quick_gelu`.
+  - CPU matmul is cache-friendly and multi-core (bit-identical results).
+  - Attention uses cuBLAS strided-batched GEMM plus block-parallel `softmax_par` (default; `SCALATORCH_CUDA_CUBLAS_ATTENTION=0` disables; scratch capped at 2 GiB, otherwise the old sliced kernels run).
+  - Linear layers call cuBLAS with a transposed B operand (no per-call weight transpose). `transpose5` and `broadcast_add5` take geometry as kernel parameters.
+  - FP16 (`SCALATORCH_CUDA_FP16=1`, opt-in): Linear weights are converted to Float16 on first use, activations are cast per call, `cublasGemmEx` accumulates in Float32. Numerically fine and the image looks the same, but it is slower right now (210 s vs 157 s) because every call casts and allocates. Real gains need FP16 activations end to end (not done). It saves no memory yet: the Float32 weights stay resident.
+- GPU tests: the 6 old failures were stale expectations (bit-exact comparisons, 8-byte score scratch, profile-gated label); fixed in `ce09111`. `ffm/test`: 60 tests, 0 failed. `models/test` has 6 unrelated failures (BetaAndDynThreshSuite, EulerConfigSuite, 4x missing `tiny-sd-pipe` fixture).
+- Weight upload is only ~4 s per load, so pinned memory was not worth doing. The rest of the fixed cost per run (~40 s) is model read/convert on the CPU.
+- Remaining per-step time (~7 s/step): `transpose5` (5212 calls), cuBLAS attention scores, `broadcast_add5`, GroupNorm, per-launch synchronize overhead. reForge is still much faster; FP16 activations, fused elementwise kernels and fewer synchronizations are the next steps.
