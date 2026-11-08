@@ -37,6 +37,7 @@ Historical release names and verification paths retain their original spelling.
 - **Engine hooks**: every new hook name goes in `hooks.KNOWN_HOOKS`, `Engine.features()` and `dryrun.features()`.
 - **Licences**: re-implement from documented behaviour. Never copy code from repositories without a licence. Add
   optional dependencies to `scripts/third_party.py` and as commented lines in `python/requirements.txt`.
+- **Engine policy**: extension support that already exists is built on the Python engine. New extension support is implemented on scala-torch (`SDFX_ENGINE_BACKEND=scala-torch`, JVM worker), with no Python dependency. Add the feature to the native worker's `features()`; touch `python/sdfx/` only to keep existing behaviour working.
 - **Verification**: GPU-check new features on real SD1.5 and SDXL models, and look at the images before marking a
   target done.
 - **Line endings**: write files with LF (`.gitattributes`).
