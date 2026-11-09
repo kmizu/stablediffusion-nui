@@ -80,6 +80,8 @@ External plugins can be added just by putting a jar in `plugins-ext/` (see below
 Once you have the Windows x64 `SDNUI-v0.1-windows-x64.zip`, extract it to a writable folder and launch `SDNUI\SDNUI.exe`.
 The Java runtime is bundled. Python 3.10-3.12 is required separately; on the first normal launch you can set up a dedicated environment and the dependencies. Checkpoints for image generation are not bundled. The detection model for NudeNet NSFW Censor is bundled. You can reuse an existing model folder via Settings → Model folders → **Add A1111/reForge install...**. For detailed steps, see [Windows release](docs/WINDOWS_RELEASE.md).
 
+**The Windows package since v0.11 starts on the Python-free scala-torch engine.** No environment variables are needed: it starts with the last used checkpoint (or the first one in your model folders) and uses an NVIDIA GPU automatically when present. The Python engine can still be selected in Settings.
+
 You can also build a dedicated package that omits the Python provider and Python sources and starts with scala-torch only. For the steps and the current feature limitations, see [Windows distribution without Python](docs/WINDOWS_RELEASE.md#native-only-package-python-provider-and-source-omitted).
 
 The older v0.01 / v0.02 releases keep the former name SDFX. For compatibility, the Python module `sdfx`, `SDFX_HOME` / `SDFX_MCP_*`, `-Dsdfx.home` and the existing settings file names have not been changed.

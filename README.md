@@ -87,6 +87,8 @@ reForge の標準スクリプトと内蔵拡張をすべて書き直して同梱
 Windows x64 の `SDNUI-v0.1-windows-x64.zip` を入手したら、書き込み可能なフォルダに展開し、`SDNUI\SDNUI.exe` を起動します。
 Java ランタイムは同梱されています。Python 3.10〜3.12 は別途必要で、初回の通常起動時に専用環境と依存パッケージをセットアップできます。画像生成用のチェックポイントは同梱されません。NudeNet NSFW Censor 用の検出モデルは同梱されています。Settings → Model folders → **Add A1111/reForge install...** から既存のモデルフォルダを利用できます。詳しい手順は [Windows 配布版](docs/WINDOWS_RELEASE.md) を参照してください。
 
+**v0.11 以降の Windows 配布版は、Python なしの scala-torch エンジンで起動します。** 環境変数の設定は要りません。最後に使ったチェックポイント（なければモデルフォルダの最初の 1 つ）で起動し、NVIDIA の GPU があれば自動で使います。Python エンジンは設定で選べます。
+
 Python provider と Python ソースを含めず、scala-torch だけで起動する専用パッケージもビルドできます。手順と現在の機能制限は [PythonなしのWindows配布手順](docs/WINDOWS_RELEASE.md#native-only-package-python-provider-and-source-omitted) を参照してください。
 
 旧版 v0.01 / v0.02 の配布物は旧名 SDFX のままです。互換性のため、Python モジュール `sdfx`、`SDFX_HOME` / `SDFX_MCP_*`、`-Dsdfx.home` と既存の設定ファイル名は変更していません。
