@@ -285,13 +285,13 @@
 "index": 47,
 "name": "Prompt Generator",
 "url": "https://github.com/imrayya/stable-diffusion-webui-Prompt_Generator.git",
-"status": "todo:prompt_generator"
+"status": "done:prompt_generator"
 },
 {
 "index": 48,
 "name": "Promptgen",
 "url": "https://github.com/AUTOMATIC1111/stable-diffusion-webui-promptgen.git",
-"status": "todo:prompt_generator"
+"status": "done:prompt_generator"
 },
 {
 "index": 49,
@@ -1191,7 +1191,7 @@
 "index": 198,
 "name": "sd-webui-oldsix-prompt",
 "url": "https://github.com/thisjam/sd-webui-oldsix-prompt.git",
-"status": "todo:prompt_library"
+"status": "done:prompt_library"
 },
 {
 "index": 199,
@@ -1329,13 +1329,13 @@
 "index": 221,
 "name": "Scenario loader",
 "url": "https://github.com/Chaest/sd-webui-sc-loader.git",
-"status": "todo:scenario_loader"
+"status": "done:scenario_loader"
 },
 {
 "index": 222,
 "name": "PromptsBrowser",
 "url": "https://github.com/AlpacaInTheNight/PromptsBrowser.git",
-"status": "todo:prompt_library"
+"status": "done:prompt_library"
 },
 {
 "index": 223,

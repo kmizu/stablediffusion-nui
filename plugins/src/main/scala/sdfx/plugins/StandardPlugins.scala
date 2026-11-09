@@ -42,7 +42,7 @@ object StandardPlugins:
 
   def scripts(extraAxes: () => Seq[XyzAxis], home: sdfx.core.config.AppHome = sdfx.core.config.AppHome.detect()): Seq[Plugin] = Seq(
     new XyzGridPlugin(extraAxes),
-    new PromptMatrixPlugin, new PromptGalleryPlugin, new StyleSelectorPlugin,
+    new PromptMatrixPlugin, new PromptGalleryPlugin, new StyleSelectorPlugin, new PromptLibraryPlugin, new ScenarioLoaderPlugin, new PromptGeneratorPlugin,
     new StylePilePlugin,
     new StepsAnimationPlugin,
     new PromptsFromFilePlugin,

@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 183, todo 119, na 51.
+Totals: done 188, todo 114, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -53,8 +53,8 @@ Totals: done 183, todo 119, na 51.
 | 44 | [Randomize](https://github.com/innightwolfsleep/stable-diffusion-webui-randomize.git) | 25 | done | `randomize` |  |
 | 45 | [conditioning-highres-fix](https://github.com/klimaleksus/stable-diffusion-webui-conditioning-highres-fix.git) | 43 | done | `conditioning_highres_fix` | Pinned seven-mode inpainting conditioning formulas, native controls and PNG replay; 9-channel SD1.5/SDXL source and MainWindow, protected input/output, cancellation/recovery verified. Actual 4-channel SD1.5/SDXL masked and Hires output is unchanged. Disabled retains native baseline; SDXL is a native adaptation. Extracted Windows package, full Torch CPU and Scala suites verified. ControlNet/ADetailer composition is not real-model verified; see conditioning-highres-verification.md. |
 | 46 | [model-keyword](https://github.com/mix1009/model-keyword.git) | 269 | done | `model_keyword` |  |
-| 47 | [Prompt Generator](https://github.com/imrayya/stable-diffusion-webui-Prompt_Generator.git) | 243 | todo | `prompt_generator` |  |
-| 48 | [Promptgen](https://github.com/AUTOMATIC1111/stable-diffusion-webui-promptgen.git) | 540 | todo | `prompt_generator` |  |
+| 47 | [Prompt Generator](https://github.com/imrayya/stable-diffusion-webui-Prompt_Generator.git) | 243 | done | `prompt_generator` |  |
+| 48 | [Promptgen](https://github.com/AUTOMATIC1111/stable-diffusion-webui-promptgen.git) | 540 | done | `prompt_generator` |  |
 | 49 | [text2prompt](https://github.com/toshiaki1729/stable-diffusion-webui-text2prompt.git) | 167 | todo | `text2prompt` |  |
 | 50 | [Prompt Translator](https://github.com/butaixianran/Stable-Diffusion-Webui-Prompt-Translator) | 252 | na | `account` | needs a third-party account / paid API key and posts data to that service |
 | 51 | [Deforum](https://github.com/deforum-art/deforum-for-automatic1111-webui.git) | 2855 | todo | `deforum` |  |
@@ -204,7 +204,7 @@ Totals: done 183, todo 119, na 51.
 | 195 | [seamless-tile-inpainting](https://github.com/brick2face/seamless-tile-inpainting.git) | 41 | done | `seamless_tile` |  |
 | 196 | [FaceSwapLab](https://github.com/glucauze/sd-webui-faceswaplab) | 821 | todo | `face_swap` |  |
 | 197 | [Style Selector for SDXL 1.0](https://github.com/ahgsql/StyleSelectorXL.git) | 475 | done | `style_selector` |  |
-| 198 | [sd-webui-oldsix-prompt](https://github.com/thisjam/sd-webui-oldsix-prompt.git) | 1962 | todo | `prompt_library` |  |
+| 198 | [sd-webui-oldsix-prompt](https://github.com/thisjam/sd-webui-oldsix-prompt.git) | 1962 | done | `prompt_library` |  |
 | 199 | [Custom Hires Fix](https://github.com/wcde/custom-hires-fix-for-automatic1111.git) | 48 | todo | `custom_hires_fix` |  |
 | 200 | [Refiner](https://github.com/wcde/sd-webui-refiner.git) | 155 | todo | `refiner` |  |
 | 201 | [sd-webui-deoldify](https://github.com/SpenserCai/sd-webui-deoldify) | 693 | todo | `deoldify` |  |
@@ -227,8 +227,8 @@ Totals: done 183, todo 119, na 51.
 | 218 | [SD Masonry Gallery](https://github.com/bit9labs/sd-masonry.git) | 10 | done | `core:gallery` |  |
 | 219 | [sd-webui-depth-lib](https://github.com/wywywywy/sd-webui-depth-lib.git) | 53 | todo | `depth_library` |  |
 | 220 | [Stable Diffusion Webui Civitai Helper](https://github.com/zixaphir/Stable-Diffusion-Webui-Civitai-Helper.git) | 254 | todo | `model_downloader` |  |
-| 221 | [Scenario loader](https://github.com/Chaest/sd-webui-sc-loader.git) | 41 | todo | `scenario_loader` |  |
-| 222 | [PromptsBrowser](https://github.com/AlpacaInTheNight/PromptsBrowser.git) | 48 | todo | `prompt_library` |  |
+| 221 | [Scenario loader](https://github.com/Chaest/sd-webui-sc-loader.git) | 41 | done | `scenario_loader` |  |
+| 222 | [PromptsBrowser](https://github.com/AlpacaInTheNight/PromptsBrowser.git) | 48 | done | `prompt_library` |  |
 | 223 | [Model Mixer](https://github.com/wkpark/sd-webui-model-mixer.git) | 115 | done | `model_merge` |  |
 | 224 | [Fast PNG Info](https://github.com/NoCrypt/sd-fast-pnginfo.git) | 44 | done | `core:png-info` |  |
 | 225 | [sd-webui-mov2mov](https://github.com/Scholar01/sd-webui-mov2mov.git) | 2157 | todo | `mov2mov` |  |
