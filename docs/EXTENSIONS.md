@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 194, todo 108, na 51.
+Totals: done 195, todo 107, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -294,7 +294,7 @@ Totals: done 194, todo 108, na 51.
 | 285 | [Clear Screen](https://github.com/Haoming02/sd-webui-clear-screen.git) | 8 | na | `webui-ux` | Gradio page behaviour (tabs, buttons, dialogs); the desktop UI provides the equivalent natively |
 | 286 | [SD Webui Image Comparison](https://github.com/Haoming02/sd-webui-image-comparison.git) | 66 | done | `core:image-compare` |  |
 | 287 | [SD Webui Tabs Extension](https://github.com/Haoming02/sd-webui-tabs-extension.git) | 103 | na | `webui-ux` | Gradio page behaviour (tabs, buttons, dialogs); the desktop UI provides the equivalent natively |
-| 288 | [Mosaic Outpaint](https://github.com/Haoming02/sd-webui-mosaic-outpaint.git) | 118 | todo | `mosaic_outpaint` |  |
+| 288 | [Mosaic Outpaint](https://github.com/Haoming02/sd-webui-mosaic-outpaint.git) | 118 | done | `mosaic_outpaint` |  |
 | 289 | [SD Webui Boomer](https://github.com/Haoming02/sd-webui-boomer.git) | 56 | na | `webui-ux` | Gradio page behaviour (tabs, buttons, dialogs); the desktop UI provides the equivalent natively |
 | 290 | [Diffusion Color Grading](https://github.com/Haoming02/sd-webui-diffusion-cg.git) | 74 | done | `color_grading` |  |
 | 291 | [Moar Generate Button](https://github.com/Haoming02/sd-webui-moar-generate.git) | 30 | na | `webui-ux` | Gradio page behaviour (tabs, buttons, dialogs); the desktop UI provides the equivalent natively |

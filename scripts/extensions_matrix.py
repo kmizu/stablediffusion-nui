@@ -93,7 +93,7 @@ S = {
     273: "todo:video_extras", 274: "todo:inpaint_background", 275: "todo:daam", 276: "done:core:controlnet_preprocess_extras",
     277: "na:account", 278: "todo:rpg_diffusion", 279: "done:creaprompt", 280: "todo:img2img_workflow",
     281: "na:server-ops", 282: "na:webui-ux", 283: "todo:dataset_tag_editor", 284: "todo:resharpen", 285: "na:webui-ux",
-    286: "todo:core:image-compare", 287: "na:webui-ux", 288: "todo:mosaic_outpaint", 289: "na:webui-ux",
+    286: "todo:core:image-compare", 287: "na:webui-ux", 288: "done:mosaic_outpaint", 289: "na:webui-ux",
     290: "todo:color_grading", 291: "na:webui-ux", 292: "todo:old_photo_restoration", 293: "na:webui-ux",
     294: "done:core:prompt-tools", 295: "todo:token_downsampling", 296: "done:core:size-presets",
     297: "done:hires_fix_tweaks", 298: "todo:manga_maker", 299: "todo:model_organizer", 300: "na:server-ops",
