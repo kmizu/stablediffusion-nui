@@ -409,3 +409,11 @@ Kimi の受入マトリクス（SD1.5/SDXL × stdio/HTTP、公式 SDK、`--requi
 - Python backend, same MCP route: SDXL `catCarrier_v60` + LoRA `20_cat-hinomina` (0.9), "cute girl hinomina", seed 173,
   1024x1024 → image differs completely from the same seed without the LoRA (short orange hair, white headband and ribbon).
   Whether it resembles the intended character was not judged.
+
+## 2026-11-09 追記（次リリース v0.2 向け 10 件、受け入れ 0/10）
+
+- ユーザー指示: issue を 10 件選んで実装し、次のリリースとする（番号は v0.2 で了承済み）。選定: #36 #39 #105 #121 #102 #100 #113 #72 #29 #101。
+- push 済み部分対応（すべて open、GUI／SDXL 未確認）: #36 Depth Anything V2 Extras（78cb123）、#105 QR code Extras（同、ZXing 3.5.3 を plugins に追加、テスト4件、SD1.5＋canny ControlNet で目視）、#39 Depth stereo Extras（f9e3b16、テスト5件、実画像で目視。3D メッシュ・動画は未実装）。
+- #72 lcm: コード変更なし。SDXL＋LCM LoRA＋LCM サンプラー 4 ステップを実 MCP で確認。SD1.5 と専用 UI は未確認。
+- #29: 元拡張の Sharp/Smoothness の仕様とライセンスが不明なため未着手（issue に理由を記載）。
+- 未着手: #121 #102 #100 #113 #101。Extras プラグインは MCP から呼べないため、GUI 確認が残る。リリースは未公開。
