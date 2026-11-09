@@ -451,7 +451,8 @@ final class ImageBrowserTab(ctx: UiContext, env: BrowserEnv):
     private val fileNameBox = hideIfConfigured("File Name", W.hbox(6, W.label("File Name"), W.hgrow(fileName)))
     private val fileTimeBox = hideIfConfigured("File Time", W.hbox(6, W.label("File Time"), fileTime))
     private val openBox = hideIfConfigured("Open Folder", W.hbox(6, openFolderBtn, openVideoBtn))
-    private val rightBox = new VBox(6, bigView, infoBox, addBox, fileNameBox, fileTimeBox, fileFacts, openBox, sendBar, toDirBar)
+    private val videoPane = new VideoPreviewPane(spec.id)
+    private val rightBox = new VBox(6, bigView, videoPane.node, infoBox, addBox, fileNameBox, fileTimeBox, fileFacts, openBox, sendBar, toDirBar)
     rightBox.setPadding(new Insets(8))
     private val rightScroll = new ScrollPane(rightBox); rightScroll.setFitToWidth(true)
     rightScroll.setPrefWidth(440); rightScroll.setMinWidth(380); rightScroll.setMaxWidth(440)
@@ -531,7 +532,7 @@ final class ImageBrowserTab(ctx: UiContext, env: BrowserEnv):
       tiles.get(rec.fold(Path.of(""))(_.path)).foreach(_.refreshBadge())
       rec match
         case None =>
-          bigReads.invalidate(); bigView.setImage(null)
+          bigReads.invalidate(); bigView.setImage(null); videoPane.hide(); bigView.setManaged(true); bigView.setVisible(true)
           infoText.clear(); infoTable.getItems.clear(); additional.clear(); fileName.clear(); fileTime.setText(""); fileFacts.setText("")
           openVideoBtn.setVisible(false); openVideoBtn.setManaged(false)
         case Some(r) =>
@@ -539,8 +540,9 @@ final class ImageBrowserTab(ctx: UiContext, env: BrowserEnv):
           val facts = BrowserInfo.sizeText(r.size) + tiles.get(r.path).flatMap(_.knownDims).fold("")(d => s"  ·  ${d._1} x ${d._2}")
           fileFacts.setText(facts)
           openVideoBtn.setVisible(r.isVideo); openVideoBtn.setManaged(r.isVideo)
-          if r.isVideo then { bigReads.invalidate(); bigView.setImage(null) }
-          else bigReads.request(r.path) {
+          if r.isVideo then { bigReads.invalidate(); bigView.setImage(null); bigView.setManaged(false); bigView.setVisible(false); videoPane.load(r.path) }
+          else { videoPane.hide(); bigView.setManaged(true); bigView.setVisible(true) }
+          if !r.isVideo then bigReads.request(r.path) {
             case scala.util.Success(d) if tvm.selected.contains(r.path) =>
               bigView.setImage(d.image)
               if tiles.get(r.path).forall(_.knownDims.isEmpty) then fileFacts.setText(facts + f"  ·  ${d.image.getWidth}%.0f x ${d.image.getHeight}%.0f (preview)")

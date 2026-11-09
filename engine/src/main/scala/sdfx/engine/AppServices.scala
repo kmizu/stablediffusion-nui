@@ -39,6 +39,13 @@ final class AppServices(
   val cardPreviews: CardPreviewSession = new CardPreviewSession(initialSettings.nsfwCardBlurDefault)
   val imageScrambleSession = new sdfx.core.png.ImageScrambleSession
 
+  /** The native backend runs with dtype fp32 / vram_mode cpu in memory; those forced values must not be written to settings.json,
+    * otherwise they stay behind when the Python engine is used later. */
+  private def forPersistence(s: Settings): Settings =
+    if !nativeLaunchSelected then s
+    else s.copy(dtype = if s.dtype == "fp32" then initialSettings.dtype else s.dtype,
+      vramMode = if s.vramMode == "cpu" then initialSettings.vramMode else s.vramMode)
+
   /** Updates (and saves) the settings. */
   def updateSettings(f: Settings => Settings): Settings = synchronized {
     _settings = f(_settings)
@@ -49,7 +56,7 @@ final class AppServices(
     else if persistSettings then
       try
         Settings.validatePreviewConfiguration(_settings).fold(reason => throw new IllegalArgumentException(reason), _ => ())
-        settingsWriter(home.settingsFile, _settings)
+        settingsWriter(home.settingsFile, forPersistence(_settings))
       catch case NonFatal(e) => log(s"[sdfx] cannot save settings: ${e.getMessage}")
     _settings
   }
@@ -66,7 +73,7 @@ final class AppServices(
         Settings.validatePreviewConfiguration(candidate) match
           case Left(reason) => Left(reason)
           case Right(_) =>
-            if persistSettings then settingsWriter(home.settingsFile, candidate)
+            if persistSettings then settingsWriter(home.settingsFile, forPersistence(candidate))
             _settings = candidate
             if intent == SettingsSaveIntent.Recover then
               _settingsRecovery = None

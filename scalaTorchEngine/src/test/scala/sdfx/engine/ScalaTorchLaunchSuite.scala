@@ -105,3 +105,34 @@ class ScalaTorchLaunchSuite extends munit.FunSuite:
       val files=Files.walk(temp)
       try files.sorted(java.util.Comparator.reverseOrder[Path]()).forEach(p => { Files.deleteIfExists(p);() }) finally files.close()
   }
+  test("zero configuration: last used checkpoint, bundled tokenizer, device and memory defaults, no environment variables") {
+    val temp=Files.createTempDirectory("native zero config")
+    val st=Files.createDirectories(temp.resolve("scala-torch"))
+    Files.writeString(st.resolve("worker-classpath.txt"),temp.toString)
+    val tok=Files.createDirectories(st.resolve("tokenizer"))
+    Files.writeString(tok.resolve("vocab.json"),"{}"); Files.writeString(tok.resolve("merges.txt"),"")
+    val ckpts=Files.createDirectories(temp.resolve("Stable-diffusion"))
+    Files.write(ckpts.resolve("a-first.safetensors"),Array[Byte](1))
+    val wanted=Files.write(ckpts.resolve("b-last.safetensors"),Array[Byte](1))
+    def settings(last: Option[String])=sdfx.core.config.Settings(engineBackend="scala-torch",
+      modelDirs=sdfx.core.config.ModelDirs(checkpoints=Seq(ckpts.toString)),lastModel=last)
+    val home=sdfx.core.config.AppHome(temp)
+    val l=EngineBackend.launch(home,settings(Some("b-last")),false,Map.empty)
+    assertEquals(l.command.takeRight(2).head,wanted.toAbsolutePath.normalize.toString)
+    assertEquals(l.env("SDFX_SCALATORCH_TOKENIZER"),tok.toAbsolutePath.normalize.toString)
+    assertEquals(l.env("SDFX_SCALATORCH_UNET_MAX_BYTES"),(8L<<30).toString)
+    assertEquals(l.env("SDFX_SCALATORCH_MAX_ATTENTION_SCORE_ELEMENTS"),(1L<<30).toString)
+    assert(Set("cpu","cuda").contains(l.env("SDFX_SCALATORCH_UNET_DEVICE")))
+    // without a last model the first checkpoint is used; an explicit environment value wins over the defaults
+    val l2=EngineBackend.launch(home,settings(None),false,Map("SDFX_SCALATORCH_UNET_MAX_BYTES"->"123","SDFX_SCALATORCH_UNET_DEVICE"->"cpu"))
+    assert(l2.command.takeRight(2).head.endsWith("a-first.safetensors"))
+    assertEquals(l2.env("SDFX_SCALATORCH_UNET_MAX_BYTES"),"123")
+    assertEquals(l2.env("SDFX_SCALATORCH_UNET_DEVICE"),"cpu")
+    // a folder given as SDFX_SCALATORCH_JAVA is accepted when it contains the executable
+    val bin=Files.createDirectories(temp.resolve("jdk/bin"))
+    val exe=Files.write(bin.resolve(if sys.props("os.name").startsWith("Windows") then "java.exe" else "java"),Array[Byte](1))
+    val l3=EngineBackend.launch(home,settings(None),false,Map("SDFX_SCALATORCH_JAVA"->bin.toString))
+    assertEquals(l3.command.head,exe.toAbsolutePath.normalize.toString)
+    // no checkpoint anywhere -> a clear failure
+    intercept[IllegalArgumentException](EngineBackend.launch(home,sdfx.core.config.Settings(engineBackend="scala-torch"),false,Map.empty))
+  }

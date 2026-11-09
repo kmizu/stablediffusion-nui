@@ -14,7 +14,7 @@ lazy val fxOs: String = {
   else if (n.contains("mac")) { if (arch == "aarch64") "mac-aarch64" else "mac" }
   else "linux"
 }
-lazy val fxDeps = Seq("base", "graphics", "controls", "swing").map(m => "org.openjfx" % s"javafx-$m" % fxV classifier fxOs)
+lazy val fxDeps = Seq("base", "graphics", "controls", "swing", "media").map(m => "org.openjfx" % s"javafx-$m" % fxV classifier fxOs)
 
 lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(

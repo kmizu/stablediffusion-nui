@@ -162,8 +162,8 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
       .add("scala-torch model", scalaTorchModelRow(), "Diffusers model folder or SD1 safetensors checkpoint")
       .add("scala-torch scheduler", browseRow(scalaTorchScheduler, false, "Choose scheduler JSON"), "Uses the selected model's scheduler/scheduler_config.json when empty")
       .add("scala-torch Java", browseRow(scalaTorchJava, false, "Choose Java 25 executable (optional)"), "Uses the packaged Java 25 runtime when available, then NUI's current Java runtime")
-      .add("scala-torch U-Net device", W.combo(FXCollections.observableArrayList("cpu", "cuda", "cuda:0", "cuda:1"), scalaTorchUnetDevice), "U-Net compute device; cuda selects GPU 0")
-      .add("scala-torch VAE device", W.combo(FXCollections.observableArrayList("cpu", "cuda", "cuda:0", "cuda:1"), scalaTorchVaeDevice), "VAE encode/decode compute device; cuda selects GPU 0")
+      .add("scala-torch U-Net device", W.combo(FXCollections.observableArrayList("auto", "cpu", "cuda", "cuda:0", "cuda:1"), scalaTorchUnetDevice), "U-Net compute device; cuda selects GPU 0")
+      .add("scala-torch VAE device", W.combo(FXCollections.observableArrayList("auto", "cpu", "cuda", "cuda:0", "cuda:1"), scalaTorchVaeDevice), "VAE encode/decode compute device; cuda selects GPU 0")
       .full(W.check("Offload U-Net weights between CPU and CUDA", scalaTorchUnetOffloadWeights))
       .full(W.check("Offload VAE weights between CPU and CUDA", scalaTorchVaeOffloadWeights))
     if availableBackends.contains("python") then
