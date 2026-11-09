@@ -120,7 +120,7 @@ class ScalaTorchLaunchSuite extends munit.FunSuite:
     val l=EngineBackend.launch(home,settings(Some("b-last")),false,Map.empty)
     assertEquals(l.command.takeRight(2).head,wanted.toAbsolutePath.normalize.toString)
     assertEquals(l.env("SDFX_SCALATORCH_TOKENIZER"),tok.toAbsolutePath.normalize.toString)
-    assertEquals(l.env("SDFX_SCALATORCH_UNET_MAX_BYTES"),(8L<<30).toString)
+    assertEquals(l.env("SDFX_SCALATORCH_UNET_MAX_BYTES"),"auto")
     assertEquals(l.env("SDFX_SCALATORCH_MAX_ATTENTION_SCORE_ELEMENTS"),(1L<<30).toString)
     assert(Set("cpu","cuda").contains(l.env("SDFX_SCALATORCH_UNET_DEVICE")))
     // without a last model the first checkpoint is used; an explicit environment value wins over the defaults
@@ -136,17 +136,18 @@ class ScalaTorchLaunchSuite extends munit.FunSuite:
     // no checkpoint anywhere -> a clear failure
     intercept[IllegalArgumentException](EngineBackend.launch(home,sdfx.core.config.Settings(engineBackend="scala-torch"),false,Map.empty))
   }
-  test("fp32 gets larger default CUDA memory budgets than fp16 (twice the weight size)") {
-    val temp=Files.createTempDirectory("native fp32 budget")
+  test("CUDA memory budgets default to auto (free device memory) and an explicit value wins") {
+    val temp=Files.createTempDirectory("native budget")
     val st=Files.createDirectories(temp.resolve("scala-torch"))
     Files.writeString(st.resolve("worker-classpath.txt"),temp.toString)
     val tok=Files.createDirectories(st.resolve("tokenizer"))
     Files.writeString(tok.resolve("vocab.json"),"{}"); Files.writeString(tok.resolve("merges.txt"),"")
     val ckpts=Files.createDirectories(temp.resolve("Stable-diffusion"))
     Files.write(ckpts.resolve("m.safetensors"),Array[Byte](1))
-    def launch(dtype: String)=EngineBackend.launch(sdfx.core.config.AppHome(temp),sdfx.core.config.Settings(engineBackend="scala-torch",dtype=dtype,
-      modelDirs=sdfx.core.config.ModelDirs(checkpoints=Seq(ckpts.toString))),false,Map.empty)
-    assertEquals(launch("fp16").env("SDFX_SCALATORCH_UNET_MAX_BYTES"),(8L<<30).toString)
-    assertEquals(launch("fp32").env("SDFX_SCALATORCH_UNET_MAX_BYTES"),(18L<<30).toString)
-    assertEquals(launch("fp32").env("SDFX_SCALATORCH_VAE_MAX_BYTES"),(12L<<30).toString)
+    def launch(dtype: String,env: Map[String,String]=Map.empty)=EngineBackend.launch(sdfx.core.config.AppHome(temp),sdfx.core.config.Settings(engineBackend="scala-torch",dtype=dtype,
+      modelDirs=sdfx.core.config.ModelDirs(checkpoints=Seq(ckpts.toString))),false,env)
+    for d <- Seq("fp16","fp32") do
+      assertEquals(launch(d).env("SDFX_SCALATORCH_UNET_MAX_BYTES"),"auto")
+      assertEquals(launch(d).env("SDFX_SCALATORCH_VAE_MAX_BYTES"),"auto")
+    assertEquals(launch("fp16",Map("SDFX_SCALATORCH_UNET_MAX_BYTES"->"4294967296")).env("SDFX_SCALATORCH_UNET_MAX_BYTES"),"4294967296")
   }
