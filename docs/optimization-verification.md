@@ -56,3 +56,7 @@ fp16 as default (tolerances written for fp32) and 7 that fail even with `SCALATO
   offload is not usable. Not implemented.
 - Keeping the U-Net weights resident between generations (would save another 1.2 s per image on SD1.5): needs allocation ownership outside the session.
 - fp8 weight storage, TeaCache, tiled generation of huge images, automatic VRAM-based choice of settings: not implemented.
+
+## Package and release
+
+Release: https://github.com/kmizu/stablediffusion-nui/releases/tag/v0.14 (target 1001cbb). SHA-256 7ae87a815528da1a1dbb04d8327de2652994f22c935d642d58bffdf279eae26e; the re-downloaded ZIP matches SHA256SUMS.txt. The measurements were run on exactly this ZIP. Not repeated: generation from the extracted GUI and the first-run flow.
