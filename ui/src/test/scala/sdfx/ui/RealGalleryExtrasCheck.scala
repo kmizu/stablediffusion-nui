@@ -131,6 +131,21 @@ object RealGalleryExtrasCheck:
         rm.getInputStream.readAllBytes(); rm.waitFor()
         s"${victim.getFileName} moved to the recycle bin (listed by Shell.Application), then removed from it"
       }
+      // ---- Open Folder: the button starts Explorer on the file's folder; the window is found through Shell.Application and closed again
+      check("open_folder") {
+        fx(window.imageBrowser.selectInner("txt2img"))
+        eventually("txt2img tile")(tile("still.png") != null)
+        click(tile("still.png"))
+        def ps(cmd: String): String =
+          val p = new ProcessBuilder("powershell", "-NoProfile", "-Command", cmd).redirectErrorStream(true).start()
+          val out = new String(p.getInputStream.readAllBytes(), java.nio.charset.Charset.defaultCharset); p.waitFor(); out
+        val find = "$s=New-Object -ComObject Shell.Application; ($s.Windows() | Where-Object { $_.LocationName -eq '2026-11-02' } | ForEach-Object { $_.LocationName }) -join '|'"
+        require(!ps(find).contains("2026-11-02"), "an Explorer window for the folder was already open")
+        fx(window.scene.lookup("#ib-txt2img-openfolder").asInstanceOf[Button].fire())
+        eventually("explorer window", 20)(ps(find).contains("2026-11-02"))
+        ps("$s=New-Object -ComObject Shell.Application; $s.Windows() | Where-Object { $_.LocationName -eq '2026-11-02' } | ForEach-Object { $_.Quit() }")
+        "Explorer opened a window titled 2026-11-02 (the file's folder), then it was closed"
+      }
       println(checks.render(indent = 2))
     finally
       Files.writeString(output.resolve("report.json"), ujson.Obj("checks" -> checks, "success" -> checks.obj.values.forall(_("pass").bool)).render(indent = 2))

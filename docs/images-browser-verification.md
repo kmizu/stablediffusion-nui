@@ -178,9 +178,9 @@ inspected); **Equivalent** = covered by an existing or different mechanism; **N/
 2. "Send to openOutpaint" (no such extension).
 3. Rankings in JPEG/WebP files (store only).
 4. Real touch swipe was not exercised, only synthetic `SwipeEvent`s.
-5. Not driven in the real check: only Open Folder (it starts Explorer on the user's desktop; the same `ImageActions.openFolder` is used by the
-   gallery's "Show in folder"). Driven since v0.11 with the real MainWindow and real files:
-   `RealGalleryExtrasCheck` - the thumbnail tooltip content ("still.png 512 x 512  617.1 KB <time>" plus the generation text; the installed Tooltip is
+5. Nothing is left undriven in the real GUI since v0.11. Driven with the real MainWindow and real files:
+   `RealGalleryExtrasCheck` - Open Folder (the button started Explorer; a window titled with the file's folder `2026-11-02` was found through
+   `Shell.Application` and then closed), the thumbnail tooltip content ("still.png 512 x 512  617.1 KB <time>" plus the generation text; the installed Tooltip is
    read, the hover timer itself is not simulated), a custom folder tab added to the active tabs (lists its 2 files), and the real Windows recycle bin
    (the app's `SystemTrash` moved a file there; it was listed by `Shell.Application`, then removed from the bin again).
    `RealGalleryKeysCheck` - the page-key modifier options on a custom folder of 6 pictures (2 per page): with the default (Ctrl), Shift and
