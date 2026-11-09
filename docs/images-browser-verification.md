@@ -178,9 +178,11 @@ inspected); **Equivalent** = covered by an existing or different mechanism; **N/
 2. "Send to openOutpaint" (no such extension).
 3. Rankings in JPEG/WebP files (store only).
 4. Real touch swipe was not exercised, only synthetic `SwipeEvent`s.
-5. Not driven in the real check: Open Folder (starts Explorer), hovering for tooltips, custom folder tabs, the Shift
-   and Ctrl+Shift key modifier options, the Maintenance rename operation with real data (unit-tested), and the
-   contents of the Windows recycle bin.
+5. Not driven in the real check: Open Folder (starts Explorer on the user's desktop), the Shift and Ctrl+Shift key modifier options and the
+   Maintenance rename operation with real data (unit-tested). Driven since v0.11 (`RealGalleryExtrasCheck`, real MainWindow, real files):
+   the thumbnail tooltip content ("still.png 512 x 512  617.1 KB <time>" plus the generation text; the installed Tooltip is read, the hover timer
+   itself is not simulated), a custom folder tab added to the active tabs (lists its 2 files), and the real Windows recycle bin (the app's
+   `SystemTrash` moved a file there; it was listed by `Shell.Application` and then removed from the bin again).
 
 ## Verification
 
