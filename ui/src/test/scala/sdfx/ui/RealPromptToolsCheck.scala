@@ -129,6 +129,15 @@ object RealPromptToolsCheck:
         require(f("Prompt expansion original") == "a girl in a garden", f.toString)
         pr
       }
+      val tv = run("sd15_travel", sd15, 512, 512, 12, "prompt_travel", "1girl, upper body", Map("keys" -> "red hair, smile\nblue hair, serious", "steps" -> "3"))
+      check("travel_sd15") {
+        require(tv.size == 4, s"images=${tv.size}")
+        val ps = tv.map(_._3.linesIterator.next())
+        require(ps.head == "1girl, upper body, red hair, smile" && ps.last == "1girl, upper body, blue hair, serious", ps.toString)
+        require(ps(1).contains("(red hair, smile:0.67), (blue hair, serious:0.33)"), ps(1))
+        require(tv.map(_._2("Seed")).distinct.size == 1, "seed must stay fixed")
+        ps.mkString(" || ")
+      }
       waitIdle()
       val t0 = System.nanoTime()
       services.loadCheckpoint(sdxl.toString, remember = false)
@@ -141,6 +150,11 @@ object RealPromptToolsCheck:
         require(b.map(_._2("Steps")) == Seq("6", "4"), b.map(_._2("Steps")).toString)
         require(b.map(_._2("Scenario scene")) == Seq("dawn", "night"))
         ps.mkString(" || ")
+      }
+      val tx = run("sdxl_travel", sdxl, 768, 768, 20, "prompt_travel", "1girl, upper body, masterpiece", Map("keys" -> "red hair, smile\nblue hair, serious", "steps" -> "1"))
+      check("travel_sdxl") {
+        require(tx.size == 2, s"images=${tx.size}")
+        tx.map(_._3.linesIterator.next()).mkString(" || ")
       }
       report("checks") = checks
       report("success") = checks.obj.values.forall(_("pass").bool)

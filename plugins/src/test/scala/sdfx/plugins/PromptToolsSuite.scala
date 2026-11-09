@@ -82,3 +82,13 @@ class PromptToolsSuite extends munit.FunSuite:
     assertEquals(ctx.generated.size, 3)
     assert(ctx.generated.forall(_.prompt.startsWith("1girl")))
   }
+
+  test("prompt travel: weights move from A to B, ends exactly on each key, fixed seed, base prompt kept") {
+    val fr = PromptTravel.frames(Seq("a", "b", "c"), 2)
+    assertEquals(fr, Vector("a", "(a:0.50), (b:0.50)", "b", "(b:0.50), (c:0.50)", "c"))
+    intercept[IllegalArgumentException](PromptTravel.frames(Seq("only"), 2))
+    val ctx = new FakeContext(); val p = new PromptTravelPlugin
+    p.run(GenerationParams(prompt = "base", seed = 5), vals(p, Map("keys" -> "a\n\nb", "steps" -> "2")), ctx)
+    assertEquals(ctx.generated.map(_.prompt), Seq("base, a", "base, (a:0.50), (b:0.50)", "base, b"))
+    assertEquals(ctx.generated.map(_.seed).distinct, Seq(5L))
+  }
