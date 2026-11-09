@@ -1437,7 +1437,7 @@
 "index": 239,
 "name": "Latent Consistency Models",
 "url": "https://github.com/0xbitches/sd-webui-lcm.git",
-"status": "todo:lcm"
+"status": "done:core:lcm"
 },
 {
 "index": 240,

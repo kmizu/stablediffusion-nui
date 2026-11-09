@@ -81,7 +81,7 @@ S = {
     225: "todo:mov2mov", 226: "todo:easyphoto", 227: "todo:rich_text", 228: "todo:remove_background",
     229: "todo:booru_prompt", 230: "todo:model_downloader", 231: "done:nsfw_checker", 232: "todo:negpip",
     233: "done:cd_tuner", 234: "na:webui-css", 235: "na:webui-api", 236: "todo:core:compile",
-    237: "done:core:image-scrambling", 238: "done:nsfw_checker", 239: "todo:lcm", 240: "todo:cads",
+    237: "done:core:image-scrambling", 238: "done:nsfw_checker", 239: "done:core:lcm", 240: "todo:cads",
     241: "todo:face_swap", 242: "todo:hotshot_xl", 243: "done:inpaint_difference", 244: "todo:temporal",
     245: "todo:facechain", 246: "todo:style_selector", 247: "todo:panorama_tools", 248: "todo:core:styles-editor",
     249: "done:semantic_guidance", 250: "done:core:png-info", 251: "todo:person_mask", 252: "todo:style_variables",
