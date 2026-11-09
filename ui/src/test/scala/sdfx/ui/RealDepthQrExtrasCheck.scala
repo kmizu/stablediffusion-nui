@@ -122,7 +122,7 @@ object RealDepthQrExtrasCheck:
       // ---- Stereo: three modes, depth_too on the first
       val modes = Seq("Side by side" -> (sw * 2, sh), "Over / under" -> (sw, sh * 2), "Red-cyan anaglyph" -> (sw, sh))
       val stereoOut = modes.zipWithIndex.map { case ((mode, expected), i) =>
-        val outs = run(s"stereo-$i", "depth_stereo", Map("mode" -> mode, "divergence" -> "2.0", "swap" -> "false",
+        val outs = run(s"stereo-$i", "depth_maps", Map("mode" -> mode, "divergence" -> "2.0", "swap" -> "false",
           "depth_too" -> (if i == 0 then "true" else "false")))
         check(s"stereo_${mode.replace(' ', '_').replace('/', '_')}") {
           require(outs.size == (if i == 0 then 2 else 1), s"outputs=${outs.size}")
@@ -142,7 +142,7 @@ object RealDepthQrExtrasCheck:
         // best horizontal shift between eyes should be non-zero for near objects: report mean diff only
         s"mean abs luminance difference left vs right = ${"%.2f".format(meanDiff)}"
       }
-      val swapped = run("stereo-swap", "depth_stereo", Map("mode" -> "Side by side", "swap" -> "true", "depth_too" -> "false"))
+      val swapped = run("stereo-swap", "depth_maps", Map("mode" -> "Side by side", "swap" -> "true", "depth_too" -> "false"))
       check("stereo_swap_differs") {
         val a = ImageIO.read(stereoOut.head.toFile); val b = ImageIO.read(swapped.head.toFile)
         require(a.getWidth == b.getWidth)
@@ -170,7 +170,7 @@ object RealDepthQrExtrasCheck:
         fx { window.model.checkpoint.set(sdxl.toString) }
         val d2 = run("depth-sdxl", "depth_anything", Map("invert" -> "false"))
         check("depth_anything_sdxl") { depthChecks("sdxl", d2.head) }
-        val st2 = run("stereo-sdxl", "depth_stereo", Map("mode" -> "Side by side", "depth_too" -> "false"))
+        val st2 = run("stereo-sdxl", "depth_maps", Map("mode" -> "Side by side", "depth_too" -> "false"))
         check("stereo_sdxl") { require(size(st2.head) == (sw * 2, sh), size(st2.head).toString); size(st2.head).toString }
       else checks("sdxl") = ujson.Obj("pass" -> false, "detail" -> ("missing " + sdxl))
       report("checks") = checks

@@ -45,7 +45,7 @@ object DepthStereo:
     o
 
 class DepthStereoPlugin extends ExtrasPlugin:
-  def id = "depth_stereo"
+  def id = "depth_maps"
   def name = "Depth stereo image"
   override def description = "Estimates depth (Depth Anything V2) and renders a stereo pair from it: side by side, over/under or " +
     "red-cyan anaglyph. Disoccluded gaps are filled from the neighbouring pixels. Needs the depth-anything-v2-small weights."
