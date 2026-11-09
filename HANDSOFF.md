@@ -417,3 +417,10 @@ Kimi の受入マトリクス（SD1.5/SDXL × stdio/HTTP、公式 SDK、`--requi
 - #72 lcm: コード変更なし。SDXL＋LCM LoRA＋LCM サンプラー 4 ステップを実 MCP で確認。SD1.5 と専用 UI は未確認。
 - #29: 元拡張の Sharp/Smoothness の仕様とライセンスが不明なため未着手（issue に理由を記載）。
 - 未着手: #121 #102 #100 #113 #101。Extras プラグインは MCP から呼べないため、GUI 確認が残る。リリースは未公開。
+
+## 2026-11-09 v0.2 公開
+
+- v0.2 を公開（タグ v0.2、対象 commit `9de502b`）。`SDNUI-v0.2-windows-x64.zip`（319,781,152 bytes、SHA-256 `67ce3ca928bcf1fa519b5b7aaf9bc296c78e989fcf333eaa17d728ac654c4852`）と `SHA256SUMS.txt`。公開後に再ダウンロードしてハッシュ一致を確認。検証は `docs/v0.2-verification.md`。
+- 受け入れ: #36 #100 #72 #105 #39（各 issue に制限を記載）。一部対応で open: #121（index 197 のみ）。未着手: #102 #113 #101。保留: #29（仕様・ライセンス不明）。当初の「10件」は 5 件で公開した（ユーザー指示は「次のリリースまで作業続行」）。
+- 既知: `SDFX_SCALATORCH_JAVA` がディレクトリを指すと dry-run が失敗し `vram_mode=cpu` が settings.json に残る（未修正）。scala-torch の環境変数（モデル・tokenizer・CUDA・SDXL 上限）は配布版で未自動化。
+- 2026-11-03 の「リリース後は作業を停止」に従い、次のバッチは始めない。
