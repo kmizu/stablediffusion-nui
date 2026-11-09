@@ -45,3 +45,15 @@ class Gpt2Suite extends munit.FunSuite:
     assertEquals(ctx.generated.size, 2)
     assert(ctx.generated.forall(_.prompt.startsWith("1girl, silver hair")))
   }
+
+  test("prompt_expansion expands the prompt reproducibly by seed and records the original") {
+    assume(have, "distilgpt2 files not available")
+    def run() =
+      val ctx = new FakeContext(); val p = new PromptExpansionPlugin
+      p.run(sdfx.core.model.GenerationParams(prompt = "a cat", seed = 9), Values(Values.defaults(p.controls).map ++ Map("model_dir" -> dir.toString, "max_tokens" -> "8")), ctx)
+      ctx.generated.head
+    val a = run()
+    assert(a.prompt.startsWith("a cat") && a.prompt.length > 5)
+    assertEquals(a.prompt, run().prompt)
+    assertEquals(a.extra("Prompt expansion original"), "a cat")
+  }

@@ -119,6 +119,16 @@ object RealPromptToolsCheck:
         require(gp.forall(_._2("Script") == "Prompt generator (GPT-2)"))
         ps.mkString(" || ")
       }
+      val ex = run("sd15_expand", sd15, 512, 512, 10, "prompt_expansion", "a girl in a garden",
+        Map("model_dir" -> "C:/Users/Mizushima/dev/stablediffusion-nui/models/distilgpt2", "max_tokens" -> "12"))
+      check("expansion") {
+        require(ex.size == 1)
+        val (_, f, text) = ex.head
+        val pr = text.linesIterator.next()
+        require(pr.startsWith("a girl in a garden") && pr.length > 20, pr)
+        require(f("Prompt expansion original") == "a girl in a garden", f.toString)
+        pr
+      }
       waitIdle()
       val t0 = System.nanoTime()
       services.loadCheckpoint(sdxl.toString, remember = false)

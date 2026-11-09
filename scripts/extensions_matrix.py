@@ -100,7 +100,7 @@ S = {
     301: "todo:demofusion", 302: "done:incantations", 303: "done:old_sd_firstpasser", 304: "todo:image_editor",
     305: "todo:triposr", 306: "na:webui-ux", 307: "done:core:prompt-tools", 308: "todo:model_merge",
     309: "todo:core:hardware-info", 310: "done:core:png-info", 311: "na:webui-css", 312: "done:core:metadata-utils",
-    313: "todo:prompt_expansion", 314: "todo:core:localization", 315: "na:external-app",
+    313: "done:prompt_expansion", 314: "todo:core:localization", 315: "na:external-app",
     316: "todo:segment_anything", 317: "done:core:size-presets", 318: "todo:scramble_prompts", 319: "todo:tweak_weights",
     320: "todo:core:prevent-interrupt", 321: "todo:waifu2x", 322: "done:depth_anything", 323: "na:external-app",
     324: "todo:detail_daemon", 325: "todo:masked_content_extras", 326: "done:core:prompt-tools",
