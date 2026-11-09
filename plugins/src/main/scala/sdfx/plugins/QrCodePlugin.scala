@@ -44,3 +44,50 @@ class QrCodePlugin extends ExtrasPlugin:
       val dark = mx >= 0 && my >= 0 && mx < m.getWidth && my < m.getHeight && m.get(mx, my)
       out.setRGB(x, y, if dark then (if inv then 0xFFFFFF else 0x000000) else bg)
     Seq((out, Seq("QR code" -> s"${text.length} chars, ECC $ecc")))
+
+/** Scannability check for generated QR art (the verification half of antfu's QR toolkit; decoded with ZXing). */
+object QrVerify:
+  import com.google.zxing.{BarcodeFormat, BinaryBitmap, DecodeHintType, MultiFormatReader}
+  import com.google.zxing.client.j2se.BufferedImageLuminanceSource
+  import com.google.zxing.common.HybridBinarizer
+
+  /** Tries the image as is, then at half and quarter size: a phone camera sees QR art softened. Returns text and the size that worked. */
+  def decode(img: BufferedImage, tryHarder: Boolean): Option[(String, String)] =
+    val hints = new java.util.HashMap[DecodeHintType, Any]()
+    hints.put(DecodeHintType.POSSIBLE_FORMATS, java.util.List.of(BarcodeFormat.QR_CODE))
+    if tryHarder then hints.put(DecodeHintType.TRY_HARDER, java.lang.Boolean.TRUE)
+    def attempt(i: BufferedImage): Option[String] =
+      try Some(new MultiFormatReader().decode(new BinaryBitmap(new HybridBinarizer(new BufferedImageLuminanceSource(i))), hints).getText)
+      catch case _: com.google.zxing.ReaderException => None
+    def scaled(f: Double): BufferedImage =
+      val w = math.max(32, (img.getWidth * f).toInt)
+      val h = math.max(32, (img.getHeight * f).toInt)
+      val o = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+      val g = o.createGraphics()
+      g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+      g.drawImage(img, 0, 0, w, h, null)
+      g.dispose()
+      o
+    Seq[(String, () => BufferedImage)]("full size" -> (() => img), "half size" -> (() => scaled(0.5)), "quarter size" -> (() => scaled(0.25)))
+      .iterator.flatMap((label, f) => attempt(f()).map(_ -> label)).nextOption()
+
+class QrVerifyPlugin extends ExtrasPlugin:
+  def id = "qr_verify"
+  def name = "QR scan check"
+  override def description = "Tries to read a QR code from the image (as is, then at half and quarter size, like a phone camera would). " +
+    "Returns the image unchanged and records the decoded text, or that it could not be read."
+  override def controls: Seq[Control] = Seq(
+    Text("expected", "Expected text (optional)", ""),
+    Check("try_harder", "Try harder (slower)", true),
+    Check("fail_if_unreadable", "Fail the job when the code cannot be read")
+  )
+  def transform(img: BufferedImage, p: GenerationParams, v: Values, ctx: PluginContext) =
+    val found = QrVerify.decode(img, v.bool("try_harder", true))
+    val expected = v.str("expected").trim
+    val status = found match
+      case Some((t, how)) if expected.isEmpty || expected == t => s"readable ($how): $t"
+      case Some((t, how)) => s"readable ($how) but different: $t"
+      case None => "not readable"
+    if v.bool("fail_if_unreadable") then require(found.exists((t, _) => expected.isEmpty || t == expected), s"QR check failed: $status")
+    ctx.log(s"QR scan check: $status")
+    Seq((img, Seq("QR scan check" -> status)))

@@ -48,7 +48,7 @@ lazy val scalaTorchEngine = project.dependsOn(engine).settings(
 val nativeOnlyBuild = sys.env.get("SDFX_NATIVE_ONLY").exists(_.trim.equalsIgnoreCase("true"))
 
 lazy val plugins = project.dependsOn(core, engine).settings(commonSettings, name := "sdfx-plugins",
-  libraryDependencies ++= Seq("com.google.zxing" % "core" % "3.5.3", "com.google.zxing" % "javase" % "3.5.3" % Test))
+  libraryDependencies ++= Seq("com.google.zxing" % "core" % "3.5.3", "com.google.zxing" % "javase" % "3.5.3"))
 
 lazy val mcp = project
   .dependsOn((Seq[ClasspathDep[ProjectReference]](core, engine, plugins, scalaTorchEngine % Runtime) ++

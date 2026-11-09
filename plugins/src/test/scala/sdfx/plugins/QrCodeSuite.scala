@@ -33,6 +33,23 @@ class QrCodeSuite extends munit.FunSuite:
     intercept[IllegalArgumentException](run(Map("text" -> "")))
   }
 
+  private def verify(img: BufferedImage, v: Map[String, String] = Map.empty): String =
+    val p = new QrVerifyPlugin
+    p.transform(img, GenerationParams(), Values(Values.defaults(p.controls).map ++ v), new FakeContext()).head._2.head._2
+
+  test("QR scan check reads a generated code, also at reduced size, and reports mismatches") {
+    val img = run(Map("text" -> "https://example.com/x"))
+    assert(verify(img).startsWith("readable (full size): https://example.com/x"))
+    assert(verify(img, Map("expected" -> "other")).contains("but different"))
+    intercept[IllegalArgumentException](verify(img, Map("expected" -> "other", "fail_if_unreadable" -> "true")))
+  }
+
+  test("QR scan check says not readable for a blank image and can fail the job") {
+    val blank = new BufferedImage(256, 256, BufferedImage.TYPE_INT_RGB)
+    assertEquals(verify(blank), "not readable")
+    intercept[IllegalArgumentException](verify(blank, Map("fail_if_unreadable" -> "true")))
+  }
+
   test("dump a control image for manual ControlNet checks when SDFX_QR_DUMP is set") {
     sys.env.get("SDFX_QR_DUMP").foreach { path =>
       javax.imageio.ImageIO.write(run(Map("text" -> "https://kmizu.dev", "border" -> "2")), "png", new java.io.File(path))

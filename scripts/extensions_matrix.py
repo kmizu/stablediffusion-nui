@@ -66,7 +66,7 @@ S = {
     163: "todo:core:styles-editor", 164: "done:clip_io", 165: "todo:inpaint_anything", 166: "done:qr_code",
     167: "todo:face_swap", 168: "todo:color_enhance", 169: "na:account", 170: "done:core:gallery", 171: "todo:pixel_art",
     172: "na:webui-css", 173: "na:webui-css", 174: "todo:llm_prompt", 175: "todo:openpose_editor",
-    176: "done:core:size-presets", 177: "done:core:gallery", 178: "todo:qr_code", 179: "todo:sadtalker",
+    176: "done:core:size-presets", 177: "done:core:gallery", 178: "done:qr_code", 179: "todo:sadtalker",
     180: "na:external-app", 181: "todo:model_downloader", 182: "done:caption", 183: "done:loopback_scaler",
     184: "todo:inpaint_background", 185: "na:external-app", 186: "todo:gpu_temperature_guard", 187: "done:core:zoom",
     188: "na:server-ops", 189: "todo:latent_upscale", 190: "done:core:gallery", 191: "todo:prompt_filter",

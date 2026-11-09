@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 181, todo 121, na 51.
+Totals: done 182, todo 120, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -184,7 +184,7 @@ Totals: done 181, todo 121, na 51.
 | 175 | [3D Editor](https://github.com/jtydhr88/sd-webui-3d-editor.git) | 143 | todo | `openpose_editor` |  |
 | 176 | [Aspect Ratio selector plus](https://github.com/LEv145/--sd-webui-ar-plus) | 61 | done | `core:size-presets` |  |
 | 177 | [SD Delete Button](https://github.com/AlUlkesh/sd_delete_button.git) | 43 | done | `core:gallery` |  |
-| 178 | [sd-webui-qrcode-toolkit](https://github.com/antfu/sd-webui-qrcode-toolkit.git) | 673 | todo | `qr_code` |  |
+| 178 | [sd-webui-qrcode-toolkit](https://github.com/antfu/sd-webui-qrcode-toolkit.git) | 673 | done | `qr_code` |  |
 | 179 | [SadTalker](https://github.com/OpenTalker/SadTalker.git) | 14157 | todo | `sadtalker` |  |
 | 180 | [Auto-Photoshop-StableDiffusion-Plugin](https://github.com/AbdullahAlfaraj/Auto-Photoshop-StableDiffusion-Plugin.git) | 7304 | na | `external-app` | bridge to a specific external application (Photoshop, Krita, ComfyUI, ...) |
 | 181 | [Civitai Shortcut](https://github.com/sunnyark/civitai-shortcut.git) | 152 | todo | `model_downloader` |  |

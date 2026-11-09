@@ -1071,7 +1071,7 @@
 "index": 178,
 "name": "sd-webui-qrcode-toolkit",
 "url": "https://github.com/antfu/sd-webui-qrcode-toolkit.git",
-"status": "todo:qr_code"
+"status": "done:qr_code"
 },
 {
 "index": 179,
