@@ -78,7 +78,7 @@ class PromptToolsSuite extends munit.FunSuite:
   test("generator run: one image per variant, base tags kept") {
     val f = Files.createTempDirectory("pg2").resolve("c.txt"); Files.writeString(f, "1girl, smile, sky\n1girl, hat\n")
     val ctx = new FakeContext(); val p = new PromptGeneratorPlugin
-    p.run(GenerationParams(prompt = "1girl"), vals(p, Map("corpus" -> f.toString, "count" -> "3", "seed" -> "5")), ctx)
+    p.run(GenerationParams(prompt = "1girl"), vals(p, Map("method" -> "Markov (corpus file)", "corpus" -> f.toString, "count" -> "3", "seed" -> "5")), ctx)
     assertEquals(ctx.generated.size, 3)
     assert(ctx.generated.forall(_.prompt.startsWith("1girl")))
   }

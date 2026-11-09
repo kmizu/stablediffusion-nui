@@ -40,9 +40,15 @@ class PromptGeneratorPlugin extends Plugin:
   def id = "prompt_generator"
   def name = "Prompt generator"
   def kind = PluginKind.Script
-  override def description = "Extends the prompt with extra tags chosen by a Markov chain trained on a prompt corpus file you give " +
-    "(one prompt per line, comma separated tags). Not a GPT-2 model. Generates one image per variant."
+  override def description = "Extends the prompt, one image per variant. Method GPT-2: continues the prompt with a local GPT-2 model " +
+    "folder (distilgpt2 or a promptgen-style fine-tune; model.safetensors in F32, vocab.json, merges.txt, config.json) run on the JVM. " +
+    "Method Markov: tag chain trained on a corpus file (one prompt per line)."
   override def controls: Seq[Control] = Seq(
+    Choice("method", "Method", Seq("GPT-2 (model folder)", "Markov (corpus file)"), "GPT-2 (model folder)"),
+    Text("model_dir", "GPT-2 model folder", ""),
+    IntField("max_tokens", "GPT-2: new tokens", 1, 256, 40),
+    Slider("temperature", "GPT-2: temperature (0 = greedy)", 0, 2, 0.05, 0.9),
+    IntField("top_k", "GPT-2: top-k", 1, 1000, 50),
     Text("corpus", "Corpus file (one prompt per line)", ""),
     IntField("new_tags", "Tags to add", 1, 64, 8),
     IntField("count", "Variants (images)", 1, 32, 4),
@@ -50,6 +56,7 @@ class PromptGeneratorPlugin extends Plugin:
   )
 
   override def run(p0: GenerationParams, v: Values, ctx: PluginContext): JobOutput =
+    if v.str("method").startsWith("GPT-2") then return gpt2(p0, v, ctx)
     val path = v.str("corpus").trim
     require(path.nonEmpty, "A corpus file path is required")
     val f = Paths.get(path)
@@ -68,6 +75,31 @@ class PromptGeneratorPlugin extends Plugin:
       ctx.status(s"Prompt generator ${i + 1}/$n", i, n)
       Support.step(ctx)(ctx.generate(p0.copy(prompt = prompt, batchSize = 1, nIter = 1,
         extra = p0.extra + ("Script" -> "Prompt generator")))) match
+        case Some(o) => outs ++= o
+        case None    => running = false
+      i += 1
+    JobOutput(outs.toSeq)
+
+  private def gpt2(p0: GenerationParams, v: Values, ctx: PluginContext): JobOutput =
+    val d = v.str("model_dir").trim
+    require(d.nonEmpty, "A GPT-2 model folder is required")
+    val dir = Paths.get(d)
+    require(Files.isRegularFile(dir.resolve("model.safetensors")), s"$d has no model.safetensors")
+    require(p0.prompt.trim.nonEmpty, "Write a base prompt to extend")
+    val tok = Gpt2.Tokenizer.load(dir); val model = Gpt2.Model.load(dir)
+    val gs = v.int("seed", -1)
+    val rnd = if gs >= 0 then new Random(gs.toLong) else new Random()
+    val n = v.int("count", 4)
+    val outs = scala.collection.mutable.ArrayBuffer[OutputImage]()
+    var running = true; var i = 0
+    while running && i < n do
+      ctx.status(s"Prompt generator (GPT-2) ${i + 1}/$n", i, n)
+      val cont = Gpt2.generate(model, tok, p0.prompt.trim, v.int("max_tokens", 40), v.double("temperature", 0.9), v.int("top_k", 50), rnd)
+      val line = cont.linesIterator.nextOption().getOrElse("")
+      val prompt = (p0.prompt.trim.stripSuffix(",") + (if line.startsWith(",") || line.startsWith(" ") then "" else " ") + line).replaceAll("[ \t]+", " ").trim
+      ctx.log(s"Prompt generator: $prompt")
+      Support.step(ctx)(ctx.generate(p0.copy(prompt = prompt, batchSize = 1, nIter = 1,
+        extra = p0.extra + ("Script" -> "Prompt generator (GPT-2)")))) match
         case Some(o) => outs ++= o
         case None    => running = false
       i += 1

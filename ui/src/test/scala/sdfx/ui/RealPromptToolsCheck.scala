@@ -102,11 +102,21 @@ object RealPromptToolsCheck:
         require(f("Script") == "Prompt library", f.toString)
         lines.head
       }
-      val g = run("sd15_generator", sd15, 512, 512, 10, "prompt_generator", "1girl", Map("corpus" -> corpus.toString, "count" -> "2", "new_tags" -> "3", "seed" -> "7"))
+      val g = run("sd15_generator", sd15, 512, 512, 10, "prompt_generator", "1girl", Map("method" -> "Markov (corpus file)", "corpus" -> corpus.toString, "count" -> "2", "new_tags" -> "3", "seed" -> "7"))
       check("generator") {
         require(g.size == 2, s"images=${g.size}")
         val ps = g.map(_._3.linesIterator.next())
         require(ps.forall(_.startsWith("1girl, ")) && ps.forall(_.split(",").length >= 2), ps.toString)
+        ps.mkString(" || ")
+      }
+      val gp = run("sd15_gpt2", sd15, 512, 512, 10, "prompt_generator", "1girl, silver hair, upper body",
+        Map("method" -> "GPT-2 (model folder)", "model_dir" -> "C:/Users/Mizushima/dev/stablediffusion-nui/models/distilgpt2",
+          "count" -> "2", "max_tokens" -> "16", "seed" -> "11"))
+      check("gpt2") {
+        require(gp.size == 2, s"images=${gp.size}")
+        val ps = gp.map(_._3.linesIterator.next())
+        require(ps.forall(_.startsWith("1girl, silver hair, upper body")) && ps.forall(_.length > 32), ps.toString)
+        require(gp.forall(_._2("Script") == "Prompt generator (GPT-2)"))
         ps.mkString(" || ")
       }
       waitIdle()
