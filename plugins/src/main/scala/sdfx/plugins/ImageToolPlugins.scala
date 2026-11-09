@@ -167,3 +167,23 @@ class InpaintBackgroundPlugin extends MaskedImg2ImgScript:
     try r.image
     finally Support.deleteQuietly(r.outputs.values.toSeq*)
   def infotext(v: Values) = Seq("Inpaint background" -> "people kept")
+
+/** Depth Anything V2 depth map as an Extras output (sd-webui-udav2 equivalent; scala-torch DepthAnythingV2). */
+class DepthAnythingPlugin extends ExtrasPlugin:
+  def id = "depth_anything"
+  def name = "Depth Anything V2"
+  override def description = "Estimates a depth map with Depth Anything V2 (near = bright) and returns it as the output image. " +
+    "Needs the depth-anything-v2-small weights in models/annotators. Optionally also returns the original beside it."
+  override def controls: Seq[Control] = Seq(Check("invert", "Invert (far = bright)"))
+  def transform(img: BufferedImage, p: GenerationParams, v: Values, ctx: PluginContext) =
+    val r = ImageTools.run(ctx, "depth_mask", img, "near" -> 0.0, "far" -> 1.0, "invert" -> false, "blur" -> 0)
+    try
+      val depthPath = r.outputs.getOrElse("depth", throw new IllegalStateException("depth_anything returned no depth map"))
+      val d = Support.readImage(ctx, depthPath)
+      val out = if v.bool("invert") then
+        val o = new BufferedImage(d.getWidth, d.getHeight, BufferedImage.TYPE_INT_RGB)
+        for y <- 0 until d.getHeight; x <- 0 until d.getWidth do o.setRGB(x, y, 0xFFFFFF - (d.getRGB(x, y) & 0xFFFFFF))
+        o
+      else d
+      Seq((out, Seq("Depth Anything" -> (if v.bool("invert") then "V2 small, inverted" else "V2 small"))))
+    finally Support.deleteQuietly(r.outputs.values.toSeq*)
