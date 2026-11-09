@@ -35,7 +35,7 @@ S = {
     37: "todo:core:localization", 38: "todo:dynamic_prompts", 39: "todo:unprompted", 40: "todo:stylepile",
     41: "todo:core:tag-autocomplete", 42: "todo:novelai_prompt", 43: "todo:tokenizer", 44: "todo:randomize",
     45: "done:conditioning_highres_fix", 46: "done:model_keyword", 47: "done:prompt_generator", 48: "done:prompt_generator",
-    49: "todo:text2prompt", 50: "na:account", 51: "todo:deforum", 52: "todo:gif2gif", 53: "todo:video_loopback",
+    49: "todo:text2prompt", 50: "na:account", 51: "todo:deforum", 52: "done:gif2gif", 53: "todo:video_loopback",
     54: "todo:seed_travel", 55: "todo:shift_attention", 56: "done:prompt_travel", 57: "todo:steps_animation",
     58: "na:external-app", 59: "done:batch_face_swap", 60: "done:depth_maps", 61: "todo:multi_subject_render",
     62: "todo:depthmap2mask", 63: "todo:remove_background", 64: "todo:pixel_art", 65: "todo:pixel_art", 66: "todo:haku_img",

@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 193, todo 109, na 51.
+Totals: done 194, todo 108, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -58,7 +58,7 @@ Totals: done 193, todo 109, na 51.
 | 49 | [text2prompt](https://github.com/toshiaki1729/stable-diffusion-webui-text2prompt.git) | 167 | todo | `text2prompt` |  |
 | 50 | [Prompt Translator](https://github.com/butaixianran/Stable-Diffusion-Webui-Prompt-Translator) | 252 | na | `account` | needs a third-party account / paid API key and posts data to that service |
 | 51 | [Deforum](https://github.com/deforum-art/deforum-for-automatic1111-webui.git) | 2855 | todo | `deforum` |  |
-| 52 | [gif2gif](https://github.com/LonicaMewinsky/gif2gif.git) | 247 | todo | `gif2gif` |  |
+| 52 | [gif2gif](https://github.com/LonicaMewinsky/gif2gif.git) | 247 | done | `gif2gif` |  |
 | 53 | [Video Loopback](https://github.com/fishslot/video_loopback_for_webui.git) | 325 | todo | `video_loopback` |  |
 | 54 | [seed travel](https://github.com/yownas/seed_travel.git) | 312 | done | `seed_travel` |  |
 | 55 | [shift-attention](https://github.com/yownas/shift-attention.git) | 164 | done | `shift_attention` |  |
