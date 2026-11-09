@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 188, todo 114, na 51.
+Totals: done 191, todo 111, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -38,7 +38,7 @@ Totals: done 188, todo 114, na 51.
 | 29 | [Infinity Grid Generator](https://github.com/mcmonkeyprojects/sd-infinity-grid-generator-script.git) | 189 | todo | `infinity_grid` |  |
 | 30 | [Config-Presets](https://github.com/Zyin055/Config-Presets.git) | 314 | done | `core:config-presets` |  |
 | 31 | [Preset Utilities](https://github.com/Gerschel/sd_web_ui_preset_utils.git) | 248 | done | `core:preset-utilities` |  |
-| 32 | [openOutpaint extension](https://github.com/zero01101/openOutpaint-webUI-extension.git) | 405 | todo | `outpaint_canvas` |  |
+| 32 | [openOutpaint extension](https://github.com/zero01101/openOutpaint-webUI-extension.git) | 405 | done | `outpaint_canvas` |  |
 | 33 | [quick-css](https://github.com/Gerschel/sd-web-ui-quickcss.git) | 71 | na | `webui-css` | styles / JavaScript tweaks of the Gradio web page; the JavaFX UI has its own theme and layout |
 | 34 | [Aspect Ratio selector](https://github.com/alemelis/sd-webui-ar.git) | 243 | done | `core:size-presets` |  |
 | 35 | [Nevysha's Cozy Nest](https://github.com/Nevysha/Cozy-Nest.git) | 374 | na | `webui-css` | styles / JavaScript tweaks of the Gradio web page; the JavaFX UI has its own theme and layout |
@@ -133,7 +133,7 @@ Totals: done 188, todo 114, na 51.
 | 124 | [Discord - Dynamic Rich Presence](https://github.com/davehornik/sd-discord-rich_presence.git) | 23 | na | `account` | needs a third-party account / paid API key and posts data to that service |
 | 125 | [PBRemTools](https://github.com/mattyamonaca/PBRemTools.git) | 369 | done | `remove_background` |  |
 | 126 | [a1111-sd-webui-lycoris](https://github.com/KohakuBlueleaf/a1111-sd-webui-lycoris.git) | 884 | na | `obsolete` | superseded: the feature is in the base app (A1111 >= 1.5) or the extension is deprecated |
-| 127 | [sd-canvas-editor](https://github.com/jtydhr88/sd-canvas-editor.git) | 157 | todo | `outpaint_canvas` |  |
+| 127 | [sd-canvas-editor](https://github.com/jtydhr88/sd-canvas-editor.git) | 157 | done | `outpaint_canvas` |  |
 | 128 | [Infinite Zoom](https://github.com/v8hid/infinite-zoom-automatic1111-webui.git) | 670 | todo | `infinite_zoom` |  |
 | 129 | [Eye Mask](https://github.com/ilian6806/stable-diffusion-webui-eyemask.git) | 59 | done | `adetailer` |  |
 | 130 | [zh_CN Localization](https://github.com/dtlnor/stable-diffusion-webui-localization-zh_CN) | 1618 | done | `core:localization` | All 19 entries (language packs 2, 130-144, 209 and the two Bilingual Localization extensions 37, 314). Native interface language support, written from the READMEs and the documented behaviour of the extensions (core/i18n, ui/i18n/Localizer.scala): a JavaFX scene-graph translator for labels, buttons, check boxes, tabs, titled panes, menus, table headers, tool tips, prompt texts, window titles and drop-down items (values, text fields and generation parameters are never touched); original English kept so the language can change or switch off at any time; texts the application sets later are translated at once. Settings > Language: language pack plus fallback pack, translation only / two lines / one line, translation first / original first, tool tips and drop-down items on or off, extra pack folders, import a pack file, export the untranslated texts as a template. The A1111 pack format incl. `@@/regex/flags` (`$1`, `$&`, `$$`, flags i/m/s/g, bounded matching time) and `##id##text` / `##@selector##text` scoped keys (type, id, class, descendant and child selectors on JavaFX nodes) is read; packs are found in localizations/, plugins-ext/NAME/localizations, extensions/NAME/localizations and listed folders, so language pack extensions need no re-import. A built-in native ja_JP pack (1,479 translations and 28 pattern rules written for this app) translates 1,440 of the 1,789 distinct texts of the window (80.5 %); the 105 texts longer than 100 characters (long tool tips of extension controls) are mostly still English (21 translated). The 35 upstream pack files of the 17 language repositories are not bundled: Settings > Language > Download pack fetches the chosen file at its pinned commit, verifies size and SHA-256, and saves it with the repository's licence text and a source note (all 35 downloaded and applied in the real window). Those packs use A1111's wording, so each translates only 1.8 % to 18.2 % of this app's texts (zh_Hant bluelovers 18.2 %, zh_CN dtlnor 14.3 %, it_IT 12.7 %, ja_JP L4Ph 10.4 %, ko_KR 9.8 %, ...). Not provided: translations of this app's own texts into languages other than Japanese; HTML/CSS/JavaScript specifics of the extensions (Gradio element ids and CSS rules, hints.js) have no JavaFX equivalent; texts inside list, table and tree cells and in drop-downs with application-defined cells stay English; MCP and the engine are untouched (parameters stay English). See docs/localization-verification.md. |
@@ -253,7 +253,7 @@ Totals: done 188, todo 114, na 51.
 | 244 | [Temporal](https://github.com/Iniquitatis/sd-webui-temporal) | 31 | todo | `temporal` |  |
 | 245 | [FaceChain](https://github.com/modelscope/facechain.git) | 9507 | todo | `facechain` |  |
 | 246 | [Stylez](https://github.com/javsezlol1/Stylez.git) | 123 | todo | `style_selector` |  |
-| 247 | [sd-webui-panorama-tools](https://github.com/Flyguygx/sd-webui-panorama-tools.git) | 41 | todo | `panorama_tools` |  |
+| 247 | [sd-webui-panorama-tools](https://github.com/Flyguygx/sd-webui-panorama-tools.git) | 41 | done | `panorama_tools` |  |
 | 248 | [sd-webui-extended-style-saver](https://github.com/harukei-tech/sd-webui-extended-style-saver.git) | 9 | done | `core:styles-editor` |  |
 | 249 | [Semantic Guidance](https://github.com/v0xie/sd-webui-semantic-guidance.git) | 68 | done | `semantic_guidance` | AlwaysOn conditioning-space concept edit as the pinned extension (not the SEGA paper noise guidance): comma-separated positive/negative concepts with first-segment attention strength, warmup, scale, tail threshold, inert momentum, SDXL pooled edit, source infotext keys, PNG/MCP replay and XYZ axes. SD1.5/SDXL real MCP checks with image inspection. XYZ axes need the plugin enabled; Neutral Prompt/Composable LoRA branches and PhotoMaker are rejected. See semantic-guidance-verification.md. |
 | 250 | [SD Web UI Modal Info](https://github.com/luminouspear/sd-webui-modal-info.git) | 10 | done | `core:png-info` |  |

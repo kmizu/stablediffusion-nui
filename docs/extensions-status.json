@@ -195,7 +195,7 @@
 "index": 32,
 "name": "openOutpaint extension",
 "url": "https://github.com/zero01101/openOutpaint-webUI-extension.git",
-"status": "todo:outpaint_canvas"
+"status": "done:outpaint_canvas"
 },
 {
 "index": 33,
@@ -765,7 +765,7 @@
 "index": 127,
 "name": "sd-canvas-editor",
 "url": "https://github.com/jtydhr88/sd-canvas-editor.git",
-"status": "todo:outpaint_canvas"
+"status": "done:outpaint_canvas"
 },
 {
 "index": 128,
@@ -1485,7 +1485,7 @@
 "index": 247,
 "name": "sd-webui-panorama-tools",
 "url": "https://github.com/Flyguygx/sd-webui-panorama-tools.git",
-"status": "todo:panorama_tools"
+"status": "done:panorama_tools"
 },
 {
 "index": 248,
