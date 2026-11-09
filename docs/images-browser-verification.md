@@ -66,7 +66,7 @@ inspected); **Equivalent** = covered by an existing or different mechanism; **N/
 | G9 | Preload images at startup for the first tab | Implemented (R) | Off: no scan until the tab is shown. On: first listing tab scanned when the tab object is built. |
 | G10 | png-cache ("scanning a directory for the first time can take minutes") | Implemented (V R) | Metadata cache keyed by (path, mtime, size), persisted to JSON, invalidated by file changes. |
 | G11 | Swipe left/right to the next image | Implemented (R, synthetic events only) | `SwipeEvent` handlers; verified with synthetic events, **no touch hardware was available**. |
-| G12 | Video support (list videos, "Show video frame", player size/position options) | **Not provided** (listing only) | Videos are listed with name, size, date and opened in the system player. No in-app player, no frame preview; the three `video_*` options are N/A. See "Not provided". |
+| G12 | Video support (list videos, "Show video frame", player size/position options) | Implemented (V) | v0.11: selecting a video shows an in-app preview (first frame, Play/Pause, seek bar) with JavaFX Media (`VideoPreviewPane`); undecodable files show a message and keep "Open video". Real check `RealVideoPreviewCheck` with an H.264 mp4: ready, playing advances 1 ms -> 2000 ms, still image hides the pane, corrupt mp4 falls back. The three `video_*` option names are N/A (size follows the pane). Formats beyond what the JavaFX decoder plays still open in the system player. |
 | G13 | JPEG / WebP / GIF support | Implemented (V) | `.png .jpg .jpeg .webp .gif`; EXIF `UserComment` (A1111 layout) read from JPEG and WebP, tested with a synthetic TIFF block. |
 | G14 | ".txt file information" | Implemented (V R) | Side-car `name.txt` used when the image has no embedded text; verified with a real JPEG + .txt in the real check. |
 
@@ -174,8 +174,7 @@ inspected); **Equivalent** = covered by an existing or different mechanism; **N/
 
 ## Not provided
 
-1. Playing a video or showing a video frame inside the app (and the three `video_*` options). Videos are listed and
-   opened in the system player. A bundled decoder (`javafx-media`) was judged out of scope for this change.
+1. (v0.11) Video playback now exists in-app for formats the JavaFX decoder supports; other formats open in the system player.
 2. "Send to openOutpaint" (no such extension).
 3. Rankings in JPEG/WebP files (store only).
 4. Real touch swipe was not exercised, only synthetic `SwipeEvent`s.
