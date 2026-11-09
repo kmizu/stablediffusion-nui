@@ -109,7 +109,9 @@ case class Settings(
     scalaTorchUnetDevice: String = "auto",
     scalaTorchVaeDevice: String = "auto",
     scalaTorchUnetOffloadWeights: Boolean = false,
-    scalaTorchVaeOffloadWeights: Boolean = false
+    scalaTorchVaeOffloadWeights: Boolean = false,
+    /** Bumped by [[Settings.migrateNativeDefaults]] once old native-engine values have been replaced. */
+    nativeDefaultsVersion: Int = 0
 ) derives RW
 
 case class SettingsRecovery(reason: String, originalSha256: Option[String])
@@ -118,6 +120,24 @@ enum SettingsSaveIntent:
   case Explicit, Recover
 
 object Settings:
+  /** One-time repair of settings written by earlier versions. The scala-torch engine used to start with U-Net / VAE device `cpu` and the app forced
+    * dtype fp32 / vram_mode cpu in memory and wrote that to settings.json, so those values stayed behind and made the native engine run on the
+    * CPU (a generation looked stuck at "Generating ..."). The old defaults are replaced by `auto` (CUDA when an NVIDIA driver exists) and the
+    * normal precision; values that cannot be the old defaults are kept. */
+  def migrateNativeDefaults(s: Settings): Settings =
+    if s.nativeDefaultsVersion >= 1 then s
+    else
+      val fresh = Settings()
+      val oldDevices = s.scalaTorchUnetDevice == "cpu" && s.scalaTorchVaeDevice == "cpu" // both at the old default
+      val forced = s.dtype == "fp32" && s.vramMode == "cpu"
+      if !oldDevices && !forced then s
+      else s.copy(
+        nativeDefaultsVersion = 1,
+        scalaTorchUnetDevice = if oldDevices then "auto" else s.scalaTorchUnetDevice,
+        scalaTorchVaeDevice = if oldDevices then "auto" else s.scalaTorchVaeDevice,
+        dtype = if forced then fresh.dtype else s.dtype,
+        vramMode = if forced then fresh.vramMode else s.vramMode)
+
   private val MaxInput = 16 * 1024 * 1024
   private val MaxUnits = 1000000L
   private val MaxEncoded = 4L * 1024 * 1024

@@ -175,5 +175,7 @@ final class ScalaTorchBackendProvider extends EngineBackendProvider:
     val configured=saved.foldLeft(environment) { case (env,(key,value)) =>
       if env.contains(key) then env else value.map(v => env.updated(key,v)).getOrElse(env)
     }
+    System.err.println(s"[sdfx] scala-torch: U-Net ${configured("SDFX_SCALATORCH_UNET_DEVICE")}, VAE ${configured("SDFX_SCALATORCH_VAE_DEVICE")}, precision ${settings.dtype}" +
+      (if configured("SDFX_SCALATORCH_UNET_DEVICE")=="cpu" then " (CPU execution is very slow; choose cuda or auto in Settings)" else ""))
     ScalaTorchLaunch.fromEnvironment(configured,Some(home.root)).getOrElse(
       throw new IllegalArgumentException("scala-torch backend requires its classpath, model and scheduler configuration"))

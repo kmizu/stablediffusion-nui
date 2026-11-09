@@ -27,8 +27,12 @@ final class AppServices(
     initialRecovery: Option[SettingsRecovery] = None,
     settingsWriter: (Path, Settings) => Unit = Settings.save
 ):
-  private val nativeLaunchSelected=launchOverride.isEmpty && EngineBackend.usesNativeBackend(initialSettings,sys.env)
-  @volatile private var _settings = initialSettings
+  private val startSettings: Settings = Settings.migrateNativeDefaults(initialSettings)
+  private val nativeLaunchSelected=launchOverride.isEmpty && EngineBackend.usesNativeBackend(startSettings,sys.env)
+  @volatile private var _settings = startSettings
+  if persistSettings && startSettings != initialSettings && initialRecovery.isEmpty then
+    try settingsWriter(home.settingsFile, startSettings)
+    catch case NonFatal(_) => ()
   @volatile private var _settingsRecovery = initialRecovery
   private var holdLogged = false
   private val logListeners = new CopyOnWriteArrayList[String => Unit]()
