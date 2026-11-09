@@ -178,11 +178,16 @@ inspected); **Equivalent** = covered by an existing or different mechanism; **N/
 2. "Send to openOutpaint" (no such extension).
 3. Rankings in JPEG/WebP files (store only).
 4. Real touch swipe was not exercised, only synthetic `SwipeEvent`s.
-5. Not driven in the real check: Open Folder (starts Explorer on the user's desktop), the Shift and Ctrl+Shift key modifier options and the
-   Maintenance rename operation with real data (unit-tested). Driven since v0.11 (`RealGalleryExtrasCheck`, real MainWindow, real files):
-   the thumbnail tooltip content ("still.png 512 x 512  617.1 KB <time>" plus the generation text; the installed Tooltip is read, the hover timer
-   itself is not simulated), a custom folder tab added to the active tabs (lists its 2 files), and the real Windows recycle bin (the app's
-   `SystemTrash` moved a file there; it was listed by `Shell.Application` and then removed from the bin again).
+5. Not driven in the real check: only Open Folder (it starts Explorer on the user's desktop; the same `ImageActions.openFolder` is used by the
+   gallery's "Show in folder"). Driven since v0.11 with the real MainWindow and real files:
+   `RealGalleryExtrasCheck` - the thumbnail tooltip content ("still.png 512 x 512  617.1 KB <time>" plus the generation text; the installed Tooltip is
+   read, the hover timer itself is not simulated), a custom folder tab added to the active tabs (lists its 2 files), and the real Windows recycle bin
+   (the app's `SystemTrash` moved a file there; it was listed by `Shell.Application`, then removed from the bin again).
+   `RealGalleryKeysCheck` - the page-key modifier options on a custom folder of 6 pictures (2 per page): with the default (Ctrl), Shift and
+   Ctrl+Shift settings each, Right moves page 1/3 -> 2/3 and Left moves back only with the configured modifier; the other combinations do nothing.
+   The Maintenance "Update directory names in database" operation with real data: a ranking (3) was set on a picture, the folder was renamed on disk,
+   the ranking was not found under the new path (None) until the operation ran ("path_recorder 0, exif_data 6, ranking 1"), then the rescanned tab
+   showed ranking 3 again.
 
 ## Verification
 
