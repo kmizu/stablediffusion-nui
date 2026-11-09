@@ -455,7 +455,7 @@ class GeneratorSuite extends munit.FunSuite:
   }
 
   test("invalid params and engine errors surface as EngineError") {
-    val e = intercept[EngineError](services.generator.generate(GenerationParams(width = 63)))
+    val e = intercept[EngineError](services.generator.generate(GenerationParams(width = 0)))
     assertEquals(e.code, Protocol.ErrorCodes.InvalidParams)
   }
 

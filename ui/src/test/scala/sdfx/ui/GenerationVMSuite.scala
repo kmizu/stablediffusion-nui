@@ -198,10 +198,10 @@ class GenerationVMSuite extends munit.FunSuite:
     val vm = new GenerationVM(Mode.Txt2Img)
     assertEquals(vm.validate(_ => true), Nil)
     vm.steps.set(0)
-    vm.width.set(500)
+    vm.width.set(0)
     val probs = vm.validate(_ => true)
     assert(probs.exists(_.startsWith("steps must be 1..150")), probs)
-    assert(probs.exists(_.startsWith("width must be a multiple of 8")), probs)
+    assert(probs.exists(_.startsWith("width must be 1..")), probs)
     assertEquals(vm.problems.size, probs.size)
 
     val i2i = new GenerationVM(Mode.Img2Img)

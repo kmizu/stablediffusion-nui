@@ -127,12 +127,18 @@ case class GenerationParams(
     })
   def imagesPerJob: Int = batchSize * nIter
 
+  /** Any width and height are accepted; the engine works on whole latents, so the generated size is rounded up to a multiple of 8
+    * (at least 64). The infotext records the size that was actually generated. */
+  def withEngineSize: GenerationParams =
+    val (w, h) = (GenerationParams.engineSide(width), GenerationParams.engineSide(height))
+    if (w, h) == (width, height) then this else copy(width = w, height = h)
+
   /** Basic validation shared by UI, MCP and engine client. Returns human readable problems. */
   def validate: List[String] =
     List(
       Option.when(steps < 1 || steps > 150)(s"steps must be 1..150 (got $steps)"),
-      Option.when(width < 64 || width > 4096 || width % 8 != 0)(s"width must be a multiple of 8 in 64..4096 (got $width)"),
-      Option.when(height < 64 || height > 4096 || height % 8 != 0)(s"height must be a multiple of 8 in 64..4096 (got $height)"),
+      Option.when(width < 1 || width > GenerationParams.MaxSide)(s"width must be 1..${GenerationParams.MaxSide} (got $width)"),
+      Option.when(height < 1 || height > GenerationParams.MaxSide)(s"height must be 1..${GenerationParams.MaxSide} (got $height)"),
       Option.when(batchSize < 1 || batchSize > 16)(s"batch size must be 1..16 (got $batchSize)"),
       Option.when(nIter < 1 || nIter > 100)(s"batch count must be 1..100 (got $nIter)"),
       Option.when(cfgScale < 0 || cfgScale > 30)(s"CFG scale must be 0..30 (got $cfgScale)"),
@@ -144,4 +150,8 @@ case class GenerationParams(
     ).flatten
 
 object GenerationParams:
+  /** Upper bound that only guards against integer overflow; memory limits are the engine's business. */
+  val MaxSide: Int = 65536
+  /** Rounds a requested side up to a whole number of 8-pixel latent cells (at least 64). */
+  def engineSide(v: Int): Int = math.max(64, (v + 7) / 8 * 8)
   val default: GenerationParams = GenerationParams()

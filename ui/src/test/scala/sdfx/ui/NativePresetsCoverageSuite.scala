@@ -37,7 +37,7 @@ class NativePresetsCoverageSuite extends munit.FunSuite:
     val statuses = ledger
     // ControlNet Fastload is its own accepted plugin (#17), not a preset implementation.
     assertEquals(statuses(203), "done:controlnet_fastload")
-    assertEquals(statuses(221), "todo:scenario_loader")
+    assertEquals(statuses(221), "done:scenario_loader")
     assertEquals(statuses(262), "todo:core:state-manager")
     Set(203, 221, 262).foreach(i => assertEquals(effective(statuses(i)), statuses(i)))
     assert(!statuses.values.exists(_ == "todo:core:presets"))

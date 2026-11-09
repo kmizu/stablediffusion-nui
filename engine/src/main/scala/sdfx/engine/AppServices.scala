@@ -162,7 +162,8 @@ final class AppServices(
       .orElse(Some(home.resolve(name)).filter(f => Files.isRegularFile(f) && generator.withinDirs(f, _settings.modelDirs.checkpoints)).map(_.toString))
       .getOrElse(throw EngineError(Protocol.ErrorCodes.InvalidParams, s"checkpoint not found: $name"))
     val s = _settings
-    val m = awaitOrRestart(client.loadModel(LoadModelRequest(path, s.dtype, s.vramMode, None, s.vaeTiling, s.vaeSlicing, s.fp8Storage, s.vaeAuto, s.vaeFp16)), timeouts.load, "load_model")
+    val (dtype, vramMode) = EngineBackend.loadModes(s)
+    val m = awaitOrRestart(client.loadModel(LoadModelRequest(path, dtype, vramMode, None, s.vaeTiling, s.vaeSlicing, s.fp8Storage, s.vaeAuto, s.vaeFp16)), timeouts.load, "load_model")
     catalog.rememberHash(m)
     if remember then updateSettings(_.copy(lastModel = Some(catalog.findCheckpoint(name).map(_.name).getOrElse(name))))
     m

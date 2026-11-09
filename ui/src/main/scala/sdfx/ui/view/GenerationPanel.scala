@@ -270,7 +270,7 @@ final class GenerationPanel(
       )
       presets.getItems.add(mi)
     }
-    val heightRow = W.intSlider(vm.height, 64, 2048, 8, 4096)
+    val heightRow = W.intSlider(vm.height, 64, 2048, 8, 65536, 1)
     presetSpinner("height", heightRow)
     val batchSummary = W.label("", "hint")
     batchSummary.setId("batch-summary")
@@ -280,8 +280,8 @@ final class GenerationPanel(
     vm.batchCount.addListener((_, _, _) => refreshBatchSummary())
     refreshBatchSummary()
     val f = W.form()
-      .add("Width", W.hbox(6, W.hgrow(W.intSlider(vm.width, 64, 2048, 8, 4096)), swap), "Image width (multiple of 8)")
-      .add("Height", W.hbox(6, W.hgrow(heightRow), presets), "Image height (multiple of 8)")
+      .add("Width", W.hbox(6, W.hgrow(W.intSlider(vm.width, 64, 2048, 8, 65536, 1)), swap), "Image width (any size; generated rounded up to a multiple of 8)")
+      .add("Height", W.hbox(6, W.hgrow(heightRow), presets), "Image height (any size; generated rounded up to a multiple of 8)")
       .add(
         "Batch",
         W.hbox(

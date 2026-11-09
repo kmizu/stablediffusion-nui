@@ -150,11 +150,11 @@ object W:
     box.getStyleClass.add("slider-row")
     box
 
-  def intSlider(p: IntegerProperty, min: Int, max: Int, step: Int = 1, spinnerMax: Int = -1): HBox =
+  def intSlider(p: IntegerProperty, min: Int, max: Int, step: Int = 1, spinnerMax: Int = -1, spinnerMin: Int = -1): HBox =
     val sl = new Slider(min, max, p.get.max(min).min(max))
     sl.setBlockIncrement(step)
     NumberSync.bindIntSlider(p, sl.valueProperty, min, max, step)
-    val sp = intSpinner(p, min, if spinnerMax > 0 then spinnerMax else max, step)
+    val sp = intSpinner(p, if spinnerMin > 0 then spinnerMin else min, if spinnerMax > 0 then spinnerMax else max, step)
     val box = hbox(8, hgrow(sl), sp)
     box.getStyleClass.add("slider-row")
     box

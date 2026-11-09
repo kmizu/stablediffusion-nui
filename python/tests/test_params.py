@@ -72,12 +72,12 @@ def test_bad_types():
 
 
 def test_validate_messages():
-    p = GenerationParams(steps=0, width=500, height=4104, batch_size=17, n_iter=0, cfg_scale=31, clip_skip=13,
+    p = GenerationParams(steps=0, width=500, height=65544, batch_size=17, n_iter=0, cfg_scale=31, clip_skip=13,
                          subseed_strength=2)
     assert p.validate() == [
         "steps must be 1..150 (got 0)",
-        "width must be a multiple of 8 in 64..4096 (got 500)",
-        "height must be a multiple of 8 in 64..4096 (got 4104)",
+        "width must be a multiple of 8 in 64..65536 (got 500)",
+        "height must be a multiple of 8 in 64..65536 (got 65544)",
         "batch size must be 1..16 (got 17)",
         "batch count must be 1..100 (got 0)",
         "CFG scale must be 0..30 (got 31.0)",

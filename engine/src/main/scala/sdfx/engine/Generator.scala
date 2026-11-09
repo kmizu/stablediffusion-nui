@@ -66,7 +66,7 @@ final case class EngineTimeouts(
   * included), checked before anything is sent to the engine.
   */
 final case class JobLimits(
-    maxSide: Int = 8192,
+    maxSide: Int = GenerationParams.MaxSide,
     maxImagesPerGeneration: Int = 64,
     maxGenerations: Int = 10000,
     maxPixelsPerGeneration: Long = 64L * 1024 * 1024
@@ -325,9 +325,10 @@ final class Generator(
       case other => other
     }
 
-  def prepare(p0: GenerationParams): PreparedGeneration =
-    val problems = p0.validate
+  def prepare(requested: GenerationParams): PreparedGeneration =
+    val problems = requested.validate
     if problems.nonEmpty then throw EngineError(Protocol.ErrorCodes.InvalidParams, problems.mkString("; "))
+    val p0 = requested.withEngineSize
     val seed = if p0.seed < 0 then randomSeed() else p0.seed
     val subseed = if p0.subseed < 0 then randomSeed() else p0.subseed
     val composed = HiresPreparation.compose(p0, styleSource(), settings().hiresFixTweaks.saveTemplate)
@@ -543,7 +544,8 @@ final class Generator(
         .getOrElse(throw EngineError(Protocol.ErrorCodes.InvalidParams, s"checkpoint not found: $name"))
       if !client.supervisor.loadedModel.exists(m => samePath(m.path, path)) then
         listener.onLog(s"loading checkpoint $name")
-        val m = await(client.loadModelOwned(LoadModelRequest(path, s.dtype, s.vramMode, None, s.vaeTiling, s.vaeSlicing, s.fp8Storage, s.vaeAuto, s.vaeFp16), listener.interruptionOwner), timeouts.load, "load_model")
+        val (dtype, vramMode) = EngineBackend.loadModes(s)
+        val m = await(client.loadModelOwned(LoadModelRequest(path, dtype, vramMode, None, s.vaeTiling, s.vaeSlicing, s.fp8Storage, s.vaeAuto, s.vaeFp16), listener.interruptionOwner), timeouts.load, "load_model")
         catalog.rememberHash(m)
     }
     p.vae.map(_.trim).filter(_.nonEmpty).foreach { v =>

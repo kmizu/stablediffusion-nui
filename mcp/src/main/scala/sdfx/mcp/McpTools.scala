@@ -203,8 +203,8 @@ final class McpTools(
         scheduler = scheduler,
         steps = a.int("steps", 1, 150).getOrElse(20),
         cfgScale = a.num("cfg_scale", 0, 30).getOrElse(7.0),
-        width = a.int("width", 64, MaxSide).getOrElse(dw),
-        height = a.int("height", 64, MaxSide).getOrElse(dh),
+        width = a.int("width", 1, MaxImageSide).getOrElse(dw),
+        height = a.int("height", 1, MaxImageSide).getOrElse(dh),
         batchSize = batch,
         nIter = nIter,
         clipSkip = a.int("clip_skip", 1, 12).getOrElse(1),
@@ -721,8 +721,8 @@ final class McpTools(
     val common: Seq[(String, ujson.Value)] = Seq(
       "prompt" -> Schema.str("Positive prompt. A1111 syntax works: (emphasis:1.2), [from:to:when], <lora:name:weight>."),
       "negative_prompt" -> Schema.str("Negative prompt (things to avoid)."),
-      "width" -> Schema.int("Image width in px, multiple of 8. Default 512 (SD1.5) / 1024 (SDXL)" + (if img2img then "; img2img defaults to the init image size." else "."), Some(64), Some(4096)),
-      "height" -> Schema.int("Image height in px, multiple of 8. Same defaults as width.", Some(64), Some(4096)),
+      "width" -> Schema.int("Image width in px, any size (generated rounded up to a multiple of 8, at least 64). Default 512 (SD1.5) / 1024 (SDXL)" + (if img2img then "; img2img defaults to the init image size." else "."), Some(1), Some(65536)),
+      "height" -> Schema.int("Image height in px, any size (rounded up to a multiple of 8, at least 64). Same defaults as width.", Some(1), Some(65536)),
       "steps" -> Schema.int("Sampling steps.", Some(1), Some(150), Some(20)),
       "cfg_scale" -> Schema.num("Classifier-free guidance scale.", Some(0.0), Some(30.0), Some(7.0)),
       "sampler_name" -> Schema.str("Sampler (see list_samplers), e.g. 'Euler a', 'DPM++ 2M'.", default = Some("DPM++ 2M")),
@@ -791,8 +791,8 @@ final class McpTools(
     val props = schema("properties").obj
     folderExcluded.foreach(props.remove)
     props("image_folder") = Schema.str("Input folder within an allowed local directory; files are inspected when the job starts.")
-    props("width") = Schema.int("Output width; defaults to 512 for SD1.5 or 1024 for SDXL.", Some(64), Some(4096))
-    props("height") = Schema.int("Output height; defaults to 512 for SD1.5 or 1024 for SDXL.", Some(64), Some(4096))
+    props("width") = Schema.int("Output width; defaults to 512 for SD1.5 or 1024 for SDXL.", Some(1), Some(65536))
+    props("height") = Schema.int("Output height; defaults to 512 for SD1.5 or 1024 for SDXL.", Some(1), Some(65536))
     schema("required") = ujson.Arr("prompt", "image_folder")
     schema
 
@@ -1207,12 +1207,14 @@ object McpTools:
   val MaxPendingJobs = 32
   /** Max width/height of any image (base, hires target, previews). */
   val MaxSide = 4096
+  /** Width and height of generated images are not limited by the tool layer (the engine rounds up to whole latents); this only prevents integer overflow. */
+  val MaxImageSide: Int = sdfx.core.model.GenerationParams.MaxSide
   val MaxBatchPixels: Long = 4096L * 4096
   val MaxJobPixels: Long = 64L * 1024 * 1024
   /** Max total base64 of inline images in one response. */
   val MaxInlineBytes: Int = 20 * 1024 * 1024
   /** Engine-enforced limits for every MCP job, script sub-generations (X/Y/Z cells, Size / Hires axes) included. */
-  val StrictLimits: JobLimits = JobLimits(maxSide = 4096, maxImagesPerGeneration = 16, maxGenerations = 64, maxPixelsPerGeneration = 4096L * 4096)
+  val StrictLimits: JobLimits = JobLimits(maxSide = MaxImageSide, maxImagesPerGeneration = 16, maxGenerations = 64, maxPixelsPerGeneration = 4096L * 4096)
   val ResizeModes: Seq[String] = Seq("just resize", "crop and resize", "resize and fill")
   val FillModes: Seq[String] = Seq("fill", "original", "latent noise", "latent nothing")
   val HiresKeys: Seq[String] = ExtendedGeneration.hiresKeys
@@ -1223,7 +1225,7 @@ object McpTools:
     if batchPx > MaxBatchPixels then
       throw ToolError(s"width * height * batch_size is too large ($batchPx px, max $MaxBatchPixels); lower the size or batch_size")
     val (tw, th) = if p.hires.enabled && !p.isImg2Img then p.hires.targetSize(p.width, p.height) else (p.width, p.height)
-    if tw > MaxSide || th > MaxSide then throw ToolError(s"hires target ${tw}x$th exceeds ${MaxSide}x$MaxSide; lower hires.scale or resize_x/resize_y")
+    if tw > MaxImageSide || th > MaxImageSide then throw ToolError(s"hires target ${tw}x$th exceeds ${MaxImageSide}x$MaxImageSide; lower hires.scale or resize_x/resize_y")
     val total = tw.toLong * th * p.batchSize * p.nIter
     if total > MaxJobPixels then
       throw ToolError(s"this job would produce $total px in total (max $MaxJobPixels); lower the size, hires scale or image count")

@@ -253,7 +253,7 @@ class McpToolsSuite extends munit.FunSuite:
   test("history draft identifies required images and rejects invalid dimensions and combined batch") {
     import sdfx.core.presets.*
     def key(s: String) = FieldKey(Vector("generation", s))
-    val fields = Map(key("width") -> PresetAtom.Integer(513), key("batchSize") -> PresetAtom.Integer(8),
+    val fields = Map(key("width") -> PresetAtom.Integer(0), key("batchSize") -> PresetAtom.Integer(8),
       key("batchCount") -> PresetAtom.Integer(4), key("subseed") -> PresetAtom.Integer(123))
     val r = PresetRecord(java.util.UUID.randomUUID(), "inpaint", fields, None, Set.empty, Vector.empty, Vector.empty)
     val result = HistoryGenerationDraft.build(r, "inpaint")
@@ -823,7 +823,7 @@ class McpToolsSuite extends munit.FunSuite:
       assert(textOf(r).toLowerCase.contains(needle.toLowerCase), s"'${textOf(r)}' lacks '$needle'")
     err(ujson.Obj(), "prompt")
     err(ujson.Obj("prompt" -> "x", "steps" -> 0), "steps")
-    err(ujson.Obj("prompt" -> "x", "width" -> 70), "width")
+    err(ujson.Obj("prompt" -> "x", "width" -> 0), "width")
     err(ujson.Obj("prompt" -> "x", "steps" -> "many"), "steps")
     err(ujson.Obj("prompt" -> "x", "batch_size" -> 8, "n_iter" -> 4), "16")
     err(ujson.Obj("prompt" -> "x", "sampler_name" -> "Nope"), "Euler a")
@@ -1178,7 +1178,7 @@ class McpToolsSuite extends munit.FunSuite:
     val big = call("img2img", ujson.Obj("prompt" -> "x", "init_image" -> pngBase64(4104, 8), "width" -> 64, "height" -> 64))
     assert(big("isError").bool && textOf(big).contains("too large"), textOf(big))
     val hires = call("txt2img", ujson.Obj("prompt" -> "x", "width" -> 2048, "height" -> 2048, "hires" -> ujson.Obj("scale" -> 4)))
-    assert(hires("isError").bool && textOf(hires).contains("hires target"), textOf(hires))
+    assert(hires("isError").bool && textOf(hires).contains("hires"), textOf(hires))
     val batch = call("txt2img", ujson.Obj("prompt" -> "x", "width" -> 4096, "height" -> 4096, "batch_size" -> 2))
     assert(batch("isError").bool && textOf(batch).contains("too large"), textOf(batch))
     val total = call("txt2img", ujson.Obj("prompt" -> "x", "width" -> 2048, "height" -> 2112, "batch_size" -> 2, "n_iter" -> 8))

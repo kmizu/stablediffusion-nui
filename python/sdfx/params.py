@@ -161,10 +161,11 @@ class GenerationParams:
         p: list[str] = []
         if self.steps < 1 or self.steps > 150:
             p.append(f"steps must be 1..150 (got {self.steps})")
-        if self.width < 64 or self.width > 4096 or self.width % 8 != 0:
-            p.append(f"width must be a multiple of 8 in 64..4096 (got {self.width})")
-        if self.height < 64 or self.height > 4096 or self.height % 8 != 0:
-            p.append(f"height must be a multiple of 8 in 64..4096 (got {self.height})")
+        # The Scala client rounds sizes up to whole latents before sending, so the engine itself still wants multiples of 8.
+        if self.width < 64 or self.width > 65536 or self.width % 8 != 0:
+            p.append(f"width must be a multiple of 8 in 64..65536 (got {self.width})")
+        if self.height < 64 or self.height > 65536 or self.height % 8 != 0:
+            p.append(f"height must be a multiple of 8 in 64..65536 (got {self.height})")
         if self.batch_size < 1 or self.batch_size > 16:
             p.append(f"batch size must be 1..16 (got {self.batch_size})")
         if self.n_iter < 1 or self.n_iter > 100:

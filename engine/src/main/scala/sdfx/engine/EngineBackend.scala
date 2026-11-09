@@ -45,6 +45,12 @@ private[engine] object EngineBackend:
           case None => providers.exists(_.usesNativeBackend(settings,environment)) ||
             (providers.nonEmpty && defaultProvider=="scala-torch")
 
+  /** dtype and VRAM mode to send with `load_model`. The native worker only accepts fp32 / cpu there (U-Net and VAE placement is configured
+    * separately), so whatever dtype / VRAM mode the saved settings hold for the Python engine must not reach it, also after the backend
+    * was switched at run time. */
+  def loadModes(settings: Settings,environment: Map[String,String]=sys.env): (String,String) =
+    if usesNativeBackend(settings,environment) then ("fp32","cpu") else (settings.dtype,settings.vramMode)
+
   def launch(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]=sys.env): EngineLaunch =
     val configured0=if environment.contains("SDFX_ENGINE_BACKEND") || settings.engineBackend=="auto" then environment
       else environment.updated("SDFX_ENGINE_BACKEND",settings.engineBackend)

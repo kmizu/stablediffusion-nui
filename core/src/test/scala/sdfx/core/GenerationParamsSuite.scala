@@ -124,10 +124,9 @@ class GenerationParamsSuite extends munit.FunSuite:
       assert(v.head.contains(frag), v)
     one(GenerationParams(steps = 0), "steps")
     one(GenerationParams(steps = 151), "steps")
-    one(GenerationParams(width = 513), "width")
-    one(GenerationParams(width = 56), "width")
-    one(GenerationParams(width = 4104), "width")
-    one(GenerationParams(height = 1001), "height")
+    one(GenerationParams(width = 0), "width")
+    one(GenerationParams(width = 65537), "width")
+    one(GenerationParams(height = -8), "height")
     one(GenerationParams(batchSize = 0), "batch size")
     one(GenerationParams(batchSize = 17), "batch size")
     one(GenerationParams(nIter = 0), "batch count")
@@ -142,12 +141,22 @@ class GenerationParamsSuite extends munit.FunSuite:
     one(GenerationParams(hires = HiresParams(enabled = true, denoisingStrength = -1)), "hires denoising")
   }
 
+  test("any width and height are accepted; the engine size is rounded up to whole latents (at least 64)") {
+    for (w, h) <- Seq((513, 1001), (56, 1), (4104, 8192), (1366, 768), (30000, 64)) do
+      assertEquals(GenerationParams(width = w, height = h).validate, Nil, s"$w x $h")
+    val p = GenerationParams(width = 1366, height = 30).withEngineSize
+    assertEquals((p.width, p.height), (1368, 64))
+    val same = GenerationParams(width = 1024, height = 512)
+    assert(same.withEngineSize eq same)
+    assertEquals((GenerationParams.engineSide(1), GenerationParams.engineSide(65), GenerationParams.engineSide(8192)), (64, 72, 8192))
+  }
+
   test("validate: disabled hires is not validated") {
     assertEquals(GenerationParams(hires = HiresParams(enabled = false, denoisingStrength = 5)).validate, Nil)
   }
 
   test("validate: multiple problems are all reported") {
-    assertEquals(GenerationParams(steps = 0, width = 1, height = 1, batchSize = 0).validate.size, 4)
+    assertEquals(GenerationParams(steps = 0, width = 0, height = 0, batchSize = 0).validate.size, 4)
   }
 
   // A1111 calculate_target_resolution: int(w * scale) / integer division, latent = size // 8.
