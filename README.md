@@ -1,5 +1,7 @@
 # Stable Diffusion NUI
 
+**日本語** | [English](README.en.md)
+
 ローカルのモデルを、ネイティブUIで。画像生成からバッチプレビュー、ギャラリー、ZIP保存まで。
 
 リポジトリ: [kmizu/stablediffusion-nui](https://github.com/kmizu/stablediffusion-nui)。旧名は Stable Diffusion FX / SDFX。
