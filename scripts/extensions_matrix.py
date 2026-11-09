@@ -30,7 +30,7 @@ S = {
     16: "done:core:embedding-editor", 17: "todo:model_merge", 18: "todo:model_converter", 19: "done:core:lora",
     20: "todo:model_merge", 21: "done:core:embedding-merge", 22: "todo:model_merge", 23: "todo:lora_block_weight",
     24: "done:core:images_browser", 25: "done:core:gallery", 26: "todo:inspiration", 27: "todo:inspiration",
-    28: "done:prompt_gallery", 29: "todo:infinity_grid", 30: "todo:core:config-presets", 31: "todo:core:preset-utilities",
+    28: "done:prompt_gallery", 29: "done:infinity_grid", 30: "todo:core:config-presets", 31: "todo:core:preset-utilities",
     32: "done:outpaint_canvas", 33: "na:webui-css", 34: "done:core:size-presets", 35: "na:webui-css", 36: "na:webui-css",
     37: "todo:core:localization", 38: "todo:dynamic_prompts", 39: "todo:unprompted", 40: "todo:stylepile",
     41: "todo:core:tag-autocomplete", 42: "todo:novelai_prompt", 43: "todo:tokenizer", 44: "todo:randomize",

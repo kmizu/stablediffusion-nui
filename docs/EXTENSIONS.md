@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 195, todo 107, na 51.
+Totals: done 196, todo 106, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -35,7 +35,7 @@ Totals: done 195, todo 107, na 51.
 | 26 | [Inspiration](https://github.com/yfszzx/stable-diffusion-webui-inspiration.git) | 113 | todo | `inspiration` |  |
 | 27 | [Artists to study](https://github.com/camenduru/stable-diffusion-webui-artists-to-study.git) | 83 | todo | `inspiration` |  |
 | 28 | [Prompt Gallery](https://github.com/dr413677671/PromptGallery-stable-diffusion-webui.git) | 162 | done | `prompt_gallery` |  |
-| 29 | [Infinity Grid Generator](https://github.com/mcmonkeyprojects/sd-infinity-grid-generator-script.git) | 189 | todo | `infinity_grid` |  |
+| 29 | [Infinity Grid Generator](https://github.com/mcmonkeyprojects/sd-infinity-grid-generator-script.git) | 189 | done | `infinity_grid` |  |
 | 30 | [Config-Presets](https://github.com/Zyin055/Config-Presets.git) | 314 | done | `core:config-presets` |  |
 | 31 | [Preset Utilities](https://github.com/Gerschel/sd_web_ui_preset_utils.git) | 248 | done | `core:preset-utilities` |  |
 | 32 | [openOutpaint extension](https://github.com/zero01101/openOutpaint-webUI-extension.git) | 405 | done | `outpaint_canvas` |  |
