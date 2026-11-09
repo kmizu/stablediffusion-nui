@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 176, todo 126, na 51.
+Totals: done 178, todo 124, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -172,7 +172,7 @@ Totals: done 176, todo 126, na 51.
 | 163 | [Styles Editor](https://github.com/chrisgoringe/Styles-Editor.git) | 87 | done | `core:styles-editor` |  |
 | 164 | [Clip I/O](https://github.com/Filexor/Clip_IO.git) | 19 | done | `clip_io` | AlwaysOn hook `clip_io` written from the README only (AGPL-3.0, pinned b6c2e96; the script was not read, nothing copied). Clip Output: positive and optional negative conditioning to .csv or .pt in the conditioning folder ($SDFX_CLIP_IO_DIR, default ~/.cache/stablediffusion-nui/clip_io/conditioning) with Transpose, no bos/eos/pad, Ignore emphasis, Bypass normalization, token strings, Overwrite. Clip Input: Positive/Negative prompts as file lists (Simple: quoting, .csv then .pt lookup, triple-quoted CLIP prompts, concatenation) and Directive mode (`?prompt(...)` with clip_skip / no_padding lists, `?eval` / `?eval_ORDER`), PNG/MCP replay, SD1.x / SD2.x / SDXL. Own design where the README is silent: file layout (rows = tokens), .pt format (tensor; SDXL dict with pooled), SDXL CSV input takes the empty prompt's pooled vector, eval runs after the pieces are joined, only the generation's own prompts are replaced. Not provided: `?exec`, the `g` and `p` objects, Python `eval` (a restricted arithmetic interpreter is used instead), prompt editing / alternating words / AND / BREAK inside input prompts. Verified on real SD1.5 and SDXL, docs/clip-io-verification.md. |
 | 165 | [Inpaint Anything](https://github.com/Uminosachi/sd-webui-inpaint-anything.git) | 1298 | todo | `inpaint_anything` |  |
-| 166 | [QR Code Generator](https://github.com/missionfloyd/webui-qrcode-generator.git) | 47 | todo | `qr_code` |  |
+| 166 | [QR Code Generator](https://github.com/missionfloyd/webui-qrcode-generator.git) | 47 | done | `qr_code` |  |
 | 167 | [sd-webui-roop](https://github.com/s0md3v/sd-webui-roop) | 3561 | todo | `face_swap` |  |
 | 168 | [sd-webui-color-enhance](https://git.mmaker.moe/mmaker/sd-webui-color-enhance.git) | None | done | `color_enhance` |  |
 | 169 | [sd-webui-bluescape](https://github.com/Bluescape/sd-webui-bluescape) | 29 | na | `account` | needs a third-party account / paid API key and posts data to that service |
@@ -328,7 +328,7 @@ Totals: done 176, todo 126, na 51.
 | 319 | [TweakWeights [m9]](https://github.com/MarcusNyne/sd-tweak-weights-m9.git) | 2 | done | `tweak_weights` |  |
 | 320 | [Prevent interruption](https://github.com/light-and-ray/sd-webui-prevent-interruption.git) | 1 | done | `core:prevent-interrupt` |  |
 | 321 | [Waifu2x Upscaler](https://github.com/light-and-ray/sd-webui-waifu2x-upscaler.git) | 6 | done | `waifu2x` | Nine pinned neural upscalers and native Script Anime/Photo/CARN controls, 2x-16x. RGB output, 64MP bound, first-use weight downloads; exact CPU reference parity and SD1.5/SDXL extracted-package cancellation/recovery verified. See waifu2x-verification.md. |
-| 322 | [sd-webui-udav2](https://github.com/MackinationsAi/sd-webui-udav2.git) | 45 | todo | `depth_anything` |  |
+| 322 | [sd-webui-udav2](https://github.com/MackinationsAi/sd-webui-udav2.git) | 45 | done | `depth_anything` |  |
 | 323 | [Topaz Photo AI integration](https://github.com/light-and-ray/sd-webui-topaz-photo-ai-integration.git) | 12 | na | `external-app` | bridge to a specific external application (Photoshop, Krita, ComfyUI, ...) |
 | 324 | [Detail Daemon](https://github.com/muerrilla/sd-webui-detail-daemon.git) | 190 | done | `detail_daemon` |  |
 | 325 | [Yandere Inpainting as masked content](https://github.com/light-and-ray/sd-webui-yandere-inpaint-masked-content.git) | 12 | todo | `masked_content_extras` |  |

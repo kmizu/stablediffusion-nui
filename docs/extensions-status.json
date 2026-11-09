@@ -999,7 +999,7 @@
 "index": 166,
 "name": "QR Code Generator",
 "url": "https://github.com/missionfloyd/webui-qrcode-generator.git",
-"status": "todo:qr_code"
+"status": "done:qr_code"
 },
 {
 "index": 167,
@@ -1935,7 +1935,7 @@
 "index": 322,
 "name": "sd-webui-udav2",
 "url": "https://github.com/MackinationsAi/sd-webui-udav2.git",
-"status": "todo:depth_anything"
+"status": "done:depth_anything"
 },
 {
 "index": 323,
