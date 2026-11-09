@@ -363,7 +363,7 @@
 "index": 60,
 "name": "Depth Maps",
 "url": "https://github.com/thygate/stable-diffusion-webui-depthmap-script.git",
-"status": "todo:depth_maps"
+"status": "done:depth_maps"
 },
 {
 "index": 61,

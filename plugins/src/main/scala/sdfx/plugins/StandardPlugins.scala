@@ -82,7 +82,7 @@ object StandardPlugins:
     new FocalCropPlugin,
     // image tools (extension index)
     new RemoveBackgroundPlugin, new PersonMaskPlugin, new PixelArtPlugin, new ColorEnhancePlugin, new FsrUpscalePlugin,
-    new ColorCorrectionPlugin, new Waifu2xPlugin, new DepthAnythingPlugin, new DepthStereoPlugin, new QrCodePlugin, new QrVerifyPlugin, new NsfwCheckerExtrasPlugin, new AestheticScoreExtrasPlugin
+    new ColorCorrectionPlugin, new Waifu2xPlugin, new DepthAnythingPlugin, new DepthStereoPlugin, new DepthMeshPlugin, new QrCodePlugin, new QrVerifyPlugin, new NsfwCheckerExtrasPlugin, new AestheticScoreExtrasPlugin
   )
 
   /** `extraAxes` lets the host contribute axes of all loaded plugins (including these AlwaysOn ones). */

@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 182, todo 120, na 51.
+Totals: done 183, todo 119, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -66,7 +66,7 @@ Totals: done 182, todo 120, na 51.
 | 57 | [Steps Animation](https://github.com/vladmandic/sd-extension-steps-animation.git) | 142 | done | `steps_animation` |  |
 | 58 | [auto-sd-paint-ext](https://github.com/Interpause/auto-sd-paint-ext.git) | 482 | na | `external-app` | bridge to a specific external application (Photoshop, Krita, ComfyUI, ...) |
 | 59 | [Batch Face Swap](https://github.com/kex0/batch-face-swap.git) | 333 | done | `batch_face_swap` | AlwaysOn face pass after ADetailer, re-implemented from the README only (no licence): YOLO face detectors (face_yolov8n/s/m, face_yolov9c from Bingsu/adetailer, or opencv_face, or mediapipe_face using the optional MediaPipe package and the pinned Google BlazeFace model, or any custom detector file), redraw of every face or the k largest through the ADetailer inpaint path with an elliptical or box mask scaled around each face, face area resolution, mask blur, padding, denoising, face prompt / negative prompt ([PROMPT], [SEP]) and steps / CFG / sampler overrides that affect only the faces, colour match, 5 XYZ axes, PNG/MCP replay through one NUI-defined `Batch Face Swap` key; img2img folder input is available via GUI and MCP with restricted Windows local-file handling. A separate face checkpoint is available and records its hash for replay; real SD1.5/SDXL, folder and checkpoint checks are documented in docs/batch-face-audit-ja.md. The extension's own option names / infotext are not documented in its README and are not claimed compatible. Two-image folder processing with a separate face checkpoint and failed-job partial results were verified on both model families, including extracted-package checks. The separate MCP path-race audit remains in progress; see docs/batch-face-audit-ja.md for exact evidence and limitations. |
-| 60 | [Depth Maps](https://github.com/thygate/stable-diffusion-webui-depthmap-script.git) | 1855 | todo | `depth_maps` |  |
+| 60 | [Depth Maps](https://github.com/thygate/stable-diffusion-webui-depthmap-script.git) | 1855 | done | `depth_maps` |  |
 | 61 | [multi-subject-render](https://github.com/Extraltodeus/multi-subject-render.git) | 376 | todo | `multi_subject_render` |  |
 | 62 | [depthmap2mask](https://github.com/Extraltodeus/depthmap2mask.git) | 360 | done | `depthmap2mask` |  |
 | 63 | [ABG_extension](https://github.com/KutsuyaYuki/ABG_extension.git) | 245 | done | `remove_background` |  |
