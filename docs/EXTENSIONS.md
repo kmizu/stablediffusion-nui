@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 180, todo 122, na 51.
+Totals: done 181, todo 121, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -203,7 +203,7 @@ Totals: done 180, todo 122, na 51.
 | 194 | [Detection Detailer](https://github.com/Bing-su/dddetailer.git) | 130 | done | `adetailer` |  |
 | 195 | [seamless-tile-inpainting](https://github.com/brick2face/seamless-tile-inpainting.git) | 41 | done | `seamless_tile` |  |
 | 196 | [FaceSwapLab](https://github.com/glucauze/sd-webui-faceswaplab) | 821 | todo | `face_swap` |  |
-| 197 | [Style Selector for SDXL 1.0](https://github.com/ahgsql/StyleSelectorXL.git) | 475 | todo | `style_selector` |  |
+| 197 | [Style Selector for SDXL 1.0](https://github.com/ahgsql/StyleSelectorXL.git) | 475 | done | `style_selector` |  |
 | 198 | [sd-webui-oldsix-prompt](https://github.com/thisjam/sd-webui-oldsix-prompt.git) | 1962 | todo | `prompt_library` |  |
 | 199 | [Custom Hires Fix](https://github.com/wcde/custom-hires-fix-for-automatic1111.git) | 48 | todo | `custom_hires_fix` |  |
 | 200 | [Refiner](https://github.com/wcde/sd-webui-refiner.git) | 155 | todo | `refiner` |  |

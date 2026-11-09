@@ -1185,7 +1185,7 @@
 "index": 197,
 "name": "Style Selector for SDXL 1.0",
 "url": "https://github.com/ahgsql/StyleSelectorXL.git",
-"status": "todo:style_selector"
+"status": "done:style_selector"
 },
 {
 "index": 198,

@@ -71,7 +71,7 @@ S = {
     184: "todo:inpaint_background", 185: "na:external-app", 186: "todo:gpu_temperature_guard", 187: "done:core:zoom",
     188: "na:server-ops", 189: "todo:latent_upscale", 190: "done:core:gallery", 191: "todo:prompt_filter",
     192: "done:animatediff", 193: "na:webui-ux", 194: "todo:adetailer", 195: "todo:seamless_tile",
-    196: "todo:face_swap", 197: "todo:style_selector", 198: "todo:prompt_library", 199: "todo:custom_hires_fix",
+    196: "todo:face_swap", 197: "done:style_selector", 198: "todo:prompt_library", 199: "todo:custom_hires_fix",
     200: "todo:refiner", 201: "todo:deoldify", 202: "todo:wav2lip", 203: "done:controlnet_fastload", 204: "todo:lora_control",
     205: "todo:dynamic_prompts", 206: "done:core:size-presets", 207: "na:account", 208: "na:account",
     209: "todo:core:localization", 210: "todo:vectorscope_cc", 211: "todo:prompt_format", 212: "todo:prompt_format",
