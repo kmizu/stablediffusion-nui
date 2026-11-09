@@ -136,3 +136,17 @@ class ScalaTorchLaunchSuite extends munit.FunSuite:
     // no checkpoint anywhere -> a clear failure
     intercept[IllegalArgumentException](EngineBackend.launch(home,sdfx.core.config.Settings(engineBackend="scala-torch"),false,Map.empty))
   }
+  test("fp32 gets larger default CUDA memory budgets than fp16 (twice the weight size)") {
+    val temp=Files.createTempDirectory("native fp32 budget")
+    val st=Files.createDirectories(temp.resolve("scala-torch"))
+    Files.writeString(st.resolve("worker-classpath.txt"),temp.toString)
+    val tok=Files.createDirectories(st.resolve("tokenizer"))
+    Files.writeString(tok.resolve("vocab.json"),"{}"); Files.writeString(tok.resolve("merges.txt"),"")
+    val ckpts=Files.createDirectories(temp.resolve("Stable-diffusion"))
+    Files.write(ckpts.resolve("m.safetensors"),Array[Byte](1))
+    def launch(dtype: String)=EngineBackend.launch(sdfx.core.config.AppHome(temp),sdfx.core.config.Settings(engineBackend="scala-torch",dtype=dtype,
+      modelDirs=sdfx.core.config.ModelDirs(checkpoints=Seq(ckpts.toString))),false,Map.empty)
+    assertEquals(launch("fp16").env("SDFX_SCALATORCH_UNET_MAX_BYTES"),(8L<<30).toString)
+    assertEquals(launch("fp32").env("SDFX_SCALATORCH_UNET_MAX_BYTES"),(18L<<30).toString)
+    assertEquals(launch("fp32").env("SDFX_SCALATORCH_VAE_MAX_BYTES"),(12L<<30).toString)
+  }

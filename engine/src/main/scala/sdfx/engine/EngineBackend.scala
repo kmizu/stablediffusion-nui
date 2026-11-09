@@ -45,11 +45,13 @@ private[engine] object EngineBackend:
           case None => providers.exists(_.usesNativeBackend(settings,environment)) ||
             (providers.nonEmpty && defaultProvider=="scala-torch")
 
-  /** dtype and VRAM mode to send with `load_model`. The native worker only accepts fp32 / cpu there (U-Net and VAE placement is configured
-    * separately), so whatever dtype / VRAM mode the saved settings hold for the Python engine must not reach it, also after the backend
-    * was switched at run time. */
+  /** dtype and VRAM mode to send with `load_model`. The native worker executes in fp16 (CUDA half precision) or fp32; it has no bf16, so
+    * bf16 is sent as fp16 (the closest half precision). U-Net / VAE placement is configured separately there, `vram_mode` is not used. */
   def loadModes(settings: Settings,environment: Map[String,String]=sys.env): (String,String) =
-    if usesNativeBackend(settings,environment) then ("fp32","cpu") else (settings.dtype,settings.vramMode)
+    if !usesNativeBackend(settings,environment) then (settings.dtype,settings.vramMode)
+    else (settings.dtype.trim.toLowerCase(java.util.Locale.ROOT) match
+      case "fp32" | "float32" => "fp32"
+      case _ => "fp16", settings.vramMode)
 
   def launch(home: AppHome,settings: Settings,dryRun: Boolean,environment: Map[String,String]=sys.env): EngineLaunch =
     val configured0=if environment.contains("SDFX_ENGINE_BACKEND") || settings.engineBackend=="auto" then environment

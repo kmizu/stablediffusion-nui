@@ -10,10 +10,11 @@ final class EngineBackendSelectionSuite extends munit.FunSuite:
     assertEquals(EngineSelection.usesNativeBackend(Settings(), Map.empty), false)
   }
 
-  test("load_model gets fp32 / cpu on the native backend whatever dtype and VRAM mode the saved settings hold") {
+  test("load_model gets the configured precision on the native backend (fp16 or fp32; bf16 becomes fp16) and the saved values on Python") {
     val saved = Settings(dtype = "fp16", vramMode = "auto")
-    assertEquals(EngineBackend.loadModes(saved, Map("SDFX_ENGINE_BACKEND" -> "scala-torch")), ("fp32", "cpu"))
-    assertEquals(EngineBackend.loadModes(saved.copy(engineBackend = "scala-torch"), Map.empty), ("fp32", "cpu"))
+    assertEquals(EngineBackend.loadModes(saved, Map("SDFX_ENGINE_BACKEND" -> "scala-torch")), ("fp16", "auto"))
+    assertEquals(EngineBackend.loadModes(saved.copy(engineBackend = "scala-torch", dtype = "fp32"), Map.empty), ("fp32", "auto"))
+    assertEquals(EngineBackend.loadModes(saved.copy(dtype = "bf16"), Map("SDFX_ENGINE_BACKEND" -> "scala-torch")), ("fp16", "auto"))
     assertEquals(EngineBackend.loadModes(saved, Map("SDFX_ENGINE_BACKEND" -> "python")), ("fp16", "auto"))
     assertEquals(EngineBackend.loadModes(saved.copy(engineBackend = "python"), Map.empty), ("fp16", "auto"))
   }

@@ -154,6 +154,7 @@ final class ScalaTorchBackendProvider extends EngineBackendProvider:
     require(!dryRun,"Scala native engine does not implement dry-run mode")
     def device(value: String): String =
       if value != "auto" then value else if ScalaTorchLaunch.cudaAvailable then "cuda" else "cpu"
+    val fp32=settings.dtype.trim.equalsIgnoreCase("fp32")
     val model=settings.scalaTorchModel.orElse(ScalaTorchLaunch.defaultModel(settings,Some(home.root)))
     if model.isEmpty && !environment.contains("SDFX_SCALATORCH_MODEL") then
       throw new IllegalArgumentException("No checkpoint found for the scala-torch engine. Add a model folder in Settings > Model folders " +
@@ -167,9 +168,9 @@ final class ScalaTorchBackendProvider extends EngineBackendProvider:
       "SDFX_SCALATORCH_VAE_DEVICE"->Some(device(settings.scalaTorchVaeDevice)),
       "SDFX_SCALATORCH_UNET_OFFLOAD_WEIGHTS"->Some(settings.scalaTorchUnetOffloadWeights.toString),
       "SDFX_SCALATORCH_VAE_OFFLOAD_WEIGHTS"->Some(settings.scalaTorchVaeOffloadWeights.toString),
-      // memory budgets verified on SD1.5 and SDXL (the worker's 2 GiB session default is too small for SDXL)
-      "SDFX_SCALATORCH_UNET_MAX_BYTES"->Some((8L<<30).toString),
-      "SDFX_SCALATORCH_VAE_MAX_BYTES"->Some((8L<<30).toString),
+      // memory budgets verified on SD1.5 and SDXL (the worker's 2 GiB session default is too small for SDXL); fp32 weights are twice as large
+      "SDFX_SCALATORCH_UNET_MAX_BYTES"->Some(((if fp32 then 18L else 8L)<<30).toString),
+      "SDFX_SCALATORCH_VAE_MAX_BYTES"->Some(((if fp32 then 12L else 8L)<<30).toString),
       "SDFX_SCALATORCH_MAX_ATTENTION_SCORE_ELEMENTS"->Some((1L<<30).toString))
     val configured=saved.foldLeft(environment) { case (env,(key,value)) =>
       if env.contains(key) then env else value.map(v => env.updated(key,v)).getOrElse(env)
