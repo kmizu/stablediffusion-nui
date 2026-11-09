@@ -423,7 +423,7 @@
 "index": 70,
 "name": "Depth Image I/O",
 "url": "https://github.com/AnonymousCervine/depth-image-io-for-SDWebui.git",
-"status": "todo:depth_image_io"
+"status": "done:depth_image_io"
 },
 {
 "index": 71,
@@ -1317,7 +1317,7 @@
 "index": 219,
 "name": "sd-webui-depth-lib",
 "url": "https://github.com/wywywywy/sd-webui-depth-lib.git",
-"status": "todo:depth_library"
+"status": "done:depth_library"
 },
 {
 "index": 220,

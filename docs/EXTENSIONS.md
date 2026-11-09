@@ -2,7 +2,7 @@
 
 Snapshot of the official extension index (353 extensions), the list reForge's Extensions > Available tab installs from. Status per extension: `done` = built in, `todo` = accepted and planned, `na` = does not apply to a standalone desktop app.
 
-Totals: done 196, todo 106, na 51.
+Totals: done 198, todo 104, na 51.
 
 | # | Extension | Stars | Status | stablediffusion-nui | Scope / notes |
 |---|---|---|---|---|---|
@@ -76,7 +76,7 @@ Totals: done 196, todo 106, na 51.
 | 67 | [Asymmetric Tiling](https://github.com/tjm35/asymmetric-tiling-sd-webui.git) | 216 | done | `asymmetric_tiling` |  |
 | 68 | [Latent Mirroring](https://github.com/dfaker/SD-latent-mirroring.git) | 111 | done | `latent_mirroring` |  |
 | 69 | [Sonar](https://github.com/Kahsolt/stable-diffusion-webui-sonar.git) | 112 | done | `sonar` | AlwaysOn Sonar from the behaviour of the MIT source (README and script, nothing copied): momentum on the Euler a / Euler / Naive sampler updates (current and history momentum, pos/neg/rand sign, zero/rand_init/rand_new history start), Naive reference-image shallow fusion (linear and euler methods, step range), the final upscale by ratio or size, Sonar sampler/momentum/momentum_hist infotext plus extra keys for exact PNG/MCP replay, hires and img2img. The k-diffusion samplers map onto diffusers' Euler and Euler a schedulers (momentum 1.0 is bit-identical to them); while active the Sonar sampler replaces the request sampler. Random choices (rand sign, rand_new history, Naive 1e-5 noise) come from a seeded generator and the reference latent is the VAE posterior mean, so replays are exact; the reference image file cannot be restored from a PNG; the grid-search script mode is covered by X/Y/Z axes of momentum and momentum_hist (the `start:stop:step` list syntax is not provided); the AlwaysVisible/Script morph switch is not applicable. SD1.5/SDXL real MCP checks with image inspection. See sonar-verification.md. |
-| 70 | [Depth Image I/O](https://github.com/AnonymousCervine/depth-image-io-for-SDWebui.git) | 73 | todo | `depth_image_io` |  |
+| 70 | [Depth Image I/O](https://github.com/AnonymousCervine/depth-image-io-for-SDWebui.git) | 73 | done | `depth_image_io` |  |
 | 71 | [Ultimate SD Upscale](https://github.com/Coyote-A/ultimate-upscale-for-automatic1111.git) | 1764 | done | `ultimate_sd_upscale` |  |
 | 72 | [Prompt Fusion](https://github.com/ljleb/prompt-fusion-extension.git) | 265 | done | `prompt_fusion` |  |
 | 73 | [Neutral Prompt](https://github.com/ljleb/sd-webui-neutral-prompt.git) | 184 | done | `neutral_prompt` |  |
@@ -225,7 +225,7 @@ Totals: done 196, todo 106, na 51.
 | 216 | [CivitAI Browser+](https://github.com/BlafKing/sd-civitai-browser-plus.git) | 380 | todo | `model_downloader` |  |
 | 217 | [Img2img batch interrogator](https://github.com/Alvi-alvarez/sd-Img2img-batch-interrogator.git) | 25 | todo | `batch_interrogate` |  |
 | 218 | [SD Masonry Gallery](https://github.com/bit9labs/sd-masonry.git) | 10 | done | `core:gallery` |  |
-| 219 | [sd-webui-depth-lib](https://github.com/wywywywy/sd-webui-depth-lib.git) | 53 | todo | `depth_library` |  |
+| 219 | [sd-webui-depth-lib](https://github.com/wywywywy/sd-webui-depth-lib.git) | 53 | done | `depth_library` |  |
 | 220 | [Stable Diffusion Webui Civitai Helper](https://github.com/zixaphir/Stable-Diffusion-Webui-Civitai-Helper.git) | 254 | todo | `model_downloader` |  |
 | 221 | [Scenario loader](https://github.com/Chaest/sd-webui-sc-loader.git) | 41 | done | `scenario_loader` |  |
 | 222 | [PromptsBrowser](https://github.com/AlpacaInTheNight/PromptsBrowser.git) | 48 | done | `prompt_library` |  |
