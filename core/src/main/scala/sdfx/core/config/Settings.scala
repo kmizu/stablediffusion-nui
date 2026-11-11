@@ -106,6 +106,10 @@ case class Settings(
     scalaTorchModel: Option[String] = None,
     scalaTorchScheduler: Option[String] = None,
     scalaTorchJava: Option[String] = None,
+    /** Folder that holds cuDNN (for example a PyTorch `torch/lib`); empty = the standard locations are searched. */
+    scalaTorchCudnnDir: Option[String] = None,
+    /** Upper limit of the GPU memory the scala-torch engine uses, in MB; empty = what the GPU has free. */
+    scalaTorchVramLimitMb: Option[Int] = None,
     scalaTorchUnetDevice: String = "auto",
     scalaTorchVaeDevice: String = "auto",
     scalaTorchUnetOffloadWeights: Boolean = false,

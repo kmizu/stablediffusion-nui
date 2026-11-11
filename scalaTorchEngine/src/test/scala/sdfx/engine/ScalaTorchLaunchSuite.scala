@@ -122,6 +122,15 @@ class ScalaTorchLaunchSuite extends munit.FunSuite:
     assertEquals(l.env("SDFX_SCALATORCH_TOKENIZER"),tok.toAbsolutePath.normalize.toString)
     assertEquals(l.env("SDFX_SCALATORCH_UNET_MAX_BYTES"),"auto")
     assertEquals(l.env("SDFX_SCALATORCH_MAX_ATTENTION_SCORE_ELEMENTS"),(1L<<30).toString)
+    // cuDNN folder and VRAM limit: absent unless set; a saved setting reaches the worker, an environment value wins
+    assert(!l.env.contains("SCALATORCH_CUDNN_PATH") && !l.env.contains("SCALATORCH_CUDA_VRAM_LIMIT_MB"))
+    val tuned=settings(Some("b-last")).copy(scalaTorchCudnnDir=Some(" D:/cudnn "),scalaTorchVramLimitMb=Some(6000))
+    val tunedLaunch=EngineBackend.launch(home,tuned,false,Map.empty)
+    assertEquals(tunedLaunch.env("SCALATORCH_CUDNN_PATH"),"D:/cudnn")
+    assertEquals(tunedLaunch.env("SCALATORCH_CUDA_VRAM_LIMIT_MB"),"6000")
+    val l4=EngineBackend.launch(home,tuned,false,Map("SCALATORCH_CUDA_VRAM_LIMIT_MB"->"4000"))
+    assertEquals(l4.env("SCALATORCH_CUDA_VRAM_LIMIT_MB"),"4000")
+    assert(!EngineBackend.launch(home,tuned.copy(scalaTorchVramLimitMb=Some(0)),false,Map.empty).env.contains("SCALATORCH_CUDA_VRAM_LIMIT_MB"))
     assert(Set("cpu","cuda").contains(l.env("SDFX_SCALATORCH_UNET_DEVICE")))
     // without a last model the first checkpoint is used; an explicit environment value wins over the defaults
     val l2=EngineBackend.launch(home,settings(None),false,Map("SDFX_SCALATORCH_UNET_MAX_BYTES"->"123","SDFX_SCALATORCH_UNET_DEVICE"->"cpu"))

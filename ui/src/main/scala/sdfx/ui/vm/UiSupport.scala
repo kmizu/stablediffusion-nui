@@ -142,6 +142,8 @@ object SettingsMerge:
       scalaTorchModel = edited.scalaTorchModel,
       scalaTorchScheduler = edited.scalaTorchScheduler,
       scalaTorchJava = edited.scalaTorchJava,
+      scalaTorchCudnnDir = edited.scalaTorchCudnnDir,
+      scalaTorchVramLimitMb = edited.scalaTorchVramLimitMb,
       scalaTorchUnetDevice = edited.scalaTorchUnetDevice,
       scalaTorchVaeDevice = edited.scalaTorchVaeDevice,
       scalaTorchUnetOffloadWeights = edited.scalaTorchUnetOffloadWeights,

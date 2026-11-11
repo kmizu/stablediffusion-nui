@@ -134,7 +134,7 @@ object ScalaTorchLaunch:
       Some(EngineLaunch(Seq(javaExe.toString,"-XX:MaxRAMPercentage=50.0","--enable-native-access=ALL-UNNAMED","-cp",classpathEntries,
         "scalatorch.models.worker.NativeWorkerMain",model.toString,config.fold("-")(_.toString)),
         if singleFile then model.getParent else model,
-        env=env.filter((key,_) => key.startsWith("SDFX_SCALATORCH_")) ++
+        env=env.filter((key,_) => key.startsWith("SDFX_SCALATORCH_") || key.startsWith("SCALATORCH_")) ++
           tokenizer.map(path => "SDFX_SCALATORCH_TOKENIZER" -> path.toString),helloTimeout=30.seconds))
 
 private final class ScalaTorchLaunchMarker
@@ -163,6 +163,9 @@ final class ScalaTorchBackendProvider extends EngineBackendProvider:
       "SDFX_SCALATORCH_MODEL"->model,
       "SDFX_SCALATORCH_SCHEDULER"->settings.scalaTorchScheduler,
       "SDFX_SCALATORCH_JAVA"->settings.scalaTorchJava,
+      // read by the worker's CUDA layer itself (no SDFX_ prefix)
+      "SCALATORCH_CUDNN_PATH"->settings.scalaTorchCudnnDir.map(_.trim).filter(_.nonEmpty),
+      "SCALATORCH_CUDA_VRAM_LIMIT_MB"->settings.scalaTorchVramLimitMb.filter(_ > 0).map(_.toString),
       "SDFX_SCALATORCH_UNET_DEVICE"->Some(device(settings.scalaTorchUnetDevice)),
       "SDFX_SCALATORCH_VAE_DEVICE"->Some(device(settings.scalaTorchVaeDevice)),
       "SDFX_SCALATORCH_UNET_OFFLOAD_WEIGHTS"->Some(settings.scalaTorchUnetOffloadWeights.toString),

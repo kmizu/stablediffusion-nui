@@ -1090,6 +1090,7 @@ final class MainWindow(val stage: Stage, val services: AppServices, initial: UiS
           val engineChanged = s.engineBackend != before.engineBackend || s.scalaTorchClasspath != before.scalaTorchClasspath ||
             s.scalaTorchModel != before.scalaTorchModel || s.scalaTorchScheduler != before.scalaTorchScheduler ||
             s.scalaTorchJava != before.scalaTorchJava || s.scalaTorchUnetDevice != before.scalaTorchUnetDevice ||
+            s.scalaTorchCudnnDir != before.scalaTorchCudnnDir || s.scalaTorchVramLimitMb != before.scalaTorchVramLimitMb ||
             s.scalaTorchVaeDevice != before.scalaTorchVaeDevice || s.scalaTorchUnetOffloadWeights != before.scalaTorchUnetOffloadWeights ||
             s.scalaTorchVaeOffloadWeights != before.scalaTorchVaeOffloadWeights || s.pythonExe != before.pythonExe || s.dtype != before.dtype || s.vramMode != before.vramMode ||
             s.vaeTiling != before.vaeTiling || s.vaeSlicing != before.vaeSlicing || s.fp8Storage != before.fp8Storage ||

@@ -41,6 +41,8 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
   private val scalaTorchModel = new SimpleStringProperty(initial.scalaTorchModel.getOrElse(""))
   private val scalaTorchScheduler = new SimpleStringProperty(initial.scalaTorchScheduler.getOrElse(""))
   private val scalaTorchJava = new SimpleStringProperty(initial.scalaTorchJava.getOrElse(""))
+  private val scalaTorchCudnnDir = new SimpleStringProperty(initial.scalaTorchCudnnDir.getOrElse(""))
+  private val scalaTorchVramLimitMb = new SimpleStringProperty(initial.scalaTorchVramLimitMb.map(_.toString).getOrElse(""))
   private val scalaTorchUnetDevice = new SimpleStringProperty(initial.scalaTorchUnetDevice)
   private val scalaTorchVaeDevice = new SimpleStringProperty(initial.scalaTorchVaeDevice)
   private val scalaTorchUnetOffloadWeights = new SimpleBooleanProperty(initial.scalaTorchUnetOffloadWeights)
@@ -162,6 +164,10 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
       .add("scala-torch model", scalaTorchModelRow(), "Diffusers model folder or SD1 safetensors checkpoint")
       .add("scala-torch scheduler", browseRow(scalaTorchScheduler, false, "Choose scheduler JSON"), "Uses the selected model's scheduler/scheduler_config.json when empty")
       .add("scala-torch Java", browseRow(scalaTorchJava, false, "Choose Java 25 executable (optional)"), "Uses the packaged Java 25 runtime when available, then NUI's current Java runtime")
+      .add("scala-torch cuDNN folder", browseRow(scalaTorchCudnnDir, true, "Choose the folder that holds cuDNN (cudnn64_9.dll)"),
+        "Optional, makes convolutions faster. Empty = searched in the CUDA Toolkit, the cuDNN installer's folder and Path. A PyTorch torch\\lib folder works")
+      .add("scala-torch VRAM limit (MB)", W.textField(scalaTorchVramLimitMb),
+        "Optional. The engine uses at most this much GPU memory; models that do not fit are partly kept in system memory (slower)")
       .add("scala-torch U-Net device", W.combo(FXCollections.observableArrayList("auto", "cpu", "cuda", "cuda:0", "cuda:1"), scalaTorchUnetDevice), "U-Net compute device; cuda selects GPU 0")
       .add("scala-torch VAE device", W.combo(FXCollections.observableArrayList("auto", "cpu", "cuda", "cuda:0", "cuda:1"), scalaTorchVaeDevice), "VAE encode/decode compute device; cuda selects GPU 0")
       .full(W.check("Offload U-Net weights between CPU and CUDA", scalaTorchUnetOffloadWeights))
@@ -267,6 +273,8 @@ final class SettingsDialog(owner: Stage, initial: Settings, initialTab: Int = 0,
           scalaTorchModel = Option(scalaTorchModel.get).map(_.trim).filter(_.nonEmpty),
           scalaTorchScheduler = Option(scalaTorchScheduler.get).map(_.trim).filter(_.nonEmpty),
           scalaTorchJava = Option(scalaTorchJava.get).map(_.trim).filter(_.nonEmpty),
+          scalaTorchCudnnDir = Option(scalaTorchCudnnDir.get).map(_.trim).filter(_.nonEmpty),
+          scalaTorchVramLimitMb = Option(scalaTorchVramLimitMb.get).map(_.trim).flatMap(_.toIntOption).filter(_ > 0),
           scalaTorchUnetDevice = scalaTorchUnetDevice.get,
           scalaTorchVaeDevice = scalaTorchVaeDevice.get,
           scalaTorchUnetOffloadWeights = scalaTorchUnetOffloadWeights.get,
