@@ -37,6 +37,8 @@ object StandardPlugins:
     // after the prompt processors, so CD Tuner reads <cdt:...> from the final prompt
     new DetailDaemonPlugin, new VectorscopeCcPlugin, new CdTunerPlugin, new LatentMirroringPlugin, new AsymmetricTilingPlugin,
     new AntiBurnPlugin, new ReSharpenPlugin, new ColorGradingPlugin, new CfgSchedulePlugin, new CadsPlugin,
+    // after DeepCache and CFG Schedule: it only fills in what they did not set
+    new FastModePlugin,
     new SaveIntermediatePlugin, new GridNumbersPlugin
   )
 
