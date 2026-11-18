@@ -69,7 +69,11 @@
 .button:pressed, .toggle-button:selected {
     -fx-background-color: -sdfx-accent, -sdfx-accent-soft;
 }
-.button:focused, .toggle-button:focused { -fx-background-insets: 0, 1; }
+.button:focused, .toggle-button:focused, .menu-button:focused {
+    -fx-border-color: -sdfx-accent;
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+}
 .menu-button .label { -fx-text-fill: -sdfx-text; }
 .menu-button .arrow { -fx-background-color: -sdfx-muted; }
 .icon-button {
@@ -189,13 +193,13 @@
     -fx-padding: 6 14 6 14;
     -fx-cursor: hand;
 }
-.tab-pane > .tab-header-area > .headers-region > .tab .tab-label { -fx-text-fill: -sdfx-muted; -fx-font-weight: bold; }
+.tab-pane > .tab-header-area > .headers-region > .tab .tab-label { -fx-text-fill: -sdfx-muted; }
 .tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label { -fx-text-fill: -sdfx-text; }
 .tab-pane > .tab-header-area > .headers-region > .tab:selected {
     -fx-background-color: -sdfx-accent, -sdfx-panel;
     -fx-background-insets: 0, 0 0 2 0;
 }
-.tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label { -fx-text-fill: -sdfx-text; }
+.tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label { -fx-text-fill: -sdfx-text; -fx-font-weight: bold; }
 .tab-pane > .tab-header-area > .headers-region > .tab:selected .focus-indicator { -fx-border-color: transparent; }
 .tab-pane > .tab-content-area { -fx-background-color: -sdfx-bg; -fx-padding: 0; }
 .main-tabs > .tab-header-area { -fx-background-color: -sdfx-bg; }
@@ -213,7 +217,7 @@
 .app-title {
     -fx-font-size: 15px;
     -fx-font-weight: bold;
-    -fx-text-fill: -sdfx-accent;
+    -fx-text-fill: -sdfx-text;
     -fx-padding: 0 10 0 2;
 }
 .bar-label { -fx-text-fill: -sdfx-muted; -fx-font-size: 12px; -fx-padding: 0 0 0 6; }
@@ -250,9 +254,9 @@
 
 .card {
     -fx-background-color: -sdfx-panel;
-    -fx-background-radius: 10;
+    -fx-background-radius: 6;
     -fx-border-color: -sdfx-border;
-    -fx-border-radius: 10;
+    -fx-border-radius: 6;
     -fx-border-width: 1;
 }
 .card-title, .pane-title {
@@ -336,7 +340,7 @@
 
 /* ---------- preview / gallery ---------- */
 .preview-stack {
-    -fx-background-color: -sdfx-input;
+    -fx-background-color: -sdfx-canvas;
     -fx-background-radius: 10;
 }
 .zoom-view { -fx-background-color: transparent; }
@@ -394,20 +398,19 @@
     -fx-border-color: -sdfx-border transparent transparent transparent;
 }
 .generate-button {
-    -fx-background-color: linear-gradient(to bottom, #8b6cff, #6c4cf0);
+    -fx-background-color: -sdfx-accent;
     -fx-background-insets: 0;
-    -fx-background-radius: 9;
+    -fx-background-radius: 6;
     -fx-text-fill: white;
-    -fx-font-size: 15px;
+    -fx-font-size: 14px;
     -fx-font-weight: bold;
     -fx-padding: 9 26 9 26;
     -fx-min-width: 170;
-    -fx-effect: dropshadow(gaussian, rgba(124, 92, 255, 0.45), 12, 0, 0, 2);
+
 }
-.generate-button:hover { -fx-background-color: linear-gradient(to bottom, #9a80ff, #7a5cff); }
+.generate-button:hover { -fx-background-color: -sdfx-accent-hover; }
 .generate-button.running {
-    -fx-background-color: linear-gradient(to bottom, #f36a70, #d9434b);
-    -fx-effect: dropshadow(gaussian, rgba(242, 84, 91, 0.45), 12, 0, 0, 2);
+    -fx-background-color: -sdfx-danger;
 }
 .queue-button { -fx-padding: 9 14 9 14; -fx-font-weight: bold; }
 .step-text { -fx-font-weight: bold; -fx-font-size: 12px; }
